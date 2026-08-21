@@ -27,7 +27,7 @@ export async function GET() {
         let remindersSheet = doc.sheetsByTitle['Reminders'];
         let letterlySheet = doc.sheetsByTitle['Letterly'];
         
-        const reminders = [];
+        const reminders: any[] = [];
         if (remindersSheet) {
             const rows = await remindersSheet.getRows();
             rows.forEach(row => {
@@ -42,7 +42,7 @@ export async function GET() {
             });
         }
 
-        const letterly = [];
+        const letterly: any[] = [];
         if (letterlySheet) {
             const rows = await letterlySheet.getRows();
             rows.forEach(row => {
