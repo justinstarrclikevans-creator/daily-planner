@@ -1,0 +1,22 @@
+{
+  "name": "mac-daemon",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@google/genai": "^2.18.0",
+    "@slack/web-api": "^8.0.0",
+    "dotenv": "^17.4.2",
+    "google-spreadsheet": "^5.3.0",
+    "googleapis": "^176.0.0",
+    "node-cron": "^4.6.0",
+    "realm": "^20.2.0"
+  }
+}
