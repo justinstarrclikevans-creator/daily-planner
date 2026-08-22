@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { CheckCircle2, Circle, Mic, Plus, Calendar, Mail, MessageSquare } from 'lucide-react';
+import { CheckCircle2, Circle, Mic, Plus, Calendar, Mail, MessageSquare, Trash2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 type Todo = {
@@ -64,6 +64,19 @@ export default function Home() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'delete_todo', rowNumber })
+    });
+  };
+
+  const handleDeleteLetterly = async (rowNumber: number) => {
+    setData(prev => ({
+      ...prev,
+      letterly: prev.letterly.filter(r => r.rowNumber !== rowNumber)
+    }));
+
+    await fetch('/api/todos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'delete_letterly', rowNumber })
     });
   };
 
@@ -212,12 +225,21 @@ export default function Home() {
             {activeTab === 'letterly' && (
               <div className="space-y-6">
                 {data.letterly.map((note, i) => (
-                  <div key={i} className="bg-slate-900 border border-slate-800 p-6 rounded-2xl relative overflow-hidden">
+                  <div key={i} className="group bg-slate-900 border border-slate-800 p-6 rounded-2xl relative overflow-hidden flex justify-between items-start">
                     <div className="absolute top-0 left-0 w-1 h-full bg-purple-500"></div>
-                    <p className="text-sm text-slate-500 mb-3">{note.timestamp}</p>
-                    <div className="prose prose-invert max-w-none">
-                      <ReactMarkdown>{note.summary}</ReactMarkdown>
+                    <div className="flex-1">
+                      <p className="text-sm text-slate-500 mb-3">{note.timestamp}</p>
+                      <div className="prose prose-invert max-w-none">
+                        <ReactMarkdown>{note.summary}</ReactMarkdown>
+                      </div>
                     </div>
+                    <button 
+                      onClick={() => handleDeleteLetterly(note.rowNumber)} 
+                      className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all p-2 bg-slate-800 rounded-lg hover:bg-slate-700"
+                      title="Dismiss Note"
+                    >
+                      <Trash2 size={20} />
+                    </button>
                   </div>
                 ))}
                 

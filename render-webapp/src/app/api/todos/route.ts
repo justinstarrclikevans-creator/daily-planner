@@ -81,6 +81,7 @@ export async function GET() {
             const rows = await letterlySheet.getRows();
             rows.forEach(row => {
                 letterly.push({
+                    rowNumber: row.rowNumber,
                     id: row.get('ID'),
                     timestamp: row.get('Timestamp'),
                     original: row.get('Original Text'),
@@ -117,6 +118,20 @@ export async function POST(req: NextRequest) {
         
         if (action === 'delete_todo') {
             const sheet = doc.sheetsByTitle['Reminders'];
+            if (!sheet) return NextResponse.json({ error: "Sheet not found" }, { status: 404 });
+            
+            const rows = await sheet.getRows();
+            const row = rows.find(r => r.rowNumber === rowNumber);
+            
+            if (row) {
+                await row.delete();
+                return NextResponse.json({ success: true });
+            }
+            return NextResponse.json({ error: "Row not found" }, { status: 404 });
+        }
+
+        if (action === 'delete_letterly') {
+            const sheet = doc.sheetsByTitle['Letterly'];
             if (!sheet) return NextResponse.json({ error: "Sheet not found" }, { status: 404 });
             
             const rows = await sheet.getRows();
