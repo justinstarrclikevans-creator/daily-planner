@@ -22,7 +22,8 @@ export default function Home() {
   const [data, setData] = useState<{
     reminders: Todo[], 
     letterly: LetterlyNote[],
-    dailySummary: { date: string, summary: string } | null
+    dailySummary: { date: string, summary: string } | null,
+    error?: string
   }>({ reminders: [], letterly: [], dailySummary: null });
   const [loading, setLoading] = useState(true);
   const [newTitle, setNewTitle] = useState("");
@@ -32,9 +33,18 @@ export default function Home() {
     try {
       const res = await fetch('/api/todos');
       const json = await res.json();
-      setData(json);
-    } catch (e) {
+      if (json.error) {
+          setData({ reminders: [], letterly: [], dailySummary: null, error: json.error });
+      } else {
+          setData({
+              reminders: json.reminders || [],
+              letterly: json.letterly || [],
+              dailySummary: json.dailySummary || null
+          });
+      }
+    } catch (e: any) {
       console.error(e);
+      setData({ reminders: [], letterly: [], dailySummary: null, error: e.message });
     } finally {
       setLoading(false);
     }
@@ -71,9 +81,9 @@ export default function Home() {
   };
 
   // Filter lists based on prefix
-  const isCommTodo = (t: Todo) => t.title.startsWith('[SLACK]') || t.title.startsWith('[EMAIL]');
-  const generalTodos = data.reminders.filter(t => !isCommTodo(t));
-  const commTodos = data.reminders.filter(t => isCommTodo(t));
+  const isCommTodo = (t: Todo) => t.title && (t.title.startsWith('[SLACK]') || t.title.startsWith('[EMAIL]'));
+  const generalTodos = (data.reminders || []).filter(t => !isCommTodo(t));
+  const commTodos = (data.reminders || []).filter(t => isCommTodo(t));
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-8 font-sans">
@@ -118,6 +128,14 @@ export default function Home() {
         ) : (
           <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             
+            {data.error && (
+              <div className="bg-red-500/10 border border-red-500/50 p-4 rounded-xl text-red-200">
+                <h3 className="font-bold text-red-400 mb-1">Failed to load data</h3>
+                <p className="text-sm">{data.error}</p>
+                <p className="text-sm mt-2 opacity-75">Check your Render Environment Variables (especially your Google Private Key) to ensure they are configured correctly.</p>
+              </div>
+            )}
+
             {activeTab === 'general' && (
               <>
                 <form onSubmit={handleAdd} className="flex gap-4">
