@@ -47,15 +47,29 @@ export async function GET() {
             const rows = await letterlySheet.getRows();
             rows.forEach(row => {
                 letterly.push({
-                    rowNumber: row.rowNumber,
                     id: row.get('ID'),
                     timestamp: row.get('Timestamp'),
+                    original: row.get('Original Text'),
                     summary: row.get('Summary')
                 });
             });
         }
+        
+        let dailySummary = null;
+        let dailySummarySheet = doc.sheetsByTitle['DailySummary'];
+        if (dailySummarySheet) {
+            const rows = await dailySummarySheet.getRows();
+            if (rows.length > 0) {
+                // Get the most recent one (last row)
+                const lastRow = rows[rows.length - 1];
+                dailySummary = {
+                    date: lastRow.get('Date'),
+                    summary: lastRow.get('Summary')
+                };
+            }
+        }
 
-        return NextResponse.json({ reminders, letterly });
+        return NextResponse.json({ reminders, letterly, dailySummary });
     } catch (e: any) {
         return NextResponse.json({ error: e.message }, { status: 500 });
     }

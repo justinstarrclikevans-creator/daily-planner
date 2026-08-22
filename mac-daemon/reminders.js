@@ -1,34 +1,12 @@
 const { exec } = require('child_process');
+const path = require('path');
 
 async function getIncompleteReminders() {
-    const jxaScript = `
-        var Reminders = Application("Reminders");
-        var lists = Reminders.lists();
-        var allReminders = [];
-        
-        for (var i = 0; i < lists.length; i++) {
-            var list = lists[i];
-            var reminders = list.reminders();
-            for (var j = 0; j < reminders.length; j++) {
-                var r = reminders[j];
-                if (!r.completed()) {
-                    allReminders.push({
-                        id: r.id(),
-                        name: r.name(),
-                        body: r.body() || "",
-                        dueDate: r.dueDate() ? r.dueDate().toISOString() : null,
-                        listName: list.name()
-                    });
-                }
-            }
-        }
-        JSON.stringify(allReminders);
-    `;
-
+    const binPath = path.join(__dirname, 'get_reminders');
     return new Promise((resolve, reject) => {
-        exec(`osascript -l JavaScript -e '${jxaScript}'`, (error, stdout, stderr) => {
+        exec(`"${binPath}"`, (error, stdout, stderr) => {
             if (error) {
-                console.error("AppleScript error:", stderr);
+                console.error("Swift get_reminders error:", stderr);
                 return resolve([]);
             }
             try {
@@ -42,19 +20,9 @@ async function getIncompleteReminders() {
 }
 
 async function completeReminder(id) {
-    const jxaScript = `
-        var Reminders = Application("Reminders");
-        var reminder = Reminders.reminders.byId("${id}");
-        if (reminder) {
-            reminder.completed = true;
-            JSON.stringify({success: true});
-        } else {
-            JSON.stringify({success: false, error: "Not found"});
-        }
-    `;
-
+    const binPath = path.join(__dirname, 'complete_reminder');
     return new Promise((resolve, reject) => {
-        exec(`osascript -l JavaScript -e '${jxaScript}'`, (error, stdout, stderr) => {
+        exec(`"${binPath}" "${id}"`, (error, stdout, stderr) => {
             if (error) {
                 return resolve({success: false});
             }

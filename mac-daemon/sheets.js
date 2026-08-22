@@ -61,7 +61,37 @@ async function addLetterlySummariesToSheet(notes) {
     await sheet.addRows(rows);
 }
 
+async function addDailySummaryToSheet(summaryText) {
+    if (!summaryText) return;
+    const doc = await getSheetDoc();
+    
+    let sheet = doc.sheetsByTitle['DailySummary'];
+    if (!sheet) {
+        sheet = await doc.addSheet({ title: 'DailySummary', headerValues: ['Date', 'Summary'] });
+    }
+
+    await sheet.addRows([
+        { Date: new Date().toLocaleDateString(), Summary: summaryText }
+    ]);
+}
+
+async function getAllPendingTodos() {
+    const doc = await getSheetDoc();
+    const sheet = doc.sheetsByTitle['Reminders'];
+    if (!sheet) return [];
+    
+    const rows = await sheet.getRows();
+    return rows.filter(r => r.get('Status') === 'Pending').map(r => ({
+        id: r.get('ID'),
+        title: r.get('Title'),
+        description: r.get('Description'),
+        dueDate: r.get('Due Date')
+    }));
+}
+
 module.exports = {
     addTodosToSheet,
-    addLetterlySummariesToSheet
+    addLetterlySummariesToSheet,
+    addDailySummaryToSheet,
+    getAllPendingTodos
 };
