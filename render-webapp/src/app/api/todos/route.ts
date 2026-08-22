@@ -8,17 +8,33 @@ async function getSheetDoc() {
     }
 
     const rawKey = process.env.GOOGLE_PRIVATE_KEY || '';
-    // Strip surrounding quotes if the user accidentally copied them from the .env file
-    let sanitizedKey = rawKey;
+    
+    // Strip surrounding quotes
+    let sanitizedKey = rawKey.trim();
     if (sanitizedKey.startsWith('"') && sanitizedKey.endsWith('"')) {
         sanitizedKey = sanitizedKey.slice(1, -1);
     } else if (sanitizedKey.startsWith("'") && sanitizedKey.endsWith("'")) {
         sanitizedKey = sanitizedKey.slice(1, -1);
     }
     
+    // Process explicit \n strings
+    sanitizedKey = sanitizedKey.replace(/\\n/g, '\n');
+
+    // If Render completely stripped the newlines, rebuild the PEM format
+    if (!sanitizedKey.includes('\n') && sanitizedKey.includes('-----BEGIN PRIVATE KEY-----')) {
+        let middle = sanitizedKey
+            .replace('-----BEGIN PRIVATE KEY-----', '')
+            .replace('-----END PRIVATE KEY-----', '')
+            .replace(/\s+/g, ''); // remove any spaces
+            
+        // Break into 64-character lines
+        const chunked = middle.match(/.{1,64}/g)?.join('\n') || middle;
+        sanitizedKey = `-----BEGIN PRIVATE KEY-----\n${chunked}\n-----END PRIVATE KEY-----\n`;
+    }
+    
     const serviceAccountAuth = new JWT({
         email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        key: sanitizedKey.replace(/\\n/g, '\n'),
+        key: sanitizedKey,
         scopes: [
             'https://www.googleapis.com/auth/spreadsheets',
         ],
