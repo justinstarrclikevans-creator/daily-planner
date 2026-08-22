@@ -7,9 +7,10 @@ async function getSheetDoc() {
         throw new Error("Missing Google Sheets credentials in .env");
     }
 
+    const privateKey = process.env.GOOGLE_PRIVATE_KEY || '';
     const serviceAccountAuth = new JWT({
         email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-        key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+        key: privateKey.replace(/\\n/g, '\n'),
         scopes: [
             'https://www.googleapis.com/auth/spreadsheets',
         ],
