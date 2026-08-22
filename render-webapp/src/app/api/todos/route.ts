@@ -17,6 +17,15 @@ async function getSheetDoc() {
         sanitizedKey = sanitizedKey.slice(1, -1);
     }
     
+    // If it doesn't contain the BEGIN block, assume it is Base64 encoded (foolproof fallback)
+    if (!sanitizedKey.includes('-----BEGIN PRIVATE KEY-----')) {
+        try {
+            sanitizedKey = Buffer.from(sanitizedKey, 'base64').toString('ascii');
+        } catch (e) {
+            // ignore
+        }
+    }
+
     // Process explicit \n strings
     sanitizedKey = sanitizedKey.replace(/\\n/g, '\n');
 
