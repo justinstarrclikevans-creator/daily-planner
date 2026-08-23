@@ -12,6 +12,7 @@ type Todo = {
 };
 
 type LetterlyNote = {
+  rowNumber: number;
   id: string;
   timestamp: string;
   original: string;
