@@ -24,6 +24,11 @@ struct ProjectsHubView: View {
                 }
                 .refreshable {
                     await supabase.fetchAll()
+                    await RemindersManager.shared.importDeviceRemindersToSupabase()
+                }
+                .task {
+                    await supabase.fetchAll()
+                    await RemindersManager.shared.importDeviceRemindersToSupabase()
                 }
                 
                 // Floating Voice Mic Button
@@ -33,11 +38,23 @@ struct ProjectsHubView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        showSettings = true
-                    } label: {
-                        Image(systemName: "gearshape")
-                            .foregroundColor(.secondary)
+                    HStack(spacing: 16) {
+                        Button {
+                            Task {
+                                await supabase.fetchAll()
+                                await RemindersManager.shared.importDeviceRemindersToSupabase()
+                            }
+                        } label: {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .foregroundColor(.indigo)
+                        }
+                        
+                        Button {
+                            showSettings = true
+                        } label: {
+                            Image(systemName: "gearshape")
+                                .foregroundColor(.secondary)
+                        }
                     }
                 }
             }

@@ -65,4 +65,38 @@ class RemindersManager: ObservableObject {
         try eventStore.save(reminder, commit: true)
         return reminder.calendarItemIdentifier
     }
+    
+    func fetchIncompleteReminders() async -> [EKReminder] {
+        if !isAuthorized {
+            let granted = await requestAccess()
+            guard granted else { return [] }
+        }
+        
+        let predicate = eventStore.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: nil)
+        
+        return await withCheckedContinuation { continuation in
+            eventStore.fetchReminders(matching: predicate) { reminders in
+                continuation.resume(returning: reminders ?? [])
+            }
+        }
+    }
+    
+    func importDeviceRemindersToSupabase() async {
+        let reminders = await fetchIncompleteReminders()
+        for r in reminders {
+            guard let title = r.title, !title.isEmpty else { continue }
+            let listName = r.calendar?.title ?? "Personal"
+            let reminderId = r.calendarItemIdentifier
+            
+            if !SupabaseService.shared.tasks.contains(where: { $0.appleReminderId == reminderId || $0.title == title }) {
+                await SupabaseService.shared.createTask(
+                    title: title,
+                    description: r.notes,
+                    listName: listName,
+                    appleReminderId: reminderId
+                )
+            }
+        }
+    }
 }
+
