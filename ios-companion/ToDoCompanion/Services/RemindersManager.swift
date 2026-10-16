@@ -10,6 +10,20 @@ class RemindersManager: ObservableObject {
     
     private init() {
         checkAuthorization()
+        setupEventStoreObserver()
+    }
+    
+    private func setupEventStoreObserver() {
+        NotificationCenter.default.addObserver(
+            forName: .EKEventStoreChanged,
+            object: eventStore,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                print("Detected Apple Reminders database change. Auto-syncing...")
+                await self?.importDeviceRemindersToSupabase()
+            }
+        }
     }
     
     func checkAuthorization() {

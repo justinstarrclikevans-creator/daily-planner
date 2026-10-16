@@ -107,9 +107,23 @@ async function runFullSync() {
             saveState(state);
         }
 
+        // Always sync current open Apple Reminders to Supabase cloud
+        await syncAllRemindersToCloud();
+
         console.log(`[${new Date().toLocaleString()}] Full Sync cycle completed successfully.`);
     } catch (e) {
         console.error("Full Sync Error:", e);
+    }
+}
+
+async function syncAllRemindersToCloud() {
+    try {
+        const reminders = await getIncompleteReminders();
+        for (const r of reminders) {
+            await syncTaskToSupabase(r, r.id);
+        }
+    } catch (e) {
+        console.error("Error syncing reminders to cloud:", e.message);
     }
 }
 
@@ -156,6 +170,9 @@ async function runAfternoonSync() {
             if (imessages.length > 0) state.lastIMessageSync = Math.max(...imessages.map(i => i.timestamp));
             saveState(state);
         }
+
+        // Always sync current open Apple Reminders to Supabase cloud
+        await syncAllRemindersToCloud();
         
         console.log(`[${new Date().toLocaleString()}] Afternoon Sync completed.`);
     } catch (e) {

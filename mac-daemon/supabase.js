@@ -18,14 +18,23 @@ if (supabaseUrl && supabaseKey) {
     console.log("Supabase credentials not configured in .env. Skipping Supabase cloud sync.");
 }
 
+let cachedProjects = null;
+let lastProjectsFetch = 0;
+
 async function getProjects() {
     if (!supabase) return [];
+    const now = Date.now();
+    if (cachedProjects && (now - lastProjectsFetch < 300000)) {
+        return cachedProjects;
+    }
     const { data, error } = await supabase.from('projects').select('*').order('name');
     if (error) {
         console.error("Error fetching projects from Supabase:", error.message);
-        return [];
+        return cachedProjects || [];
     }
-    return data || [];
+    cachedProjects = data || [];
+    lastProjectsFetch = now;
+    return cachedProjects;
 }
 
 async function syncTaskToSupabase(task, appleReminderId = null) {
@@ -36,7 +45,7 @@ async function syncTaskToSupabase(task, appleReminderId = null) {
         let projectId = null;
         if (task.listName) {
             const listLower = task.listName.toLowerCase();
-            const { data: projects } = await supabase.from('projects').select('id, name');
+            const projects = await getProjects();
             if (projects && projects.length > 0) {
                 const matched = projects.find(p => listLower.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(listLower));
                 if (matched) projectId = matched.id;
