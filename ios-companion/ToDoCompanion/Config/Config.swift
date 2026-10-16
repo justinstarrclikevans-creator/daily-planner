@@ -5,11 +5,11 @@ struct AppConfig {
     // Fill in your project URL and anon public key from your Supabase dashboard:
     // https://app.supabase.com/project/_/settings/api
     static var supabaseURL: String {
-        return UserDefaults.standard.string(forKey: "supabase_url") ?? "https://YOUR_PROJECT_ID.supabase.co"
+        return UserDefaults.standard.string(forKey: "supabase_url") ?? "https://huwattmqwiqhcfhtqely.supabase.co"
     }
     
     static var supabaseAnonKey: String {
-        return UserDefaults.standard.string(forKey: "supabase_anon_key") ?? "YOUR_SUPABASE_ANON_KEY"
+        return UserDefaults.standard.string(forKey: "supabase_anon_key") ?? "sb_secret_21i-I_QCc5xA_dPeVQPKsg_iV7ZzjQm"
     }
     
     // Gemini API Configuration
