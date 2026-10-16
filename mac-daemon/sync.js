@@ -1,12 +1,13 @@
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
-const { getIncompleteReminders, completeReminder } = require('./reminders');
-const { getRecentLetterlyNotes, summarizeNotes } = require('./letterly');
-const { addTodosToSheet, addLetterlySummariesToSheet, addDailySummaryToSheet, getAllPendingTodos } = require('./sheets');
-const { getRecentSlackMessages } = require('./slack');
+const { getIncompleteReminders, addReminder, updateReminderNotes } = require('./reminders');
+const { getRecentSlackMessages, sendSlackDM } = require('./slack');
 const { getRecentEmails, getTodaysCalendarEvents } = require('./google');
-const { extractTodos, generateDailySummary } = require('./ai');
+const { getRecentMessages, sendIMessage } = require('./imessage');
+const { extractTodos, generateDailySummary, generateADHDProcess } = require('./ai');
+const { processIncomingSMS, checkUpcomingMeetings, triggerStalePurgeOffer } = require('./sms-handler');
+const { syncTaskToSupabase } = require('./supabase');
 
 const STATE_FILE = path.join(__dirname, 'state.json');
 
@@ -15,153 +16,181 @@ function loadState() {
         if (fs.existsSync(STATE_FILE)) {
             return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
         }
-    } catch (e) {
-        console.error("Error reading state.json:", e);
-    }
+    } catch (e) {}
     return {};
 }
 
 function saveState(state) {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+}
+
+async function expandTaskNotesForADHD() {
+    console.log(`[${new Date().toLocaleString()}] Checking for tasks that need ADHD process expansion...`);
     try {
-        fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
-    } catch (e) {
-        console.error("Error saving state.json:", e);
-    }
-}
-
-async function runSlackSync() {
-    console.log(`[${new Date().toLocaleString()}] Starting Slack-only sync...`);
-    const state = loadState();
-    
-    // Pass the last slack sync timestamp (if null, slack.js defaults to 7 days ago)
-    const slack = await getRecentSlackMessages(state.lastSlackSync);
-    
-    if (slack.length > 0) {
-        console.log("Extracting action items via Gemini...");
-        // Pass empty arrays for emails and events
-        const aiTodos = await extractTodos(slack, [], []);
+        const reminders = await getIncompleteReminders();
         
-        if (aiTodos.length > 0) {
-            console.log(`Extracted ${aiTodos.length} new Slack action items. Pushing to Google Sheets...`);
-            const formattedTodos = aiTodos.map(todo => ({
-                id: 'ai_' + Date.now() + Math.floor(Math.random()*1000),
-                name: `[${todo.source.toUpperCase()}] ${todo.title}`,
-                body: todo.description,
-                dueDate: ''
-            }));
-            await addTodosToSheet(formattedTodos);
+        // Find reminders that don't have the new First 5 Minutes momentum signature
+        let toExpand = reminders.filter(r => !r.description || !r.description.includes('⚡ First 5 Minutes:'));
+        
+        // Sort by User's List Priority: First shift > Personal > Football
+        const priorityScore = (listName) => {
+            const name = (listName || "").toLowerCase();
+            if (name.includes("first shift")) return 1;
+            if (name.includes("personal")) return 2;
+            if (name.includes("football") || name.includes("843")) return 3;
+            return 4; // Everything else
+        };
+        
+        toExpand.sort((a, b) => priorityScore(a.listName) - priorityScore(b.listName));
+        
+        // Limit to 30 at a time
+        toExpand = toExpand.slice(0, 30);
+        
+        if (toExpand.length > 0) {
+            console.log(`Found ${toExpand.length} tasks needing process expansion...`);
+            for (const task of toExpand) {
+                console.log(`Expanding notes for task: ${task.title}`);
+                const expandedProcess = await generateADHDProcess(task.title, task.description);
+                if (expandedProcess && expandedProcess.includes('⚡ First 5 Minutes:')) {
+                    await updateReminderNotes(task.id, expandedProcess);
+                    console.log(`Successfully updated notes for: ${task.title}`);
+                }
+            }
         }
-        
-        // Update state with the highest timestamp we found
-        const maxTs = Math.max(...slack.map(s => s.timestamp));
-        state.lastSlackSync = maxTs;
-        saveState(state);
-    } else {
-        console.log("No new Slack communications found.");
+    } catch (e) {
+        console.error("expandTaskNotesForADHD Error:", e);
     }
 }
 
-async function runFullSync(isMorningRun = false) {
+async function runFullSync() {
     console.log(`[${new Date().toLocaleString()}] Starting Full sync cycle...`);
     const state = loadState();
     
     try {
-        // 1. Process Apple Reminders
-        console.log("Fetching Apple Reminders...");
-        const reminders = await getIncompleteReminders();
-        if (reminders.length > 0) {
-            console.log(`Found ${reminders.length} incomplete reminders. Pushing to Google Sheets...`);
-            await addTodosToSheet(reminders);
-            
-            console.log("Marking reminders as complete in Apple Reminders...");
-            for (const r of reminders) {
-                await completeReminder(r.id);
-            }
-        }
-
-        // 2. Process Letterly Notes
-        console.log("Fetching recent Letterly notes...");
-        const allRecentNotes = await getRecentLetterlyNotes();
-        const lastSyncedLetterly = state.lastLetterlySync || (Date.now() - (24 * 60 * 60 * 1000));
-        const newNotes = allRecentNotes.filter(n => n.timestamp > lastSyncedLetterly);
-        
-        if (newNotes.length > 0) {
-            console.log(`Found ${newNotes.length} new Letterly notes. Summarizing with Gemini...`);
-            const summarizedNotes = await summarizeNotes(newNotes);
-            
-            console.log("Pushing Letterly summaries to Google Sheets...");
-            await addLetterlySummariesToSheet(summarizedNotes);
-            
-            state.lastLetterlySync = Math.max(...newNotes.map(n => n.timestamp));
-            saveState(state);
-        }
-
-        // 3. Process Communications (Slack, Gmail, Calendar) for Action Items
-        console.log("Fetching Slack, Gmail, and Calendar...");
-        const [slack, emails, events] = await Promise.all([
+        console.log("Fetching Slack, Gmail, iMessages, and Calendar Events...");
+        const [slack, emails, imessages, events] = await Promise.all([
             getRecentSlackMessages(state.lastSlackSync),
-            getRecentEmails(),
+            getRecentEmails(state.lastEmailSync),
+            getRecentMessages(state.lastIMessageSync || 0),
             getTodaysCalendarEvents()
         ]);
 
-        if (slack.length > 0 || emails.length > 0 || events.length > 0) {
+        if (slack.length > 0 || emails.length > 0 || imessages.length > 0 || events.length > 0) {
+            console.log("Fetching existing Apple Reminders to prevent duplicates...");
+            const existingTodos = await getIncompleteReminders();
+            
             console.log("Extracting action items via Gemini...");
-            const aiTodos = await extractTodos(slack, emails, events);
+            const aiExtractedTodos = await extractTodos(slack, emails, events, existingTodos, imessages, []);
             
-            if (aiTodos.length > 0) {
-                console.log(`Extracted ${aiTodos.length} new action items. Pushing to Google Sheets...`);
-                const formattedTodos = aiTodos.map(todo => ({
-                    id: 'ai_' + Date.now() + Math.floor(Math.random()*1000),
-                    name: `[${todo.source.toUpperCase()}] ${todo.title}`,
-                    body: todo.description,
-                    dueDate: ''
-                }));
-                await addTodosToSheet(formattedTodos);
+            if (aiExtractedTodos.length > 0) {
+                console.log(`Extracted ${aiExtractedTodos.length} new action items. Pushing to Apple Reminders...`);
+                for (const todo of aiExtractedTodos) {
+                    const targetList = todo.listName || 'Personal';
+                    const ok = await addReminder(targetList, todo.title, todo.description);
+                    if (!ok) console.error(`Failed to push reminder to list (${targetList}):`, todo.title);
+                    await syncTaskToSupabase(todo);
+                }
             }
             
-            if (slack.length > 0) {
-                const maxTs = Math.max(...slack.map(s => s.timestamp));
-                state.lastSlackSync = maxTs;
-                saveState(state);
+            if (slack.length > 0) state.lastSlackSync = Math.max(...slack.map(s => s.timestamp));
+            if (emails.length > 0) {
+                if (typeof state.lastEmailSync !== 'object' || state.lastEmailSync === null) {
+                    state.lastEmailSync = {};
+                }
+                for (const e of emails) {
+                    if (e.account) {
+                        state.lastEmailSync[e.account] = Math.max(state.lastEmailSync[e.account] || 0, e.timestamp);
+                    }
+                }
             }
-        }
-        
-        // 4. Generate Daily Summary if this is the 6 AM run
-        if (isMorningRun) {
-            console.log("Morning run detected. Generating Daily Summary...");
-            // events was fetched above
-            const pendingTodos = await getAllPendingTodos();
-            const dailySummary = await generateDailySummary(events, pendingTodos);
-            if (dailySummary) {
-                console.log("Pushing Daily Summary to Google Sheets...");
-                await addDailySummaryToSheet(dailySummary);
-            }
+            if (imessages.length > 0) state.lastIMessageSync = Math.max(...imessages.map(i => i.timestamp));
+            saveState(state);
         }
 
         console.log(`[${new Date().toLocaleString()}] Full Sync cycle completed successfully.`);
-    } catch (err) {
-        console.error("Error during sync cycle:", err);
+    } catch (e) {
+        console.error("Full Sync Error:", e);
     }
 }
 
-// 6 AM: Full Sync + Daily Summary
-cron.schedule('0 6 * * *', () => {
-    runFullSync(true);
-});
+async function runAfternoonSync() {
+    console.log(`[${new Date().toLocaleString()}] Starting Afternoon sync cycle...`);
+    const state = loadState();
+    
+    try {
+        const [slack, emails, imessages, events] = await Promise.all([
+            getRecentSlackMessages(state.lastSlackSync),
+            getRecentEmails(state.lastEmailSync),
+            getRecentMessages(state.lastIMessageSync || 0),
+            getTodaysCalendarEvents()
+        ]);
+        
+        if (slack.length > 0 || emails.length > 0 || imessages.length > 0 || events.length > 0) {
+            console.log("Fetching existing Apple Reminders to prevent duplicates...");
+            const existingTodos = await getIncompleteReminders();
+            
+            console.log("Extracting action items via Gemini...");
+            const aiExtractedTodos = await extractTodos(slack, emails, events, existingTodos, imessages, []);
+            
+            if (aiExtractedTodos.length > 0) {
+                console.log(`Extracted ${aiExtractedTodos.length} new action items. Pushing to Apple Reminders...`);
+                for (const todo of aiExtractedTodos) {
+                    const targetList = todo.listName || 'Personal';
+                    const ok = await addReminder(targetList, todo.title, todo.description);
+                    if (!ok) console.error(`Failed to push reminder to list (${targetList}):`, todo.title);
+                    await syncTaskToSupabase(todo);
+                }
+            }
+            
+            if (slack.length > 0) state.lastSlackSync = Math.max(...slack.map(s => s.timestamp));
+            if (emails.length > 0) {
+                if (typeof state.lastEmailSync !== 'object' || state.lastEmailSync === null) {
+                    state.lastEmailSync = {};
+                }
+                for (const e of emails) {
+                    if (e.account) {
+                        state.lastEmailSync[e.account] = Math.max(state.lastEmailSync[e.account] || 0, e.timestamp);
+                    }
+                }
+            }
+            if (imessages.length > 0) state.lastIMessageSync = Math.max(...imessages.map(i => i.timestamp));
+            saveState(state);
+        }
+        
+        console.log(`[${new Date().toLocaleString()}] Afternoon Sync completed.`);
+    } catch (e) {
+        console.error("Afternoon Sync Error:", e);
+    }
+}
 
-// 12 PM (Noon): Full Sync
-cron.schedule('0 12 * * *', () => {
-    runFullSync(false);
-});
+// 6:00 AM Morning Plan
+cron.schedule('0 6 * * *', () => runFullSync());
 
-// 3 PM: Slack Only Sync
-cron.schedule('0 15 * * *', () => {
-    runSlackSync();
-});
+// 12:00 PM Midday Catch-up
+cron.schedule('0 12 * * *', () => runFullSync());
+
+// 3:00 PM Afternoon Catch-up
+cron.schedule('0 15 * * *', runAfternoonSync);
+
+// Process incoming SMS (for "DONE" and "PURGE" replies) every minute
+cron.schedule('* * * * *', processIncomingSMS);
+
+// Check for upcoming meetings (Just-In-Time Context) every 5 minutes
+cron.schedule('*/5 * * * *', checkUpcomingMeetings);
+
+// The "Stale Task" Purge: Every Friday at 4:00 PM
+cron.schedule('0 16 * * 5', triggerStalePurgeOffer);
 
 console.log("Sync daemon started.");
 console.log("- Full Sync at 6:00 AM and 12:00 PM");
-console.log("- Slack-only Sync at 3:00 PM");
+console.log("- Afternoon Sync (Slack, Gmail, iMessage) at 3:00 PM");
+console.log("- Active ADHD Workflows: One Thing SMS (1m), Meeting Prompts (5m), Friday Purge (4pm Fri)");
 
 // On start, run a full sync immediately just to catch up
-runFullSync(false);
+runFullSync();
+
+module.exports = {
+    runFullSync,
+    runAfternoonSync,
+    expandTaskNotesForADHD
+};

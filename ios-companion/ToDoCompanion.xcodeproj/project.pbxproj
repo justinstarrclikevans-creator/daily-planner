@@ -1,0 +1,309 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		222200000000000000000000 /* ToDoCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000000 /* ToDoCompanionApp.swift */; };
+		222200000000000000000001 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000001 /* Config.swift */; };
+		222200000000000000000002 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000002 /* Project.swift */; };
+		222200000000000000000003 /* Idea.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000003 /* Idea.swift */; };
+		222200000000000000000004 /* TaskItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000004 /* TaskItem.swift */; };
+		222200000000000000000005 /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000005 /* SupabaseService.swift */; };
+		222200000000000000000006 /* GeminiVoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000006 /* GeminiVoiceService.swift */; };
+		222200000000000000000007 /* VoiceCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000007 /* VoiceCaptureManager.swift */; };
+		222200000000000000000008 /* SpeechSynthesisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000008 /* SpeechSynthesisService.swift */; };
+		222200000000000000000009 /* RemindersManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000009 /* RemindersManager.swift */; };
+		22220000000000000000000A /* WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000A /* WaveformView.swift */; };
+		22220000000000000000000B /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000B /* TaskRowView.swift */; };
+		22220000000000000000000C /* ProjectCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000C /* ProjectCardView.swift */; };
+		22220000000000000000000D /* ProjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000D /* ProjectDetailView.swift */; };
+		22220000000000000000000E /* VoiceSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000E /* VoiceSheetView.swift */; };
+		22220000000000000000000F /* ProjectsHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000F /* ProjectsHubView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		111100000000000000000000 /* ToDoCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App/ToDoCompanionApp.swift"; sourceTree = "<group>"; };
+		111100000000000000000001 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Config/Config.swift"; sourceTree = "<group>"; };
+		111100000000000000000002 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models/Project.swift"; sourceTree = "<group>"; };
+		111100000000000000000003 /* Idea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models/Idea.swift"; sourceTree = "<group>"; };
+		111100000000000000000004 /* TaskItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models/TaskItem.swift"; sourceTree = "<group>"; };
+		111100000000000000000005 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/SupabaseService.swift"; sourceTree = "<group>"; };
+		111100000000000000000006 /* GeminiVoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/GeminiVoiceService.swift"; sourceTree = "<group>"; };
+		111100000000000000000007 /* VoiceCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/VoiceCaptureManager.swift"; sourceTree = "<group>"; };
+		111100000000000000000008 /* SpeechSynthesisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/SpeechSynthesisService.swift"; sourceTree = "<group>"; };
+		111100000000000000000009 /* RemindersManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/RemindersManager.swift"; sourceTree = "<group>"; };
+		11110000000000000000000A /* WaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Voice/WaveformView.swift"; sourceTree = "<group>"; };
+		11110000000000000000000B /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Tasks/TaskRowView.swift"; sourceTree = "<group>"; };
+		11110000000000000000000C /* ProjectCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Projects/ProjectCardView.swift"; sourceTree = "<group>"; };
+		11110000000000000000000D /* ProjectDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Projects/ProjectDetailView.swift"; sourceTree = "<group>"; };
+		11110000000000000000000E /* VoiceSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Voice/VoiceSheetView.swift"; sourceTree = "<group>"; };
+		11110000000000000000000F /* ProjectsHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Projects/ProjectsHubView.swift"; sourceTree = "<group>"; };
+		1111000000000000000003E7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
+		333300000000000000000001 /* ToDoCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ToDoCompanion.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		444400000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		555500000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				555500000000000000000002 /* ToDoCompanion */,
+				555500000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		555500000000000000000002 /* ToDoCompanion */ = {
+			isa = PBXGroup;
+			children = (
+				1111000000000000000003E7 /* Info.plist */,
+				111100000000000000000000 /* ToDoCompanionApp.swift */,
+				111100000000000000000001 /* Config.swift */,
+				111100000000000000000002 /* Project.swift */,
+				111100000000000000000003 /* Idea.swift */,
+				111100000000000000000004 /* TaskItem.swift */,
+				111100000000000000000005 /* SupabaseService.swift */,
+				111100000000000000000006 /* GeminiVoiceService.swift */,
+				111100000000000000000007 /* VoiceCaptureManager.swift */,
+				111100000000000000000008 /* SpeechSynthesisService.swift */,
+				111100000000000000000009 /* RemindersManager.swift */,
+				11110000000000000000000A /* WaveformView.swift */,
+				11110000000000000000000B /* TaskRowView.swift */,
+				11110000000000000000000C /* ProjectCardView.swift */,
+				11110000000000000000000D /* ProjectDetailView.swift */,
+				11110000000000000000000E /* VoiceSheetView.swift */,
+				11110000000000000000000F /* ProjectsHubView.swift */,
+			);
+			path = ToDoCompanion;
+			sourceTree = "<group>";
+		};
+		555500000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				333300000000000000000001 /* ToDoCompanion.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		666600000000000000000001 /* ToDoCompanion */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 777700000000000000000002 /* Build configuration list for PBXNativeTarget "ToDoCompanion" */;
+			buildPhases = (
+				444400000000000000000002 /* Sources */,
+				444400000000000000000001 /* Frameworks */,
+				444400000000000000000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ToDoCompanion;
+			productName = ToDoCompanion;
+			productReference = 333300000000000000000001 /* ToDoCompanion.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		888800000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					666600000000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 777700000000000000000001 /* Build configuration list for PBXProject "ToDoCompanion" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 555500000000000000000001;
+			productRefGroup = 555500000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				666600000000000000000001 /* ToDoCompanion */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		444400000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		444400000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				222200000000000000000000 /* ToDoCompanionApp.swift in Sources */,
+				222200000000000000000001 /* Config.swift in Sources */,
+				222200000000000000000002 /* Project.swift in Sources */,
+				222200000000000000000003 /* Idea.swift in Sources */,
+				222200000000000000000004 /* TaskItem.swift in Sources */,
+				222200000000000000000005 /* SupabaseService.swift in Sources */,
+				222200000000000000000006 /* GeminiVoiceService.swift in Sources */,
+				222200000000000000000007 /* VoiceCaptureManager.swift in Sources */,
+				222200000000000000000008 /* SpeechSynthesisService.swift in Sources */,
+				222200000000000000000009 /* RemindersManager.swift in Sources */,
+				22220000000000000000000A /* WaveformView.swift in Sources */,
+				22220000000000000000000B /* TaskRowView.swift in Sources */,
+				22220000000000000000000C /* ProjectCardView.swift in Sources */,
+				22220000000000000000000D /* ProjectDetailView.swift in Sources */,
+				22220000000000000000000E /* VoiceSheetView.swift in Sources */,
+				22220000000000000000000F /* ProjectsHubView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		999900000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		999900000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_NO_COMMON_BLOCKS = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		999900000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ToDoCompanion/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "ToDo Companion";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.justinevans.ToDoCompanion;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		999900000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ToDoCompanion/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "ToDo Companion";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.justinevans.ToDoCompanion;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		777700000000000000000001 /* Build configuration list for PBXProject "ToDoCompanion" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				999900000000000000000001 /* Debug */,
+				999900000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		777700000000000000000002 /* Build configuration list for PBXNativeTarget "ToDoCompanion" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				999900000000000000000003 /* Debug */,
+				999900000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = 888800000000000000000001 /* Project object */;
+}
