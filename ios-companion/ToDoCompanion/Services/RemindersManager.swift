@@ -119,18 +119,56 @@ class RemindersManager: ObservableObject {
         }
     }
     
+    func syncReminderListsToProjects() async {
+        if !isAuthorized {
+            let granted = await requestAccess()
+            guard granted else { return }
+        }
+        
+        let calendars = eventStore.calendars(for: .reminder)
+        for cal in calendars {
+            let name = cal.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty else { continue }
+            
+            let exists = SupabaseService.shared.projects.contains { p in
+                p.name.caseInsensitiveCompare(name) == .orderedSame ||
+                p.slug.caseInsensitiveCompare(name) == .orderedSame
+            }
+            
+            if !exists {
+                let slug = name.lowercased()
+                    .replacingOccurrences(of: " ", with: "-")
+                    .replacingOccurrences(of: "[^a-z0-9-]", with: "", options: .regularExpression)
+                _ = await SupabaseService.shared.createProject(
+                    name: name,
+                    slug: slug.isEmpty ? "project-\(Int.random(in: 100...999))" : slug,
+                    color: "#3B82F6",
+                    icon: "folder.fill",
+                    goal: "Imported from Apple Reminders list",
+                    scheduleRule: .always
+                )
+            }
+        }
+    }
+    
     func importDeviceRemindersToSupabase() async {
+        await syncReminderListsToProjects()
         let reminders = await fetchIncompleteReminders()
         for r in reminders {
             guard let title = r.title, !title.isEmpty else { continue }
             let listName = r.calendar?.title ?? "Personal"
             let reminderId = r.calendarItemIdentifier
             
+            let matchedProject = SupabaseService.shared.projects.first { p in
+                p.name.caseInsensitiveCompare(listName) == .orderedSame
+            }
+            
             if !SupabaseService.shared.tasks.contains(where: { $0.appleReminderId == reminderId || $0.title == title }) {
                 await SupabaseService.shared.createTask(
                     title: title,
                     description: r.notes,
                     listName: listName,
+                    projectId: matchedProject?.id,
                     appleReminderId: reminderId
                 )
             }
