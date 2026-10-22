@@ -7,43 +7,69 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		222200000000000000000000 /* ToDoCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000000 /* ToDoCompanionApp.swift */; };
-		222200000000000000000001 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000001 /* Config.swift */; };
-		222200000000000000000002 /* Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000002 /* Project.swift */; };
-		222200000000000000000003 /* Idea.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000003 /* Idea.swift */; };
-		222200000000000000000004 /* TaskItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000004 /* TaskItem.swift */; };
-		222200000000000000000005 /* SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000005 /* SupabaseService.swift */; };
-		222200000000000000000006 /* GeminiVoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000006 /* GeminiVoiceService.swift */; };
-		222200000000000000000007 /* VoiceCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000007 /* VoiceCaptureManager.swift */; };
-		222200000000000000000008 /* SpeechSynthesisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000008 /* SpeechSynthesisService.swift */; };
-		222200000000000000000009 /* RemindersManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000009 /* RemindersManager.swift */; };
-		22220000000000000000000A /* WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000A /* WaveformView.swift */; };
-		22220000000000000000000B /* TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000B /* TaskRowView.swift */; };
-		22220000000000000000000C /* ProjectCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000C /* ProjectCardView.swift */; };
-		22220000000000000000000D /* ProjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000D /* ProjectDetailView.swift */; };
-		22220000000000000000000E /* VoiceSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000E /* VoiceSheetView.swift */; };
-		22220000000000000000000F /* ProjectsHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000F /* ProjectsHubView.swift */; };
+		222200000000000000000000 /* App/ToDoCompanionApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000000 /* App/ToDoCompanionApp.swift */; };
+		222200000000000000000001 /* Config/Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000001 /* Config/Config.swift */; };
+		222200000000000000000002 /* Models/Project.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000002 /* Models/Project.swift */; };
+		222200000000000000000003 /* Models/Idea.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000003 /* Models/Idea.swift */; };
+		222200000000000000000004 /* Models/TaskItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000004 /* Models/TaskItem.swift */; };
+		222200000000000000000005 /* Services/SupabaseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000005 /* Services/SupabaseService.swift */; };
+		222200000000000000000006 /* Services/GeminiVoiceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000006 /* Services/GeminiVoiceService.swift */; };
+		222200000000000000000007 /* Services/VoiceCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000007 /* Services/VoiceCaptureManager.swift */; };
+		222200000000000000000008 /* Services/SpeechSynthesisService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000008 /* Services/SpeechSynthesisService.swift */; };
+		222200000000000000000009 /* Services/RemindersManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000009 /* Services/RemindersManager.swift */; };
+		22220000000000000000000A /* Views/Voice/WaveformView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000A /* Views/Voice/WaveformView.swift */; };
+		22220000000000000000000B /* Views/Tasks/TaskRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000B /* Views/Tasks/TaskRowView.swift */; };
+		22220000000000000000000C /* Views/Projects/ProjectCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000C /* Views/Projects/ProjectCardView.swift */; };
+		22220000000000000000000D /* Views/Projects/ProjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000D /* Views/Projects/ProjectDetailView.swift */; };
+		22220000000000000000000E /* Views/Voice/VoiceSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000E /* Views/Voice/VoiceSheetView.swift */; };
+		22220000000000000000000F /* Views/Projects/ProjectsHubView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000000F /* Views/Projects/ProjectsHubView.swift */; };
+		222200000000000000000010 /* Views/Tasks/TaskFocusSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000010 /* Views/Tasks/TaskFocusSheetView.swift */; };
+		222200000000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000011 /* Assets.xcassets */; };
+		222200000000000000000012 /* Models/Routine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000012 /* Models/Routine.swift */; };
+		222200000000000000000013 /* Services/NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000013 /* Services/NotificationService.swift */; };
+		222200000000000000000014 /* Views/Routines/RoutineLibrarySheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000014 /* Views/Routines/RoutineLibrarySheetView.swift */; };
+		222200000000000000000015 /* Services/CalendarManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000015 /* Services/CalendarManager.swift */; };
+		222200000000000000000016 /* Views/Assistant/AssistantHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000016 /* Views/Assistant/AssistantHomeView.swift */; };
+		222200000000000000000017 /* Views/Projects/ProjectPlaybookEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000017 /* Views/Projects/ProjectPlaybookEditorView.swift */; };
+		222200000000000000000018 /* Views/Tasks/RemindersListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000018 /* Views/Tasks/RemindersListView.swift */; };
+		222200000000000000000019 /* Views/MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000019 /* Views/MainTabView.swift */; };
+		22220000000000000000001A /* Views/Projects/CreateProjectSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000001A /* Views/Projects/CreateProjectSheetView.swift */; };
+		22220000000000000000001B /* Views/Tasks/SingleStepFocusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000001B /* Views/Tasks/SingleStepFocusView.swift */; };
+		22220000000000000000001C /* Views/Routines/CreateWorkflowFromAudioSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000001C /* Views/Routines/CreateWorkflowFromAudioSheetView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		111100000000000000000000 /* ToDoCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "App/ToDoCompanionApp.swift"; sourceTree = "<group>"; };
-		111100000000000000000001 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Config/Config.swift"; sourceTree = "<group>"; };
-		111100000000000000000002 /* Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models/Project.swift"; sourceTree = "<group>"; };
-		111100000000000000000003 /* Idea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models/Idea.swift"; sourceTree = "<group>"; };
-		111100000000000000000004 /* TaskItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Models/TaskItem.swift"; sourceTree = "<group>"; };
-		111100000000000000000005 /* SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/SupabaseService.swift"; sourceTree = "<group>"; };
-		111100000000000000000006 /* GeminiVoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/GeminiVoiceService.swift"; sourceTree = "<group>"; };
-		111100000000000000000007 /* VoiceCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/VoiceCaptureManager.swift"; sourceTree = "<group>"; };
-		111100000000000000000008 /* SpeechSynthesisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/SpeechSynthesisService.swift"; sourceTree = "<group>"; };
-		111100000000000000000009 /* RemindersManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Services/RemindersManager.swift"; sourceTree = "<group>"; };
-		11110000000000000000000A /* WaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Voice/WaveformView.swift"; sourceTree = "<group>"; };
-		11110000000000000000000B /* TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Tasks/TaskRowView.swift"; sourceTree = "<group>"; };
-		11110000000000000000000C /* ProjectCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Projects/ProjectCardView.swift"; sourceTree = "<group>"; };
-		11110000000000000000000D /* ProjectDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Projects/ProjectDetailView.swift"; sourceTree = "<group>"; };
-		11110000000000000000000E /* VoiceSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Voice/VoiceSheetView.swift"; sourceTree = "<group>"; };
-		11110000000000000000000F /* ProjectsHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Views/Projects/ProjectsHubView.swift"; sourceTree = "<group>"; };
-		1111000000000000000003E7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Info.plist"; sourceTree = "<group>"; };
-		333300000000000000000001 /* ToDoCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "ToDoCompanion.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		111100000000000000000000 /* App/ToDoCompanionApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/ToDoCompanionApp.swift; sourceTree = "<group>"; };
+		111100000000000000000001 /* Config/Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config/Config.swift; sourceTree = "<group>"; };
+		111100000000000000000002 /* Models/Project.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/Project.swift; sourceTree = "<group>"; };
+		111100000000000000000003 /* Models/Idea.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/Idea.swift; sourceTree = "<group>"; };
+		111100000000000000000004 /* Models/TaskItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/TaskItem.swift; sourceTree = "<group>"; };
+		111100000000000000000005 /* Services/SupabaseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SupabaseService.swift; sourceTree = "<group>"; };
+		111100000000000000000006 /* Services/GeminiVoiceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/GeminiVoiceService.swift; sourceTree = "<group>"; };
+		111100000000000000000007 /* Services/VoiceCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/VoiceCaptureManager.swift; sourceTree = "<group>"; };
+		111100000000000000000008 /* Services/SpeechSynthesisService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SpeechSynthesisService.swift; sourceTree = "<group>"; };
+		111100000000000000000009 /* Services/RemindersManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/RemindersManager.swift; sourceTree = "<group>"; };
+		11110000000000000000000A /* Views/Voice/WaveformView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Voice/WaveformView.swift; sourceTree = "<group>"; };
+		11110000000000000000000B /* Views/Tasks/TaskRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/TaskRowView.swift; sourceTree = "<group>"; };
+		11110000000000000000000C /* Views/Projects/ProjectCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Projects/ProjectCardView.swift; sourceTree = "<group>"; };
+		11110000000000000000000D /* Views/Projects/ProjectDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Projects/ProjectDetailView.swift; sourceTree = "<group>"; };
+		11110000000000000000000E /* Views/Voice/VoiceSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Voice/VoiceSheetView.swift; sourceTree = "<group>"; };
+		11110000000000000000000F /* Views/Projects/ProjectsHubView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Projects/ProjectsHubView.swift; sourceTree = "<group>"; };
+		111100000000000000000010 /* Views/Tasks/TaskFocusSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/TaskFocusSheetView.swift; sourceTree = "<group>"; };
+		111100000000000000000011 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		111100000000000000000012 /* Models/Routine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/Routine.swift; sourceTree = "<group>"; };
+		111100000000000000000013 /* Services/NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/NotificationService.swift; sourceTree = "<group>"; };
+		111100000000000000000014 /* Views/Routines/RoutineLibrarySheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Routines/RoutineLibrarySheetView.swift; sourceTree = "<group>"; };
+		111100000000000000000015 /* Services/CalendarManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/CalendarManager.swift; sourceTree = "<group>"; };
+		111100000000000000000016 /* Views/Assistant/AssistantHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Assistant/AssistantHomeView.swift; sourceTree = "<group>"; };
+		111100000000000000000017 /* Views/Projects/ProjectPlaybookEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Projects/ProjectPlaybookEditorView.swift; sourceTree = "<group>"; };
+		111100000000000000000018 /* Views/Tasks/RemindersListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/RemindersListView.swift; sourceTree = "<group>"; };
+		111100000000000000000019 /* Views/MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/MainTabView.swift; sourceTree = "<group>"; };
+		11110000000000000000001A /* Views/Projects/CreateProjectSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Projects/CreateProjectSheetView.swift; sourceTree = "<group>"; };
+		11110000000000000000001B /* Views/Tasks/SingleStepFocusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/SingleStepFocusView.swift; sourceTree = "<group>"; };
+		11110000000000000000001C /* Views/Routines/CreateWorkflowFromAudioSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Routines/CreateWorkflowFromAudioSheetView.swift; sourceTree = "<group>"; };
+		1111000000000000000003E7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		333300000000000000000001 /* ToDoCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ToDoCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -69,22 +95,35 @@
 			isa = PBXGroup;
 			children = (
 				1111000000000000000003E7 /* Info.plist */,
-				111100000000000000000000 /* ToDoCompanionApp.swift */,
-				111100000000000000000001 /* Config.swift */,
-				111100000000000000000002 /* Project.swift */,
-				111100000000000000000003 /* Idea.swift */,
-				111100000000000000000004 /* TaskItem.swift */,
-				111100000000000000000005 /* SupabaseService.swift */,
-				111100000000000000000006 /* GeminiVoiceService.swift */,
-				111100000000000000000007 /* VoiceCaptureManager.swift */,
-				111100000000000000000008 /* SpeechSynthesisService.swift */,
-				111100000000000000000009 /* RemindersManager.swift */,
-				11110000000000000000000A /* WaveformView.swift */,
-				11110000000000000000000B /* TaskRowView.swift */,
-				11110000000000000000000C /* ProjectCardView.swift */,
-				11110000000000000000000D /* ProjectDetailView.swift */,
-				11110000000000000000000E /* VoiceSheetView.swift */,
-				11110000000000000000000F /* ProjectsHubView.swift */,
+				111100000000000000000000 /* App/ToDoCompanionApp.swift */,
+				111100000000000000000001 /* Config/Config.swift */,
+				111100000000000000000002 /* Models/Project.swift */,
+				111100000000000000000003 /* Models/Idea.swift */,
+				111100000000000000000004 /* Models/TaskItem.swift */,
+				111100000000000000000005 /* Services/SupabaseService.swift */,
+				111100000000000000000006 /* Services/GeminiVoiceService.swift */,
+				111100000000000000000007 /* Services/VoiceCaptureManager.swift */,
+				111100000000000000000008 /* Services/SpeechSynthesisService.swift */,
+				111100000000000000000009 /* Services/RemindersManager.swift */,
+				11110000000000000000000A /* Views/Voice/WaveformView.swift */,
+				11110000000000000000000B /* Views/Tasks/TaskRowView.swift */,
+				11110000000000000000000C /* Views/Projects/ProjectCardView.swift */,
+				11110000000000000000000D /* Views/Projects/ProjectDetailView.swift */,
+				11110000000000000000000E /* Views/Voice/VoiceSheetView.swift */,
+				11110000000000000000000F /* Views/Projects/ProjectsHubView.swift */,
+				111100000000000000000010 /* Views/Tasks/TaskFocusSheetView.swift */,
+				111100000000000000000011 /* Assets.xcassets */,
+				111100000000000000000012 /* Models/Routine.swift */,
+				111100000000000000000013 /* Services/NotificationService.swift */,
+				111100000000000000000014 /* Views/Routines/RoutineLibrarySheetView.swift */,
+				111100000000000000000015 /* Services/CalendarManager.swift */,
+				111100000000000000000016 /* Views/Assistant/AssistantHomeView.swift */,
+				111100000000000000000017 /* Views/Projects/ProjectPlaybookEditorView.swift */,
+				111100000000000000000018 /* Views/Tasks/RemindersListView.swift */,
+				111100000000000000000019 /* Views/MainTabView.swift */,
+				11110000000000000000001A /* Views/Projects/CreateProjectSheetView.swift */,
+				11110000000000000000001B /* Views/Tasks/SingleStepFocusView.swift */,
+				11110000000000000000001C /* Views/Routines/CreateWorkflowFromAudioSheetView.swift */,
 			);
 			path = ToDoCompanion;
 			sourceTree = "<group>";
@@ -155,6 +194,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				222200000000000000000011 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -165,22 +205,34 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				222200000000000000000000 /* ToDoCompanionApp.swift in Sources */,
-				222200000000000000000001 /* Config.swift in Sources */,
-				222200000000000000000002 /* Project.swift in Sources */,
-				222200000000000000000003 /* Idea.swift in Sources */,
-				222200000000000000000004 /* TaskItem.swift in Sources */,
-				222200000000000000000005 /* SupabaseService.swift in Sources */,
-				222200000000000000000006 /* GeminiVoiceService.swift in Sources */,
-				222200000000000000000007 /* VoiceCaptureManager.swift in Sources */,
-				222200000000000000000008 /* SpeechSynthesisService.swift in Sources */,
-				222200000000000000000009 /* RemindersManager.swift in Sources */,
-				22220000000000000000000A /* WaveformView.swift in Sources */,
-				22220000000000000000000B /* TaskRowView.swift in Sources */,
-				22220000000000000000000C /* ProjectCardView.swift in Sources */,
-				22220000000000000000000D /* ProjectDetailView.swift in Sources */,
-				22220000000000000000000E /* VoiceSheetView.swift in Sources */,
-				22220000000000000000000F /* ProjectsHubView.swift in Sources */,
+				222200000000000000000000 /* App/ToDoCompanionApp.swift in Sources */,
+				222200000000000000000001 /* Config/Config.swift in Sources */,
+				222200000000000000000002 /* Models/Project.swift in Sources */,
+				222200000000000000000003 /* Models/Idea.swift in Sources */,
+				222200000000000000000004 /* Models/TaskItem.swift in Sources */,
+				222200000000000000000005 /* Services/SupabaseService.swift in Sources */,
+				222200000000000000000006 /* Services/GeminiVoiceService.swift in Sources */,
+				222200000000000000000007 /* Services/VoiceCaptureManager.swift in Sources */,
+				222200000000000000000008 /* Services/SpeechSynthesisService.swift in Sources */,
+				222200000000000000000009 /* Services/RemindersManager.swift in Sources */,
+				22220000000000000000000A /* Views/Voice/WaveformView.swift in Sources */,
+				22220000000000000000000B /* Views/Tasks/TaskRowView.swift in Sources */,
+				22220000000000000000000C /* Views/Projects/ProjectCardView.swift in Sources */,
+				22220000000000000000000D /* Views/Projects/ProjectDetailView.swift in Sources */,
+				22220000000000000000000E /* Views/Voice/VoiceSheetView.swift in Sources */,
+				22220000000000000000000F /* Views/Projects/ProjectsHubView.swift in Sources */,
+				222200000000000000000010 /* Views/Tasks/TaskFocusSheetView.swift in Sources */,
+				222200000000000000000012 /* Models/Routine.swift in Sources */,
+				222200000000000000000013 /* Services/NotificationService.swift in Sources */,
+				222200000000000000000014 /* Views/Routines/RoutineLibrarySheetView.swift in Sources */,
+				222200000000000000000015 /* Services/CalendarManager.swift in Sources */,
+				222200000000000000000016 /* Views/Assistant/AssistantHomeView.swift in Sources */,
+				222200000000000000000017 /* Views/Projects/ProjectPlaybookEditorView.swift in Sources */,
+				222200000000000000000018 /* Views/Tasks/RemindersListView.swift in Sources */,
+				222200000000000000000019 /* Views/MainTabView.swift in Sources */,
+				22220000000000000000001A /* Views/Projects/CreateProjectSheetView.swift in Sources */,
+				22220000000000000000001B /* Views/Tasks/SingleStepFocusView.swift in Sources */,
+				22220000000000000000001C /* Views/Routines/CreateWorkflowFromAudioSheetView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -241,6 +293,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = AYV356A8JG;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ToDoCompanion/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "ToDo Companion";
@@ -264,6 +317,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = AYV356A8JG;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ToDoCompanion/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "ToDo Companion";
@@ -303,7 +357,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
 	};
 	rootObject = 888800000000000000000001 /* Project object */;
 }

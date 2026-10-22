@@ -6,7 +6,7 @@ const { getRecentSlackMessages, sendSlackDM } = require('./slack');
 const { getRecentEmails, getTodaysCalendarEvents } = require('./google');
 const { getRecentMessages, sendIMessage } = require('./imessage');
 const { extractTodos, generateDailySummary, generateADHDProcess } = require('./ai');
-const { processIncomingSMS, checkUpcomingMeetings, triggerStalePurgeOffer } = require('./sms-handler');
+const { processIncomingSMS, checkUpcomingMeetings, triggerStalePurgeOffer, checkHalfwayNudge, checkAggressiveMotivationNudges } = require('./sms-handler');
 const { syncTaskToSupabase } = require('./supabase');
 
 const STATE_FILE = path.join(__dirname, 'state.json');
@@ -67,27 +67,33 @@ async function runFullSync() {
     const state = loadState();
     
     try {
-        console.log("Fetching Slack, Gmail, iMessages, and Calendar Events...");
-        const [slack, emails, imessages, events] = await Promise.all([
+        console.log("Fetching Slack, Gmail, and Calendar Events (iMessage reading disabled)...");
+        const [slack, emails, events] = await Promise.all([
             getRecentSlackMessages(state.lastSlackSync),
             getRecentEmails(state.lastEmailSync),
-            getRecentMessages(state.lastIMessageSync || 0),
             getTodaysCalendarEvents()
         ]);
 
-        if (slack.length > 0 || emails.length > 0 || imessages.length > 0 || events.length > 0) {
+        if (slack.length > 0 || emails.length > 0 || events.length > 0) {
             console.log("Fetching existing Apple Reminders to prevent duplicates...");
             const existingTodos = await getIncompleteReminders();
             
             console.log("Extracting action items via Gemini...");
-            const aiExtractedTodos = await extractTodos(slack, emails, events, existingTodos, imessages, []);
+            const aiExtractedTodos = await extractTodos(slack, emails, events, existingTodos, [], []);
             
             if (aiExtractedTodos.length > 0) {
                 console.log(`Extracted ${aiExtractedTodos.length} new action items. Pushing to Apple Reminders...`);
                 for (const todo of aiExtractedTodos) {
-                    const targetList = todo.listName || 'Personal';
+                    let targetList = todo.listName || 'Personal';
+                    const lower = targetList.toLowerCase();
+                    if (lower.includes('first shift')) targetList = 'First Shift';
+                    else if (lower.includes('reentry')) targetList = 'Reentry Nav';
+                    else if (lower.includes('football') || lower.includes('843')) targetList = 'Football';
+                    else targetList = 'Personal';
+
                     const ok = await addReminder(targetList, todo.title, todo.description);
                     if (!ok) console.error(`Failed to push reminder to list (${targetList}):`, todo.title);
+                    todo.listName = targetList;
                     await syncTaskToSupabase(todo);
                 }
             }
@@ -132,26 +138,32 @@ async function runAfternoonSync() {
     const state = loadState();
     
     try {
-        const [slack, emails, imessages, events] = await Promise.all([
+        const [slack, emails, events] = await Promise.all([
             getRecentSlackMessages(state.lastSlackSync),
             getRecentEmails(state.lastEmailSync),
-            getRecentMessages(state.lastIMessageSync || 0),
             getTodaysCalendarEvents()
         ]);
         
-        if (slack.length > 0 || emails.length > 0 || imessages.length > 0 || events.length > 0) {
+        if (slack.length > 0 || emails.length > 0 || events.length > 0) {
             console.log("Fetching existing Apple Reminders to prevent duplicates...");
             const existingTodos = await getIncompleteReminders();
             
             console.log("Extracting action items via Gemini...");
-            const aiExtractedTodos = await extractTodos(slack, emails, events, existingTodos, imessages, []);
+            const aiExtractedTodos = await extractTodos(slack, emails, events, existingTodos, [], []);
             
             if (aiExtractedTodos.length > 0) {
                 console.log(`Extracted ${aiExtractedTodos.length} new action items. Pushing to Apple Reminders...`);
                 for (const todo of aiExtractedTodos) {
-                    const targetList = todo.listName || 'Personal';
+                    let targetList = todo.listName || 'Personal';
+                    const lower = targetList.toLowerCase();
+                    if (lower.includes('first shift')) targetList = 'First Shift';
+                    else if (lower.includes('reentry')) targetList = 'Reentry Nav';
+                    else if (lower.includes('football') || lower.includes('843')) targetList = 'Football';
+                    else targetList = 'Personal';
+
                     const ok = await addReminder(targetList, todo.title, todo.description);
                     if (!ok) console.error(`Failed to push reminder to list (${targetList}):`, todo.title);
+                    todo.listName = targetList;
                     await syncTaskToSupabase(todo);
                 }
             }
@@ -195,13 +207,19 @@ cron.schedule('* * * * *', processIncomingSMS);
 // Check for upcoming meetings (Just-In-Time Context) every 5 minutes
 cron.schedule('*/5 * * * *', checkUpcomingMeetings);
 
+// Tiimo-style Halfway Check-in for active focused task every 5 minutes
+cron.schedule('*/5 * * * *', checkHalfwayNudge);
+
+// Aggressive Motivation Nudges (15m Idle Anger Trigger & Overtime check) every 2 minutes
+cron.schedule('*/2 * * * *', checkAggressiveMotivationNudges);
+
 // The "Stale Task" Purge: Every Friday at 4:00 PM
 cron.schedule('0 16 * * 5', triggerStalePurgeOffer);
 
 console.log("Sync daemon started.");
 console.log("- Full Sync at 6:00 AM and 12:00 PM");
-console.log("- Afternoon Sync (Slack, Gmail, iMessage) at 3:00 PM");
-console.log("- Active ADHD Workflows: One Thing SMS (1m), Meeting Prompts (5m), Friday Purge (4pm Fri)");
+console.log("- Afternoon Sync (Slack, Gmail) at 3:00 PM (iMessage reading disabled)");
+console.log("- Active ADHD Workflows: Aggressive Motivation Anger Triggers (15m Idle, Overtime alerts), Meeting Prompts (5m), Friday Purge (4pm Fri)");
 
 // On start, run a full sync immediately just to catch up
 runFullSync();

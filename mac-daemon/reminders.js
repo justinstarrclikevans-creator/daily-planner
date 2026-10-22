@@ -1,4 +1,4 @@
-const { exec } = require('child_process');
+const { exec, execFile } = require('child_process');
 const path = require('path');
 
 async function getIncompleteReminders() {
@@ -10,7 +10,15 @@ async function getIncompleteReminders() {
                 return resolve([]);
             }
             try {
-                const data = JSON.parse(stdout.trim());
+                const rawData = JSON.parse(stdout.trim());
+                const data = rawData.map(r => ({
+                    id: r.id,
+                    title: r.name,
+                    description: r.body,
+                    listName: r.listName,
+                    updated: r.updated,
+                    dueDate: r.dueDate
+                }));
                 resolve(data);
             } catch (e) {
                 resolve([]);
@@ -35,7 +43,56 @@ async function completeReminder(id) {
     });
 }
 
+async function addReminder(listName, title, notes = "") {
+    const safeTitle = (title || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const safeNotes = (notes || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const safeList = (listName || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const script = `
+    tell application "Reminders"
+        if not (exists list "${safeList}") then
+            make new list with properties {name:"${safeList}"}
+        end if
+        set targetList to list "${safeList}"
+        make new reminder at end of reminders of targetList with properties {name:"${safeTitle}", body:"${safeNotes}"}
+    end tell
+    `;
+    return new Promise((resolve) => {
+        execFile('osascript', ['-e', script], (err) => {
+            if (err) console.error("Error creating reminder:", err.message);
+            resolve(!err);
+        });
+    });
+}
+
+async function moveReminderToSomeday(id, title, notes = "") {
+    const added = await addReminder("Someday", title, notes);
+    if (added) {
+        await completeReminder(id);
+        return true;
+    }
+    return false;
+}
+
+async function updateReminderNotes(id, notes) {
+    const binPath = path.join(__dirname, 'update_reminder_notes');
+    return new Promise((resolve, reject) => {
+        exec(`"${binPath}" "${id}" "${notes.replace(/"/g, '\\"')}"`, (error, stdout, stderr) => {
+            if (error) {
+                return resolve({success: false});
+            }
+            try {
+                resolve(JSON.parse(stdout.trim()));
+            } catch (e) {
+                resolve({success: false});
+            }
+        });
+    });
+}
+
 module.exports = {
     getIncompleteReminders,
-    completeReminder
+    completeReminder,
+    addReminder,
+    moveReminderToSomeday,
+    updateReminderNotes
 };

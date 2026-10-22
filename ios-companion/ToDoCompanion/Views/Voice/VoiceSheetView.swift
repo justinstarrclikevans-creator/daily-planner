@@ -234,9 +234,17 @@ struct VoiceSheetView: View {
                     
                     // 2. Save Tasks to Apple Reminders & Supabase
                     for extracted in result.tasks {
+                        let subtaskItems = (extracted.subtasks ?? []).map { SubtaskItem(title: $0, isCompleted: false) }
+                        
                         let reminderId = try? await RemindersManager.shared.addReminder(
                             title: extracted.title,
-                            notes: extracted.description,
+                            notes: TaskItem.buildDescription(
+                                cleanNotes: extracted.description ?? "",
+                                estimatedMinutes: extracted.estimatedMinutes,
+                                inPlayQueue: false,
+                                firstFiveMinutes: extracted.firstFiveMinutes,
+                                subtasks: subtaskItems
+                            ),
                             listName: extracted.listName
                         )
                         
@@ -245,7 +253,11 @@ struct VoiceSheetView: View {
                             description: extracted.description,
                             listName: extracted.listName,
                             projectId: projectId,
-                            appleReminderId: reminderId
+                            appleReminderId: reminderId,
+                            estimatedMinutes: extracted.estimatedMinutes,
+                            inPlayQueue: false,
+                            firstFiveMinutes: extracted.firstFiveMinutes,
+                            subtasks: subtaskItems
                         )
                     }
                     

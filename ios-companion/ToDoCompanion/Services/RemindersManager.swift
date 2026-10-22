@@ -48,6 +48,30 @@ class RemindersManager: ObservableObject {
         }
     }
     
+    func createReminderList(named name: String) async -> Bool {
+        if !isAuthorized {
+            let granted = await requestAccess()
+            guard granted else { return false }
+        }
+        
+        let existing = eventStore.calendars(for: .reminder)
+        if existing.contains(where: { $0.title.caseInsensitiveCompare(name) == .orderedSame }) {
+            return true
+        }
+        
+        let newCal = EKCalendar(for: .reminder, eventStore: eventStore)
+        newCal.title = name
+        newCal.source = eventStore.defaultCalendarForNewReminders()?.source ?? eventStore.sources.first
+        
+        do {
+            try eventStore.saveCalendar(newCal, commit: true)
+            return true
+        } catch {
+            print("Failed to create reminder list \(name): \(error)")
+            return false
+        }
+    }
+    
     func addReminder(title: String, notes: String? = nil, listName: String = "Personal", dueDate: Date? = nil) async throws -> String? {
         if !isAuthorized {
             let granted = await requestAccess()

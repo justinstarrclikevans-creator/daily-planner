@@ -4,7 +4,7 @@ import SwiftUI
 struct ToDoCompanionApp: App {
     var body: some Scene {
         WindowGroup {
-            ProjectsHubView()
+            MainTabView()
         }
     }
 }

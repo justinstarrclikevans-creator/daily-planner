@@ -1,26 +1,77 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0f172a;
+  --foreground: #f8fafc;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  min-height: 100vh;
+}
+
+/* ==========================================================================
+   Modern Web Guidance: Progress Ring Implementation
+   ========================================================================== */
+@property --value {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.progress-ring {
+  --thickness: 14px;
+  --fill-color: #f97316;
+  --track-color: rgba(255, 255, 255, 0.12);
+  inline-size: 200px;
+  block-size: 200px;
+  border-radius: 50%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: conic-gradient(var(--fill-color) calc(var(--value) * 1%), var(--track-color) 0);
+  /* MANDATORY: Clip the background to the border-area. */
+  background-clip: border-area;
+  border: var(--thickness) solid transparent;
+  background-origin: border-box;
+  transition: --value 0.3s ease-out;
+}
+
+@supports not (background-clip: border-area) {
+  .progress-ring {
+    mask-image: radial-gradient(circle, transparent calc(100% - var(--thickness)), black calc(100% - var(--thickness)));
+    -webkit-mask-image: radial-gradient(circle, transparent calc(100% - var(--thickness)), black calc(100% - var(--thickness)));
+  }
+}
+
+.progress-ring::-webkit-progress-bar,
+.progress-ring::-webkit-progress-value {
+  display: none;
+}
+
+/* ==========================================================================
+   Modern Web Guidance: Native Dialog & Light-Dismiss
+   ========================================================================== */
+dialog.focus-dialog {
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 24px;
+  background: #1e293b;
+  color: #f8fafc;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  max-width: 580px;
+  width: 90vw;
+  max-height: 90vh;
+  padding: 0;
+  overflow: hidden;
+}
+
+dialog.focus-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
 }

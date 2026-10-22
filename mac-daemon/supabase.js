@@ -52,9 +52,41 @@ async function syncTaskToSupabase(task, appleReminderId = null) {
             }
         }
 
-        const taskPayload = {
+        const rawDesc = task.description || '';
+        
+        // Extract Tiimo metadata from description if present
+        let estimatedMinutes = task.estimated_minutes || task.estimatedMinutes || 15;
+        const durMatch = rawDesc.match(/\[⏱\s*(\d+)m\]/);
+        if (durMatch && durMatch[1]) {
+            estimatedMinutes = parseInt(durMatch[1], 10);
+        }
+
+        const inPlayQueue = task.in_play_queue ?? (rawDesc.includes('[▶️ Queue]'));
+        
+        let firstFiveMinutes = task.first_five_minutes || task.firstFiveMinutes || null;
+        if (!firstFiveMinutes) {
+            const f5Match = rawDesc.match(/⚡ First 5 Minutes:\s*(.+)/i);
+            if (f5Match && f5Match[1]) {
+                firstFiveMinutes = f5Match[1].trim();
+            }
+        }
+
+        let subtasks = task.subtasks || [];
+        if (!subtasks || subtasks.length === 0) {
+            const lines = rawDesc.split('\n');
+            for (const line of lines) {
+                const trimmed = line.trim();
+                if (trimmed.startsWith('- [ ] ')) {
+                    subtasks.push({ title: trimmed.substring(6).trim(), isCompleted: false });
+                } else if (trimmed.toLowerCase().startsWith('- [x] ')) {
+                    subtasks.push({ title: trimmed.substring(6).trim(), isCompleted: true });
+                }
+            }
+        }
+
+        const baseTaskPayload = {
             title: task.title,
-            description: task.description || '',
+            description: rawDesc,
             list_name: task.listName || 'Personal',
             status: task.status === 'completed' ? 'completed' : 'pending',
             due_date: task.dueDate ? new Date(task.dueDate).toISOString() : null,
@@ -77,7 +109,7 @@ async function syncTaskToSupabase(task, appleReminderId = null) {
         if (existing && existing.length > 0) {
             const { data, error } = await supabase
                 .from('tasks')
-                .update(taskPayload)
+                .update(baseTaskPayload)
                 .eq('id', existing[0].id)
                 .select();
             if (error) console.error("Error updating task in Supabase:", error.message);
@@ -85,7 +117,7 @@ async function syncTaskToSupabase(task, appleReminderId = null) {
         } else {
             const { data, error } = await supabase
                 .from('tasks')
-                .insert([taskPayload])
+                .insert([baseTaskPayload])
                 .select();
             if (error) console.error("Error inserting task into Supabase:", error.message);
             return data ? data[0] : null;
@@ -93,6 +125,20 @@ async function syncTaskToSupabase(task, appleReminderId = null) {
     } catch (err) {
         console.error("Exception syncing task to Supabase:", err.message);
         return null;
+    }
+}
+
+async function getRoutines() {
+    if (!supabase) return [];
+    try {
+        const { data, error } = await supabase.from('routines').select('*').order('title');
+        if (error) {
+            console.error("Error fetching routines:", error.message);
+            return [];
+        }
+        return data || [];
+    } catch (e) {
+        return [];
     }
 }
 
@@ -113,6 +159,7 @@ async function markTaskCompletedInSupabase(appleReminderId) {
 module.exports = {
     supabase,
     getProjects,
+    getRoutines,
     syncTaskToSupabase,
     markTaskCompletedInSupabase
 };

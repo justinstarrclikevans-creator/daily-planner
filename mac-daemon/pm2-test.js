@@ -1,0 +1,9 @@
+const hexBody = "040B73747265616D747970656481E803840140848484124E5341747472696275746564537472696E67008484084E534F626A656374008592848484084E53537472696E67019484012B04446F6E6586840269490104928484840C4E5344696374696F6E617279009484016901928496961D5F5F6B494D4D657373616765506172744174747269627574654E616D658692848484084E534E756D626572008484074E5356616C7565009484012A84999900868686";
+
+let ascii = Buffer.from(hexBody, 'hex').toString('utf8');
+ascii = ascii.replace(/[^\x20-\x7E\n]/g, '').trim();
+let text = ascii.replace(/(streamtyped|NSAttributedString|NSDictionary|NSNumber|NSString|NSObject|NSMutableString|NSValue|NSData|__kIMMessagePartAttributeName)/ig, '').trim();
+
+console.log("Extracted:", text);
+console.log("Upper:", text.toUpperCase());
+console.log("Match:", text.toUpperCase().includes('DONE') && text.length < 50);

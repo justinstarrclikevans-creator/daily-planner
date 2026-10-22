@@ -1,0 +1,14 @@
+.DS_Store
+*/.DS_Store
+node_modules/
+build/
+ios-companion/build/
+*.xcuserstate
+xcuserdata/
+DerivedData/
+*.log
+mac-daemon/token*.json
+mac-daemon/credentials.json
+mac-daemon/.env
+render-webapp/.env*
+render-webapp/.next/
