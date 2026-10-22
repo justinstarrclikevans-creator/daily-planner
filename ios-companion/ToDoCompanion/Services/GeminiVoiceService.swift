@@ -80,7 +80,7 @@ class GeminiVoiceService {
            - a clean action-verb `title`
            - `description` (relevant context)
            - assigned `listName` ("First shift", "Football", or "Personal")
-           - `estimatedMinutes` (integer: 5, 10, 15, 30, or 45)
+           - `estimatedMinutes` (integer: 5, 10, 15, 20, 25, 30, 45, or 60. For simple tasks like calls, texts, checking something, or quick emails, use 5-10m. Standard default is 15m. Never suggest 45m or 60m for simple tasks.)
            - `firstFiveMinutes` (1 short sentence describing the smallest physical action to start in the first 5 minutes)
            - `subtasks` (array of 2-4 concrete checklist steps)
         
@@ -115,7 +115,11 @@ class GeminiVoiceService {
         
         Generate:
         1. `firstFiveMinutes`: A single, ultra-specific, low-barrier physical action Justin can do in the next 60 seconds to break initiation paralysis.
-        2. `estimatedMinutes`: Realistic total duration in minutes (5, 10, 15, 25, 30, 45, or 60).
+        2. `estimatedMinutes`: Realistic total duration in minutes (5, 10, 15, 20, 25, 30, 45, or 60).
+           CRITICAL DURATION SIZING:
+           - For simple, everyday, or single-action tasks (e.g. calls, texts, quick emails, checking something, ordering, filing, quick lookups, routine tasks), assign 5, 10, or 15 minutes.
+           - NEVER assign 45 or 60 minutes to simple tasks.
+           - Reserve 30-45 minutes only for complex, multi-step deep work.
         3. `steps`: An array of \(detailLevel.stepCountRange) that walk from start to finish. Keep each step concise (under 10 words).
         
         Respond with ONLY a valid JSON object matching this schema:

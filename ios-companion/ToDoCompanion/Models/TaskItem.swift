@@ -33,7 +33,11 @@ struct SubtaskItem: Identifiable, Codable, Hashable {
 }
 
 enum TaskDuration: Int, CaseIterable, Identifiable {
+    case five = 5
+    case ten = 10
     case fifteen = 15
+    case twenty = 20
+    case twentyFive = 25
     case thirty = 30
     case fortyFive = 45
     case sixty = 60
@@ -43,9 +47,13 @@ enum TaskDuration: Int, CaseIterable, Identifiable {
     
     static func normalize(_ minutes: Int?) -> TaskDuration {
         guard let m = minutes, m > 0 else { return .fifteen }
-        if m <= 20 { return .fifteen }
-        if m <= 35 { return .thirty }
-        if m <= 50 { return .fortyFive }
+        if m <= 7 { return .five }
+        if m <= 12 { return .ten }
+        if m <= 18 { return .fifteen }
+        if m <= 22 { return .twenty }
+        if m <= 27 { return .twentyFive }
+        if m <= 38 { return .thirty }
+        if m <= 52 { return .fortyFive }
         return .sixty
     }
 }
@@ -214,16 +222,31 @@ struct TaskItem: Identifiable, Codable, Hashable {
                 return TaskDuration.normalize(mins).rawValue
             }
         }
-        let lower = title.lowercased()
-        if lower.contains("deep") || lower.contains("curriculum") || lower.contains("audit") || lower.contains("reentry navigation") {
-            return 60
+        let lower = title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // 1. Explicit micro / quick tasks (5 - 10 min) - Never suggest 45m for simple tasks
+        let quickKeywords = [
+            "call", "text", "sms", "email", "reply", "send", "ping", "message",
+            "ask", "buy", "order", "clean", "put", "take", "check", "pay",
+            "sign", "schedule", "pick up", "drop off", "lookup", "look up",
+            "confirm", "remind", "cancel", "submit", "file", "download",
+            "upload", "copy", "print", "trash", "delete", "rsvp", "quick"
+        ]
+        if quickKeywords.contains(where: { lower.contains($0) }) {
+            return 10
         }
+        
+        // 2. Heavy / Deep curriculum & audit tasks (45 - 60 min)
+        if lower.contains("deep") || lower.contains("curriculum") || lower.contains("audit") || lower.contains("reentry navigation") {
+            return 45
+        }
+        
+        // 3. Medium planning / writing / meeting tasks (25 - 30 min)
         if lower.contains("plan") || lower.contains("draft") || lower.contains("build") || lower.contains("write") || lower.contains("meeting") || lower.contains("practice") {
             return 30
         }
-        if lower.contains("report") || lower.contains("review") || lower.contains("training") {
-            return 45
-        }
+        
+        // 4. Standard default for all ordinary tasks (15 min)
         return 15
     }
     

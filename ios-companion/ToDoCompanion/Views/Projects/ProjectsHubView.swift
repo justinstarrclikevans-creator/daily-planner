@@ -581,11 +581,17 @@ struct ProjectsHubView: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(filteredTasks) { task in
-                        TaskRowView(task: task) {
-                            Task {
-                                await supabase.toggleTaskCompletion(task: task)
+                        TaskRowView(
+                            task: task,
+                            onToggle: {
+                                Task {
+                                    await supabase.toggleTaskCompletion(task: task)
+                                }
+                            },
+                            onFocus: {
+                                self.activeFocusTask = task
                             }
-                        }
+                        )
                         Divider()
                     }
                 }

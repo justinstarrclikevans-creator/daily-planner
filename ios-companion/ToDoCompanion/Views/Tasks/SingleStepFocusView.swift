@@ -118,29 +118,84 @@ struct SingleStepFocusView: View {
                     
                     Spacer()
                     
-                    Text("⏱ OVERALL TIMER (\(task.estimatedMinutes)M)")
-                        .font(.caption2)
-                        .fontWeight(.black)
-                        .tracking(0.5)
+                    Menu {
+                        Section("Change Time Frame") {
+                            ForEach([5, 10, 15, 20, 25, 30, 45, 60], id: \.self) { mins in
+                                Button {
+                                    setTimeFrame(mins)
+                                } label: {
+                                    HStack {
+                                        Text("\(mins) min\(mins <= 10 ? " (Quick)" : mins == 15 ? " (Standard)" : "")")
+                                        if task.estimatedMinutes == mins {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "clock")
+                                .font(.caption2)
+                            Text("⏱ OVERALL TIMER (\(task.estimatedMinutes)M)")
+                                .font(.caption2)
+                                .fontWeight(.black)
+                                .tracking(0.5)
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8))
+                        }
                         .foregroundColor(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.secondary.opacity(0.12))
+                        .cornerRadius(6)
+                    }
                 }
                 
-                // Giant Digits & Progress Bar
-                HStack(alignment: .lastTextBaseline) {
+                // Giant Digits & Progress Bar & Quick Adjusters
+                HStack(alignment: .center) {
                     Text(formattedTime(secondsRemaining))
-                        .font(.system(size: 48, weight: .black, design: .monospaced))
+                        .font(.system(size: 44, weight: .black, design: .monospaced))
                         .foregroundColor(secondsRemaining < 180 ? .red : .primary)
                     
                     Spacer()
                     
-                    Text(isRunning ? "BURNING" : "PAUSED")
-                        .font(.caption2)
-                        .fontWeight(.heavy)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(isRunning ? Color.orange.opacity(0.15) : Color.secondary.opacity(0.15))
-                        .foregroundColor(isRunning ? .orange : .secondary)
-                        .cornerRadius(6)
+                    HStack(spacing: 6) {
+                        Button {
+                            adjustSeconds(-300)
+                        } label: {
+                            Text("-5m")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                                .background(Color.secondary.opacity(0.15))
+                                .foregroundColor(.secondary)
+                                .cornerRadius(6)
+                        }
+                        
+                        Button {
+                            adjustSeconds(300)
+                        } label: {
+                            Text("+5m")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 4)
+                                .background(Color.secondary.opacity(0.15))
+                                .foregroundColor(.secondary)
+                                .cornerRadius(6)
+                        }
+                        
+                        Text(isRunning ? "BURNING" : "PAUSED")
+                            .font(.caption2)
+                            .fontWeight(.heavy)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(isRunning ? Color.orange.opacity(0.15) : Color.secondary.opacity(0.15))
+                            .foregroundColor(isRunning ? .orange : .secondary)
+                            .cornerRadius(6)
+                    }
                 }
                 
                 GeometryReader { geo in
@@ -427,6 +482,32 @@ struct SingleStepFocusView: View {
         
         withAnimation {
             self.isFinished = true
+        }
+    }
+    
+    private func setTimeFrame(_ mins: Int) {
+        let safeMins = max(1, mins)
+        let newSecs = safeMins * 60
+        self.totalSeconds = newSecs
+        self.secondsRemaining = newSecs
+        task.updateMetadata(estimatedMinutes: safeMins)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            await supabase.updateTask(task)
+        }
+    }
+    
+    private func adjustSeconds(_ delta: Int) {
+        let adjusted = max(60, secondsRemaining + delta)
+        self.secondsRemaining = adjusted
+        if delta > 0 {
+            self.totalSeconds = max(totalSeconds, adjusted)
+        }
+        let updatedMins = max(1, totalSeconds / 60)
+        task.updateMetadata(estimatedMinutes: updatedMins)
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        Task {
+            await supabase.updateTask(task)
         }
     }
     

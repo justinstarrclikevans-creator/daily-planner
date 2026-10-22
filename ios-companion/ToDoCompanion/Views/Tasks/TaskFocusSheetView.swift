@@ -33,85 +33,80 @@ struct TaskFocusSheetView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 20) {
-                    // Task Header
-                    headerSection
-                    
-                    // Single-Step Zero-Paralysis Runner Action Card
-                    Button {
-                        showSingleStepRunner = true
-                    } label: {
-                        HStack(spacing: 12) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.white.opacity(0.2))
-                                    .frame(width: 40, height: 40)
-                                Image(systemName: "flame.fill")
-                                    .font(.headline)
+            ZStack {
+                Color(.systemBackground).ignoresSafeArea()
+                
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Task Header
+                        headerSection
+                        
+                        // Single-Step Zero-Paralysis Runner Action Card
+                        Button {
+                            showSingleStepRunner = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color.white.opacity(0.2))
+                                        .frame(width: 40, height: 40)
+                                    Image(systemName: "flame.fill")
+                                        .font(.headline)
+                                        .foregroundColor(.white)
+                                }
+                                
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("RUN 1-STEP ZERO-PARALYSIS MODE")
+                                        .font(.subheadline)
+                                        .fontWeight(.black)
+                                        .foregroundColor(.white)
+                                    Text("Shows 1 step at a time • Overall \(task.estimatedMinutes)m timer • Fighting quotes")
+                                        .font(.caption2)
+                                        .foregroundColor(.white.opacity(0.9))
+                                }
+                                
+                                Spacer()
+                                
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .font(.title3)
                                     .foregroundColor(.white)
                             }
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("RUN 1-STEP ZERO-PARALYSIS MODE")
-                                    .font(.subheadline)
-                                    .fontWeight(.black)
-                                    .foregroundColor(.white)
-                                Text("Shows 1 step at a time • Overall \(task.estimatedMinutes)m timer • Fighting quotes")
-                                    .font(.caption2)
-                                    .foregroundColor(.white.opacity(0.9))
-                            }
-                            
-                            Spacer()
-                            
-                            Image(systemName: "arrow.right.circle.fill")
-                                .font(.title3)
-                                .foregroundColor(.white)
-                        }
-                        .padding(14)
-                        .background(
-                            LinearGradient(
-                                colors: [.red, .orange],
-                                startPoint: .leading,
-                                endPoint: .trailing
+                            .padding(14)
+                            .background(
+                                LinearGradient(
+                                    colors: [.red, .orange],
+                                    startPoint: .leading,
+                                    endPoint: .trailing
+                                )
                             )
-                        )
-                        .cornerRadius(14)
-                        .shadow(color: Color.red.opacity(0.3), radius: 6, x: 0, y: 3)
-                    }
-                    .padding(.horizontal)
-                    .fullScreenCover(isPresented: $showSingleStepRunner) {
-                        SingleStepFocusView(task: $task)
-                    }
-                    
-                    // Timer Mode Selector
-                    Picker("Timer Mode", selection: $timerMode) {
-                        ForEach(TimerMode.allCases) { mode in
-                            Text(mode == .firstFive ? "⚡ First 5 Min Sprint" : "⏱ Full (\(task.estimatedMinutes)m)").tag(mode)
+                            .cornerRadius(14)
+                            .shadow(color: Color.red.opacity(0.3), radius: 6, x: 0, y: 3)
                         }
+                        .padding(.horizontal)
+                        .fullScreenCover(isPresented: $showSingleStepRunner) {
+                            SingleStepFocusView(task: $task)
+                        }
+                        
+                        // Interactive Time Frame Preset Selector Bar
+                        timeFrameSelectorSection
+                        
+                        // Circular Focus Timer Ring
+                        timerRingSection
+                        
+                        // First 5 Minutes Starter Prompt Callout
+                        starterPromptSection
+                        
+                        // Subtasks Checklist
+                        subtasksSection
+                        
+                        // AI Breakdown Assistant
+                        aiBreakdownSection
+                        
+                        // Bottom Actions
+                        bottomActionsSection
                     }
-                    .pickerStyle(.segmented)
-                    .padding(.horizontal)
-                    .onChange(of: timerMode) { newMode in
-                        resetTimer(for: newMode)
-                    }
-                    
-                    // Circular Focus Timer Ring
-                    timerRingSection
-                    
-                    // First 5 Minutes Starter Prompt Callout
-                    starterPromptSection
-                    
-                    // Subtasks Checklist
-                    subtasksSection
-                    
-                    // AI Breakdown Assistant
-                    aiBreakdownSection
-                    
-                    // Bottom Actions
-                    bottomActionsSection
+                    .padding(.vertical)
                 }
-                .padding(.vertical)
             }
             .navigationTitle("Focus Sprint")
             .navigationBarTitleDisplayMode(.inline)
@@ -159,14 +154,38 @@ struct TaskFocusSheetView: View {
                 
                 Spacer()
                 
-                HStack(spacing: 4) {
-                    Image(systemName: "clock")
-                        .font(.caption2)
-                    Text("\(task.estimatedMinutes) min estimated")
-                        .font(.caption2)
-                        .fontWeight(.medium)
+                // Interactive Duration Changer
+                Menu {
+                    Section("Change Time Frame") {
+                        ForEach([5, 10, 15, 20, 25, 30, 45, 60], id: \.self) { mins in
+                            Button {
+                                selectDuration(mins)
+                            } label: {
+                                HStack {
+                                    Text("\(mins) min\(mins <= 10 ? " (Quick)" : mins == 15 ? " (Standard)" : "")")
+                                    if task.estimatedMinutes == mins {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "clock")
+                            .font(.caption2)
+                        Text("\(task.estimatedMinutes) min estimated")
+                            .font(.caption2)
+                            .fontWeight(.semibold)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8))
+                    }
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.secondary.opacity(0.12))
+                    .foregroundColor(.primary)
+                    .cornerRadius(8)
                 }
-                .foregroundColor(.secondary)
             }
             
             Text(task.title)
@@ -184,6 +203,61 @@ struct TaskFocusSheetView: View {
         .padding(.horizontal)
     }
     
+    // MARK: - Time Frame Preset Selector Bar
+    private var timeFrameSelectorSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Label("SELECT TIME FRAME", systemImage: "clock.arrow.circlepath")
+                    .font(.system(size: 11, weight: .black))
+                    .tracking(0.5)
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+                
+                Text("\(totalSeconds / 60)m active")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.indigo)
+            }
+            .padding(.horizontal)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach([5, 10, 15, 20, 25, 30, 45, 60], id: \.self) { mins in
+                        let isSelected = (totalSeconds / 60) == mins
+                        Button {
+                            selectDuration(mins)
+                        } label: {
+                            HStack(spacing: 4) {
+                                if isSelected {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 10, weight: .black))
+                                }
+                                Text("\(mins)m")
+                                    .font(.system(size: 13, weight: isSelected ? .black : .semibold))
+                            }
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .background(
+                                isSelected
+                                ? LinearGradient(colors: [.indigo, .purple], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                : LinearGradient(colors: [Color(.secondarySystemBackground), Color(.secondarySystemBackground)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                            )
+                            .foregroundColor(isSelected ? .white : .primary)
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(isSelected ? Color.indigo : Color.secondary.opacity(0.2), lineWidth: isSelected ? 1.5 : 1)
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal)
+            }
+        }
+    }
+    
     // MARK: - Timer Ring Section
     private var timerRingSection: some View {
         VStack(spacing: 16) {
@@ -198,7 +272,7 @@ struct TaskFocusSheetView: View {
                     .trim(from: 0, to: progressFraction)
                     .stroke(
                         LinearGradient(
-                            colors: timerMode == .firstFive ? [.orange, .yellow] : [.indigo, .purple],
+                            colors: totalSeconds <= 300 ? [.orange, .yellow] : [.indigo, .purple],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -217,13 +291,23 @@ struct TaskFocusSheetView: View {
                     Text(timerStatusLabel)
                         .font(.caption)
                         .fontWeight(.semibold)
-                        .foregroundColor(timerMode == .firstFive ? .orange : .indigo)
+                        .foregroundColor(totalSeconds <= 300 ? .orange : .indigo)
                 }
             }
             .padding(.top, 6)
             
-            // Timer Control Buttons
-            HStack(spacing: 24) {
+            // Timer Control Buttons with quick -5m, Reset, Play/Pause, +5m, +15m
+            HStack(spacing: 14) {
+                Button(action: subtractFiveMinutes) {
+                    Text("-5m")
+                        .font(.footnote)
+                        .fontWeight(.bold)
+                        .foregroundColor(.secondary)
+                        .frame(width: 44, height: 44)
+                        .background(Color(.secondarySystemBackground))
+                        .clipShape(Circle())
+                }
+                
                 Button(action: resetTimerCurrent) {
                     Image(systemName: "arrow.counterclockwise")
                         .font(.title3)
@@ -240,13 +324,13 @@ struct TaskFocusSheetView: View {
                         .frame(width: 64, height: 64)
                         .background(
                             Circle()
-                                .fill(timerMode == .firstFive ? Color.orange : Color.indigo)
+                                .fill(totalSeconds <= 300 ? Color.orange : Color.indigo)
                         )
-                        .shadow(color: (timerMode == .firstFive ? Color.orange : Color.indigo).opacity(0.35), radius: 8, x: 0, y: 4)
+                        .shadow(color: (totalSeconds <= 300 ? Color.orange : Color.indigo).opacity(0.35), radius: 8, x: 0, y: 4)
                 }
                 
-                Button(action: addOneMinute) {
-                    Text("+1m")
+                Button(action: addFiveMinutes) {
+                    Text("+5m")
                         .font(.footnote)
                         .fontWeight(.bold)
                         .foregroundColor(.secondary)
@@ -255,8 +339,8 @@ struct TaskFocusSheetView: View {
                         .clipShape(Circle())
                 }
                 
-                Button(action: addFiveMinutes) {
-                    Text("+5m")
+                Button(action: addFifteenMinutes) {
+                    Text("+15m")
                         .font(.footnote)
                         .fontWeight(.bold)
                         .foregroundColor(.secondary)
@@ -476,7 +560,8 @@ struct TaskFocusSheetView: View {
     }
     
     private func setupInitialTimer() {
-        resetTimer(for: timerMode)
+        totalSeconds = max(60, task.estimatedMinutes * 60)
+        secondsRemaining = totalSeconds
     }
     
     private func resetTimer(for mode: TimerMode) {
@@ -492,7 +577,43 @@ struct TaskFocusSheetView: View {
     }
     
     private func resetTimerCurrent() {
-        resetTimer(for: timerMode)
+        isRunning = false
+        didAnnounceHalfway = false
+        didAnnounceFinish = false
+        secondsRemaining = totalSeconds
+    }
+    
+    private func selectDuration(_ mins: Int) {
+        stopTimer()
+        didAnnounceHalfway = false
+        didAnnounceFinish = false
+        let safeMins = max(1, mins)
+        totalSeconds = safeMins * 60
+        secondsRemaining = totalSeconds
+        task.updateMetadata(estimatedMinutes: safeMins)
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        saveTaskToSupabase()
+    }
+    
+    private func subtractFiveMinutes() {
+        if secondsRemaining > 300 {
+            secondsRemaining -= 300
+            totalSeconds = max(300, totalSeconds - 300)
+            task.updateMetadata(estimatedMinutes: max(5, totalSeconds / 60))
+            saveTaskToSupabase()
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        }
+    }
+    
+    private func addFifteenMinutes() {
+        secondsRemaining += 900
+        totalSeconds += 900
+        task.updateMetadata(estimatedMinutes: totalSeconds / 60)
+        saveTaskToSupabase()
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        if isRunning {
+            NotificationService.shared.scheduleFocusTimerNotifications(taskTitle: task.title, totalSeconds: secondsRemaining)
+        }
     }
     
     private func toggleTimer() {

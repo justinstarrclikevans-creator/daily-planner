@@ -3,8 +3,8 @@ import SwiftUI
 struct TaskRowView: View {
     var task: TaskItem
     var onToggle: () -> Void
+    var onFocus: (() -> Void)? = nil
     
-    @State private var showFocusSheet: Bool = false
     @State private var currentTask: TaskItem? = nil
     @ObservedObject private var supabase = SupabaseService.shared
     
@@ -31,22 +31,44 @@ struct TaskRowView: View {
                     
                     Spacer()
                     
-                    // Duration pill
-                    HStack(spacing: 3) {
-                        Image(systemName: "clock")
-                            .font(.system(size: 9))
-                        Text("\(task.estimatedMinutes)m")
-                            .font(.system(size: 10, weight: .bold))
-                        if task.actualSeconds > 0 {
-                            Text("(\(max(1, task.actualSeconds / 60))m)")
-                                .font(.system(size: 9))
+                    // Duration pill with Quick Time Frame Changer
+                    Menu {
+                        Section("Change Time Frame") {
+                            ForEach([5, 10, 15, 20, 25, 30, 45, 60], id: \.self) { mins in
+                                Button {
+                                    var updated = task
+                                    updated.updateMetadata(estimatedMinutes: mins)
+                                    Task {
+                                        await supabase.updateTask(updated)
+                                    }
+                                } label: {
+                                    HStack {
+                                        Text("\(mins) min\(mins <= 10 ? " (Quick)" : mins == 15 ? " (Standard)" : "")")
+                                        if task.estimatedMinutes == mins {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
                         }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Image(systemName: "clock")
+                                .font(.system(size: 9))
+                            Text("\(task.estimatedMinutes)m")
+                                .font(.system(size: 10, weight: .bold))
+                            if task.actualSeconds > 0 {
+                                Text("(\(max(1, task.actualSeconds / 60))m)")
+                                    .font(.system(size: 9))
+                            }
+                        }
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(durationBadgeColor.opacity(0.12))
+                        .foregroundColor(durationBadgeColor)
+                        .cornerRadius(6)
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(durationBadgeColor.opacity(0.12))
-                    .foregroundColor(durationBadgeColor)
-                    .cornerRadius(6)
+                    .buttonStyle(.plain)
                 }
                 
                 // Clean Description (if available)
@@ -131,8 +153,11 @@ struct TaskRowView: View {
                     // Focus Sprint Launcher Button
                     if !task.isCompleted {
                         Button {
-                            currentTask = task
-                            showFocusSheet = true
+                            if let onFocus = onFocus {
+                                onFocus()
+                            } else {
+                                currentTask = task
+                            }
                         } label: {
                             HStack(spacing: 3) {
                                 Image(systemName: "play.fill")
@@ -153,10 +178,16 @@ struct TaskRowView: View {
             }
         }
         .padding(.vertical, 6)
-        .sheet(isPresented: $showFocusSheet) {
-            if let bindingTask = Binding($currentTask) {
-                TaskFocusSheetView(task: bindingTask)
-            }
+        .sheet(item: $currentTask) { taskItem in
+            TaskFocusSheetView(task: Binding(
+                get: { currentTask ?? taskItem },
+                set: { updated in
+                    currentTask = updated
+                    Task {
+                        await supabase.updateTask(updated)
+                    }
+                }
+            ))
         }
     }
     

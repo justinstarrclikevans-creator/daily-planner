@@ -99,11 +99,17 @@ struct RemindersListView: View {
                 } else {
                     List {
                         ForEach(filteredTasks) { task in
-                            TaskRowView(task: task) {
-                                Task {
-                                    await supabase.toggleTaskCompletion(task: task)
+                            TaskRowView(
+                                task: task,
+                                onToggle: {
+                                    Task {
+                                        await supabase.toggleTaskCompletion(task: task)
+                                    }
+                                },
+                                onFocus: {
+                                    self.activeFocusTask = task
                                 }
-                            }
+                            )
                             .contentShape(Rectangle())
                             .onTapGesture {
                                 self.activeFocusTask = task
