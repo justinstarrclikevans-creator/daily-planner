@@ -286,9 +286,15 @@ struct RemindersListView: View {
     }
     
     private func binding(for task: TaskItem) -> Binding<TaskItem> {
-        guard let index = supabase.tasks.firstIndex(where: { $0.id == task.id }) else {
-            return .constant(task)
-        }
-        return $supabase.tasks[index]
+        Binding(
+            get: {
+                supabase.tasks.first(where: { $0.id == task.id }) ?? task
+            },
+            set: { updated in
+                Task {
+                    await supabase.updateTask(updated)
+                }
+            }
+        )
     }
 }

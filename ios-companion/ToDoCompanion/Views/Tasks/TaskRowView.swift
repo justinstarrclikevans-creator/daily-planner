@@ -5,7 +5,6 @@ struct TaskRowView: View {
     var onToggle: () -> Void
     var onFocus: (() -> Void)? = nil
     
-    @State private var currentTask: TaskItem? = nil
     @ObservedObject private var supabase = SupabaseService.shared
     
     var body: some View {
@@ -16,7 +15,7 @@ struct TaskRowView: View {
                     .font(.title3)
                     .foregroundColor(task.isCompleted ? .green : .secondary)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)
             .padding(.top, 2)
             
             // Content
@@ -68,7 +67,7 @@ struct TaskRowView: View {
                         .foregroundColor(durationBadgeColor)
                         .cornerRadius(6)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                 }
                 
                 // Clean Description (if available)
@@ -140,7 +139,7 @@ struct TaskRowView: View {
                         .foregroundColor(task.inPlayQueue ? .indigo : .secondary)
                         .cornerRadius(6)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                     
                     if let source = task.source as String?, source != "ios" {
                         Label(source.capitalized, systemImage: sourceIcon(for: source))
@@ -153,11 +152,7 @@ struct TaskRowView: View {
                     // Focus Sprint Launcher Button
                     if !task.isCompleted {
                         Button {
-                            if let onFocus = onFocus {
-                                onFocus()
-                            } else {
-                                currentTask = task
-                            }
+                            onFocus?()
                         } label: {
                             HStack(spacing: 3) {
                                 Image(systemName: "play.fill")
@@ -171,24 +166,13 @@ struct TaskRowView: View {
                             .foregroundColor(.orange)
                             .cornerRadius(10)
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderless)
                     }
                 }
                 .padding(.top, 2)
             }
         }
         .padding(.vertical, 6)
-        .sheet(item: $currentTask) { taskItem in
-            TaskFocusSheetView(task: Binding(
-                get: { currentTask ?? taskItem },
-                set: { updated in
-                    currentTask = updated
-                    Task {
-                        await supabase.updateTask(updated)
-                    }
-                }
-            ))
-        }
     }
     
     private var durationBadgeColor: Color {
