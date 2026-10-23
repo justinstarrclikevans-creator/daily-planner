@@ -30,6 +30,8 @@
 	<string>ToDo Companion needs access to your microphone to capture voice brain-dumps and speak conversationally with you.</string>
 	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>ToDo Companion syncs your extracted action items directly into your Apple Reminders lists.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>ToDo Companion syncs your extracted action items directly into your Apple Reminders lists.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>ToDo Companion uses speech recognition to convert your spoken ideas and tasks into text in real-time.</string>
 	<key>UILaunchScreen</key>

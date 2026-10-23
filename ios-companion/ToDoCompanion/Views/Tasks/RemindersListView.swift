@@ -23,14 +23,7 @@ struct RemindersListView: View {
     @State private var selectedDuration: TaskDuration = .fifteen
     
     private func isTaskVisibleNow(_ task: TaskItem) -> Bool {
-        // If user explicitly selected a list filter pill, show all tasks in that list
-        if selectedList != nil { return true }
-        if let pid = task.projectId, let proj = supabase.projects.first(where: { $0.id == pid }) {
-            return proj.isVisibleNow
-        }
-        if let proj = supabase.projects.first(where: { $0.name.caseInsensitiveCompare(task.listName) == .orderedSame }) {
-            return proj.isVisibleNow
-        }
+        // In the Reminders view, all incomplete tasks are visible without time-of-day filtering
         return true
     }
     
@@ -138,9 +131,17 @@ struct RemindersListView: View {
                     }
                     .listStyle(.plain)
                     .refreshable {
-                        await reminders.importDeviceRemindersToSupabase()
-                        await supabase.fetchTasks()
+                        await reminders.syncDeviceReminders()
+                        if AppConfig.isSupabaseConfigured {
+                            await supabase.fetchTasks()
+                        }
                     }
+                }
+            }
+            .task {
+                await reminders.syncDeviceReminders()
+                if AppConfig.isSupabaseConfigured {
+                    await supabase.fetchTasks()
                 }
             }
             .navigationTitle("Reminders (\(filteredTasks.count))")
@@ -217,6 +218,25 @@ struct RemindersListView: View {
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
+            
+            if !reminders.isAuthorized {
+                Button {
+                    Task {
+                        _ = await reminders.requestAccess()
+                        await reminders.syncDeviceReminders()
+                    }
+                } label: {
+                    Label("Allow Apple Reminders Access", systemImage: "checklist")
+                        .font(.footnote)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(Color.indigo)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+                .padding(.top, 4)
+            }
             
             Spacer()
         }

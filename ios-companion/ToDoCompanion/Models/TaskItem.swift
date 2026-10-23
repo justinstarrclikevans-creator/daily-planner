@@ -250,7 +250,7 @@ struct TaskItem: Identifiable, Codable, Hashable {
         return 15
     }
     
-    private static func extractFirstFive(from desc: String) -> String? {
+    static func extractFirstFive(from desc: String) -> String? {
         for line in desc.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("⚡ First 5 Minutes:") {
@@ -261,7 +261,7 @@ struct TaskItem: Identifiable, Codable, Hashable {
         return nil
     }
     
-    private static func extractSubtasks(from desc: String) -> [SubtaskItem] {
+    static func extractSubtasks(from desc: String) -> [SubtaskItem] {
         var items: [SubtaskItem] = []
         for line in desc.components(separatedBy: .newlines) {
             let trimmed = line.trimmingCharacters(in: .whitespaces)

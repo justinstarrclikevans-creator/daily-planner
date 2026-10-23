@@ -21,7 +21,7 @@ class RemindersManager: ObservableObject {
         ) { [weak self] _ in
             Task { @MainActor in
                 print("Detected Apple Reminders database change. Auto-syncing...")
-                await self?.importDeviceRemindersToSupabase()
+                await self?.syncDeviceReminders()
             }
         }
     }
@@ -151,28 +151,88 @@ class RemindersManager: ObservableObject {
         }
     }
     
-    func importDeviceRemindersToSupabase() async {
+    func completeReminder(identifier: String) async -> Bool {
+        if !isAuthorized {
+            let granted = await requestAccess()
+            guard granted else { return false }
+        }
+        guard let item = eventStore.calendarItem(withIdentifier: identifier) as? EKReminder else {
+            return false
+        }
+        item.isCompleted = true
+        item.completionDate = Date()
+        do {
+            try eventStore.save(item, commit: true)
+            return true
+        } catch {
+            print("Failed to complete EKReminder on device: \(error)")
+            return false
+        }
+    }
+    
+    func syncDeviceReminders() async {
+        if !isAuthorized {
+            _ = await requestAccess()
+        }
+        guard isAuthorized else { return }
+        
         await syncReminderListsToProjects()
         let reminders = await fetchIncompleteReminders()
+        let activeReminderIds = Set(reminders.map { $0.calendarItemIdentifier })
+        
         for r in reminders {
             guard let title = r.title, !title.isEmpty else { continue }
             let listName = r.calendar?.title ?? "Personal"
             let reminderId = r.calendarItemIdentifier
+            let dueDate = r.dueDateComponents?.date
             
             let matchedProject = SupabaseService.shared.projects.first { p in
                 p.name.caseInsensitiveCompare(listName) == .orderedSame
             }
             
-            if !SupabaseService.shared.tasks.contains(where: { $0.appleReminderId == reminderId || $0.title == title }) {
+            if let index = SupabaseService.shared.tasks.firstIndex(where: {
+                $0.appleReminderId == reminderId || ($0.appleReminderId == nil && $0.title == title && $0.listName == listName)
+            }) {
+                var current = SupabaseService.shared.tasks[index]
+                current.appleReminderId = reminderId
+                current.title = title
+                current.listName = listName
+                if let due = dueDate { current.dueDate = due }
+                if let notes = r.notes, !notes.isEmpty {
+                    current.description = notes
+                    if let firstFive = TaskItem.extractFirstFive(from: notes) {
+                        current.firstFiveMinutesPrompt = firstFive
+                    }
+                    let subtasks = TaskItem.extractSubtasks(from: notes)
+                    if !subtasks.isEmpty {
+                        current.subtasks = subtasks
+                    }
+                }
+                SupabaseService.shared.tasks[index] = current
+            } else {
                 await SupabaseService.shared.createTask(
                     title: title,
                     description: r.notes,
                     listName: listName,
                     projectId: matchedProject?.id,
+                    dueDate: dueDate,
                     appleReminderId: reminderId
                 )
             }
         }
+        
+        // Mark tasks as completed in app if completed in Apple Reminders
+        for (idx, task) in SupabaseService.shared.tasks.enumerated() {
+            if let rId = task.appleReminderId, !activeReminderIds.contains(rId), !task.isCompleted {
+                SupabaseService.shared.tasks[idx].isCompleted = true
+            }
+        }
+        
+        SupabaseService.shared.persistLocalTasks()
+    }
+    
+    func importDeviceRemindersToSupabase() async {
+        await syncDeviceReminders()
     }
 }
 

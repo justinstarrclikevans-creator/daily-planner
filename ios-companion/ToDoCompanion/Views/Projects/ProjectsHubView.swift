@@ -651,7 +651,7 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage("supabase_url") private var supabaseURL = ""
     @AppStorage("supabase_anon_key") private var supabaseAnonKey = ""
-    @AppStorage("gemini_api_key") private var geminiKey = "AQ.Ab8RN6IcCg0ZHzgemvtrQ-8oyseoCX5QSMOxKBT_aCyMXrHd6w"
+    @AppStorage("gemini_api_key") private var geminiKey = ""
     
     var body: some View {
         NavigationStack {

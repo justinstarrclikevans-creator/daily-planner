@@ -214,7 +214,7 @@ class GeminiVoiceService {
     }
     
     private func callGeminiJSON<T: Decodable>(prompt: String, responseType: T.Type) async throws -> T {
-        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(AppConfig.geminiAPIKey)"
+        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=\(AppConfig.geminiAPIKey)"
         guard let url = URL(string: urlString) else {
             throw URLError(.badURL)
         }
@@ -287,7 +287,7 @@ class GeminiVoiceService {
             ]
         ]
         
-        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(AppConfig.geminiAPIKey)"
+        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=\(AppConfig.geminiAPIKey)"
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
         
         var request = URLRequest(url: url)
@@ -405,7 +405,7 @@ class GeminiVoiceService {
             ]
         ]
         
-        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(AppConfig.geminiAPIKey)"
+        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=\(AppConfig.geminiAPIKey)"
         guard let url = URL(string: urlString) else { throw URLError(.badURL) }
         
         var request = URLRequest(url: url)

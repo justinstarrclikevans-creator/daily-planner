@@ -154,6 +154,7 @@ struct AssistantHomeView: View {
                 CreateProjectSheetView(prefillName: prefill.name, prefillGoal: prefill.goal)
             }
             .task {
+                await RemindersManager.shared.syncDeviceReminders()
                 await calendar.refreshEvents()
             }
         }

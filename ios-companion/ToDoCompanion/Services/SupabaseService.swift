@@ -13,11 +13,26 @@ class SupabaseService: ObservableObject {
     @Published var errorMessage: String? = nil
     
     private let customProjectsKey = "saved_custom_projects_v1"
+    private let customTasksKey = "saved_custom_tasks_v1"
     
     private init() {
         loadLocalProjects()
+        loadLocalTasks()
         Task {
             await fetchAll()
+        }
+    }
+    
+    func loadLocalTasks() {
+        if let data = UserDefaults.standard.data(forKey: customTasksKey),
+           let saved = try? JSONDecoder().decode([TaskItem].self, from: data) {
+            self.tasks = saved
+        }
+    }
+    
+    func persistLocalTasks() {
+        if let data = try? JSONEncoder().encode(self.tasks) {
+            UserDefaults.standard.set(data, forKey: customTasksKey)
         }
     }
     
@@ -211,7 +226,11 @@ class SupabaseService: ObservableObject {
             }
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            self.tasks = try decoder.decode([TaskItem].self, from: data)
+            let fetched = try decoder.decode([TaskItem].self, from: data)
+            if !fetched.isEmpty {
+                self.tasks = fetched
+                persistLocalTasks()
+            }
         } catch {
             print("Error fetching tasks: \(error.localizedDescription)")
         }
@@ -255,8 +274,9 @@ class SupabaseService: ObservableObject {
             subtasks: subtasks
         )
         
-        // Optimistic UI update
+        // Optimistic UI update & local persistence
         self.tasks.insert(newTask, at: 0)
+        persistLocalTasks()
         
         guard AppConfig.isSupabaseConfigured,
               let url = URL(string: "\(AppConfig.supabaseURL)/rest/v1/tasks") else { return }
@@ -282,12 +302,20 @@ class SupabaseService: ObservableObject {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         tasks[index].isCompleted.toggle()
         let updated = tasks[index]
+        persistLocalTasks()
+        
+        // Also mark complete in Apple Reminders on device
+        if let reminderId = updated.appleReminderId, updated.isCompleted {
+            _ = await RemindersManager.shared.completeReminder(identifier: reminderId)
+        }
+        
         await updateTask(updated)
     }
     
     func updateTask(_ updatedTask: TaskItem) async {
         if let index = tasks.firstIndex(where: { $0.id == updatedTask.id }) {
             tasks[index] = updatedTask
+            persistLocalTasks()
         }
         
         guard AppConfig.isSupabaseConfigured,
