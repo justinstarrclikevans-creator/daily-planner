@@ -91,9 +91,15 @@ async function runFullSync() {
                     else if (lower.includes('football') || lower.includes('843')) targetList = 'Football';
                     else targetList = 'Personal';
 
-                    const ok = await addReminder(targetList, todo.title, todo.description);
+                    let desc = todo.description || '';
+                    if (!desc.includes('[⏱')) {
+                        desc = `[⏱ ${todo.estimatedMinutes || 5}m]\n${desc}`.trim();
+                    }
+                    const ok = await addReminder(targetList, todo.title, desc);
                     if (!ok) console.error(`Failed to push reminder to list (${targetList}):`, todo.title);
                     todo.listName = targetList;
+                    todo.description = desc;
+                    todo.estimatedMinutes = todo.estimatedMinutes || 5;
                     await syncTaskToSupabase(todo);
                 }
             }
@@ -161,9 +167,15 @@ async function runAfternoonSync() {
                     else if (lower.includes('football') || lower.includes('843')) targetList = 'Football';
                     else targetList = 'Personal';
 
-                    const ok = await addReminder(targetList, todo.title, todo.description);
+                    let desc = todo.description || '';
+                    if (!desc.includes('[⏱')) {
+                        desc = `[⏱ ${todo.estimatedMinutes || 5}m]\n${desc}`.trim();
+                    }
+                    const ok = await addReminder(targetList, todo.title, desc);
                     if (!ok) console.error(`Failed to push reminder to list (${targetList}):`, todo.title);
                     todo.listName = targetList;
+                    todo.description = desc;
+                    todo.estimatedMinutes = todo.estimatedMinutes || 5;
                     await syncTaskToSupabase(todo);
                 }
             }

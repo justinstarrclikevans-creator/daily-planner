@@ -16,10 +16,6 @@
   },
   "lastSMSProcessed": 1791375308352,
   "alertedMeetings": [
-    "3cgo0s1e90664tau0bebgsri2j_20260928T223000Z",
-    "3gnrh957n99k04e8nsgdl68feu",
-    "042f0e9s186dg51u48vkbl4uu5",
-    "_6so48gq664pk4b9j6h244b9k8h0k4ba18op36ba48p23ad9j8op4ac1n6s_20260929T191500Z",
     "_8kok8c9i8gq32b9o89234b9k6933aba16p346ba66kok2e2588r3ed9h8k_20260930T113000Z",
     "397a4chlgl6oa23la9hr1mionc_20260930T160000Z",
     "_8goj8d266gp48b9j6krjgb9k8cskcb9p6t34cb9j70s4cci16kr42g9g6o_20260930T201000Z",
@@ -65,7 +61,11 @@
     "1r9os74ijdmh3lf54t3taj7ssf_20261022T170500Z",
     "4tubvbv55lu90qh9f1n18594mp_20261022T190000Z",
     "15bnhedf8s0uahpj87o75cgfti_20261022T191500Z",
-    "6udr5g6iuc8idukvsg4h4t5gu0"
+    "6udr5g6iuc8idukvsg4h4t5gu0",
+    "afuf60d9gh520qkq3iagbe49r3_20261023T123000Z",
+    "1vtgct1qe48pr8a1qe04o8sn2j",
+    "_6sq48gq66cs42b9j612jab9k6l1jib9p84r34ba38opj4ci28kpjad1j88_20261023T160000Z",
+    "_6cok4d9i6t236b9n6go3cb9k64ojeba26sq3ab9k8co38c9p6d0jagpl8g"
   ],
   "purgePending": true
 }

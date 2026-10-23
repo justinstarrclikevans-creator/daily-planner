@@ -31,7 +31,8 @@ async function extractTodos(slackMessages, emails, events, existingTodos = [], i
 
     RULES & SCHEMA:
     - Output MUST be a raw JSON array of objects.
-    - Schema: [{ "title": "Clear action-verb task title", "description": "Brief context and source reference", "source": "slack" | "email" | "calendar" | "imessage", "listName": "First Shift" | "Football" | "Personal" | "Reentry Nav" }]
+    - Schema: [{ "title": "Clear action-verb task title", "description": "Brief context and source reference", "source": "slack" | "email" | "calendar" | "imessage", "listName": "First Shift" | "Football" | "Personal" | "Reentry Nav", "estimatedMinutes": 5 }]
+    - Note on duration: Default to 5 minutes for tasks unless explicitly stated otherwise.
     - Do not include markdown like \`\`\`json. Just raw JSON string.
     - CRITICAL: Do NOT extract any tasks that are similar or identical to the "Existing Pending Todos" provided below. We want to avoid duplicates.
     - CRITICAL PRIORITY FOR EMAILS: Prioritize direct human communication, forwarded requests, or bills.

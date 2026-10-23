@@ -243,14 +243,15 @@ class SupabaseService: ObservableObject {
         projectId: UUID? = nil,
         dueDate: Date? = nil,
         appleReminderId: String? = nil,
-        estimatedMinutes: Int? = nil,
+        estimatedMinutes: Int? = 5,
         inPlayQueue: Bool = false,
         firstFiveMinutes: String? = nil,
         subtasks: [SubtaskItem] = []
     ) async {
+        let effectiveMinutes = estimatedMinutes ?? TaskItem.extractEstimatedMinutes(from: description ?? "") ?? 5
         let finalDescription = TaskItem.buildDescription(
             cleanNotes: description ?? "",
-            estimatedMinutes: estimatedMinutes,
+            estimatedMinutes: effectiveMinutes,
             inPlayQueue: inPlayQueue,
             firstFiveMinutes: firstFiveMinutes,
             subtasks: subtasks
@@ -267,7 +268,7 @@ class SupabaseService: ObservableObject {
             source: "ios",
             appleReminderId: appleReminderId,
             createdAt: Date(),
-            estimatedMinutes: estimatedMinutes,
+            estimatedMinutes: effectiveMinutes,
             actualSeconds: 0,
             inPlayQueue: inPlayQueue,
             firstFiveMinutesPrompt: firstFiveMinutes,

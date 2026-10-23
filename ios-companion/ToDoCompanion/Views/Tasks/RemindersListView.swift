@@ -20,7 +20,7 @@ struct RemindersListView: View {
     @State private var activeFocusTask: TaskItem? = nil
     @State private var showNewTaskSheet: Bool = false
     @State private var newReminderTitle: String = ""
-    @State private var selectedDuration: TaskDuration = .fifteen
+    @State private var selectedDuration: TaskDuration = .five
     
     private func isTaskVisibleNow(_ task: TaskItem) -> Bool {
         // In the Reminders view, all incomplete tasks are visible without time-of-day filtering
@@ -51,9 +51,9 @@ struct RemindersListView: View {
             case .all:
                 return !task.isCompleted
             case .quick:
-                return !task.isCompleted && (task.estimatedMinutes ?? 15) <= 15
+                return !task.isCompleted && (task.estimatedMinutes ?? 5) <= 15
             case .deep:
-                return !task.isCompleted && (task.estimatedMinutes ?? 15) >= 30
+                return !task.isCompleted && (task.estimatedMinutes ?? 5) >= 30
             case .queue:
                 return !task.isCompleted && task.inPlayQueue
             case .completed:
@@ -250,7 +250,7 @@ struct RemindersListView: View {
                     TextField("What needs to get done?", text: $newReminderTitle)
                 }
                 
-                Section(header: Text("Target Time (Forced 15m Intervals)")) {
+                Section(header: Text("Target Time (Default 5m)")) {
                     Picker("Duration", selection: $selectedDuration) {
                         ForEach(TaskDuration.allCases) { dur in
                             Text(dur.label).tag(dur)

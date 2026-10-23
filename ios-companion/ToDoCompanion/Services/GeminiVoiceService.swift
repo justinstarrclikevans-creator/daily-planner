@@ -80,7 +80,7 @@ class GeminiVoiceService {
            - a clean action-verb `title`
            - `description` (relevant context)
            - assigned `listName` ("First shift", "Football", or "Personal")
-           - `estimatedMinutes` (integer: 5, 10, 15, 20, 25, 30, 45, or 60. For simple tasks like calls, texts, checking something, or quick emails, use 5-10m. Standard default is 15m. Never suggest 45m or 60m for simple tasks.)
+           - `estimatedMinutes` (integer: 5, 10, 15, 20, 25, 30, 45, or 60. Standard default for all new tasks is 5m. For simple tasks like calls, texts, checking something, or quick emails, use 5m. Never suggest 45m or 60m for simple tasks.)
            - `firstFiveMinutes` (1 short sentence describing the smallest physical action to start in the first 5 minutes)
            - `subtasks` (array of 2-4 concrete checklist steps)
         
@@ -94,7 +94,7 @@ class GeminiVoiceService {
               "title": "Clear action verb title",
               "description": "Any relevant details",
               "listName": "Personal or First shift or Football",
-              "estimatedMinutes": 15,
+              "estimatedMinutes": 5,
               "firstFiveMinutes": "Open the thread and type a 1-line reply.",
               "subtasks": ["Step 1", "Step 2", "Step 3"]
             }
@@ -115,9 +115,9 @@ class GeminiVoiceService {
         
         Generate:
         1. `firstFiveMinutes`: A single, ultra-specific, low-barrier physical action Justin can do in the next 60 seconds to break initiation paralysis.
-        2. `estimatedMinutes`: Realistic total duration in minutes (5, 10, 15, 20, 25, 30, 45, or 60).
+        2. `estimatedMinutes`: Realistic total duration in minutes (5, 10, 15, 20, 25, 30, 45, or 60). Standard default is 5m.
            CRITICAL DURATION SIZING:
-           - For simple, everyday, or single-action tasks (e.g. calls, texts, quick emails, checking something, ordering, filing, quick lookups, routine tasks), assign 5, 10, or 15 minutes.
+           - For simple, everyday, or single-action tasks (e.g. calls, texts, quick emails, checking something, ordering, filing, quick lookups, routine tasks), assign 5m (or 10m).
            - NEVER assign 45 or 60 minutes to simple tasks.
            - Reserve 30-45 minutes only for complex, multi-step deep work.
         3. `steps`: An array of \(detailLevel.stepCountRange) that walk from start to finish. Keep each step concise (under 10 words).
@@ -125,7 +125,7 @@ class GeminiVoiceService {
         Respond with ONLY a valid JSON object matching this schema:
         {
           "firstFiveMinutes": "Smallest immediate physical starter action",
-          "estimatedMinutes": 15,
+          "estimatedMinutes": 5,
           "steps": ["Step 1", "Step 2", "Step 3"]
         }
         """
@@ -190,7 +190,7 @@ class GeminiVoiceService {
         - `title`: Clear action-verb title
         - `description`: Brief context
         - `listName`: "\(defaultList)"
-        - `estimatedMinutes`: Realistic duration in minutes (5, 10, 15, 30)
+        - `estimatedMinutes`: Realistic duration in minutes (5, 10, 15, 30. Default is 5)
         - `firstFiveMinutes`: 1-sentence immediate physical action to start
         - `subtasks`: Array of \(detailLevel.stepCountRange)
         
@@ -201,7 +201,7 @@ class GeminiVoiceService {
               "title": "Action title",
               "description": "Context",
               "listName": "\(defaultList)",
-              "estimatedMinutes": 15,
+              "estimatedMinutes": 5,
               "firstFiveMinutes": "First 5-minute starter action",
               "subtasks": ["Subtask 1", "Subtask 2", "Subtask 3"]
             }
@@ -323,7 +323,7 @@ class GeminiVoiceService {
         freeSlotsTomorrow: [FreeTimeSlot]
     ) async throws -> ChatMessage {
         let taskSummary = tasks.filter { !$0.isCompleted }.prefix(30).map { t in
-            "- [\(t.listName)] \(t.title) (⏱ \(t.estimatedMinutes ?? 15)m)\(t.firstFiveMinutesPrompt != nil ? " | Starter: \(t.firstFiveMinutesPrompt!)" : "")"
+            "- [\(t.listName)] \(t.title) (⏱ \(t.estimatedMinutes ?? 5)m)\(t.firstFiveMinutesPrompt != nil ? " | Starter: \(t.firstFiveMinutesPrompt!)" : "")"
         }.joined(separator: "\n")
         
         let projectRules = projects.map { p in
@@ -361,11 +361,14 @@ class GeminiVoiceService {
         \(taskSummary.isEmpty ? "All to-dos completed!" : taskSummary)
         
         CAPABILITIES & BEHAVIOR:
-        1. When asked for a schedule or tasks for a specific time window (e.g. "I have three hours", "I have 45 minutes", "I have 2 hours", "I have 15 minutes", "Give me a list of todos I can do"):
-           - Calculate a tight, high-impact schedule from his currently open tasks matching that exact duration.
-           - Every task has an assigned duration of 15m, 30m, 45m, or 60m. Pack them into the window cleanly.
-           - Output a crisp numbered plan with times and the exact sequence.
-           - Set the first task as an immediate focus target. Append: [ACTION:FOCUS|First Task Title|Smallest 60-second starter|Minutes]
+        1. When asked for a schedule, quick win, or tasks for a specific time window (e.g. "I have 15 minutes", "15m quick win", "45m sprint", "I have three hours", "give me a list of todos I can do"):
+           - You MUST pick concrete tasks from the OPEN TO-DOS list above. NEVER respond with vague advice, platitudes, or an empty one-sentence answer if tasks are available.
+           - For "15m quick win" / 15 minutes: Select 1 to 3 quick tasks totaling ~15 minutes (default tasks are 5m each). State clearly which task to do first, its duration, and the immediate physical starter step.
+           - For "45m sprint" / 45 minutes: Select 1 or 2 high-priority tasks totaling ~45 minutes.
+           - For multi-hour blocks (e.g. 3 hours): Pack tasks cleanly into a numbered chronological agenda.
+           - CRITICAL: In EVERY schedule or quick-win recommendation, append an action tag so the app can launch the focus timer directly:
+             [ACTION:FOCUS|Exact Task Title|Smallest 60-second physical starter action|DurationMinutes]
+           - The "Exact Task Title" MUST match one of the task titles from OPEN TO-DOS verbatim.
            
         2. RULE OF THREE (Project Promotion):
            - If you observe 3 or more unassigned or "Personal" tasks that share a common theme, domain, or project (e.g. book writing, taxes, car, podcast, drills), actively call it out:
@@ -435,7 +438,7 @@ class GeminiVoiceService {
         var actionMinutes: Int? = nil
         var actionPrompt: String? = nil
         
-        if let focusRange = cleanText.range(of: #"\\[ACTION:FOCUS\\|([^\\]]+)\\]"#, options: .regularExpression) {
+        if let focusRange = cleanText.range(of: #"\[ACTION:FOCUS\|([^\]]+)\]"#, options: .regularExpression) {
             let matched = String(cleanText[focusRange])
             let inner = matched.replacingOccurrences(of: "[ACTION:FOCUS|", with: "").replacingOccurrences(of: "]", with: "")
             let components = inner.components(separatedBy: "|")
@@ -443,10 +446,10 @@ class GeminiVoiceService {
                 actionType = "focus"
                 actionTitle = components[0].trimmingCharacters(in: .whitespacesAndNewlines)
                 actionPrompt = components[1].trimmingCharacters(in: .whitespacesAndNewlines)
-                actionMinutes = Int(components[2].trimmingCharacters(in: .whitespacesAndNewlines)) ?? 15
+                actionMinutes = Int(components[2].trimmingCharacters(in: .whitespacesAndNewlines)) ?? 5
             }
             cleanText.removeSubrange(focusRange)
-        } else if let schedRange = cleanText.range(of: #"\\[ACTION:SCHEDULE\\|([^\\]]+)\\]"#, options: .regularExpression) {
+        } else if let schedRange = cleanText.range(of: #"\[ACTION:SCHEDULE\|([^\]]+)\]"#, options: .regularExpression) {
             let matched = String(cleanText[schedRange])
             let inner = matched.replacingOccurrences(of: "[ACTION:SCHEDULE|", with: "").replacingOccurrences(of: "]", with: "")
             let components = inner.components(separatedBy: "|")
@@ -458,7 +461,7 @@ class GeminiVoiceService {
                 actionMinutes = Int(components[2].trimmingCharacters(in: .whitespacesAndNewlines)) ?? 30
             }
             cleanText.removeSubrange(schedRange)
-        } else if let projRange = cleanText.range(of: #"\\[ACTION:CREATE_PROJECT\\|([^\\]]+)\\]"#, options: .regularExpression) {
+        } else if let projRange = cleanText.range(of: #"\[ACTION:CREATE_PROJECT\|([^\]]+)\]"#, options: .regularExpression) {
             let matched = String(cleanText[projRange])
             let inner = matched.replacingOccurrences(of: "[ACTION:CREATE_PROJECT|", with: "").replacingOccurrences(of: "]", with: "")
             let components = inner.components(separatedBy: "|")

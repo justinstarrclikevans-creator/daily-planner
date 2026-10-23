@@ -200,6 +200,11 @@ class RemindersManager: ObservableObject {
                 if let due = dueDate { current.dueDate = due }
                 if let notes = r.notes, !notes.isEmpty {
                     current.description = notes
+                    if let mins = TaskItem.extractEstimatedMinutes(from: notes) {
+                        current.estimatedMinutes = mins
+                    } else if current.estimatedMinutes <= 0 {
+                        current.estimatedMinutes = 5
+                    }
                     if let firstFive = TaskItem.extractFirstFive(from: notes) {
                         current.firstFiveMinutesPrompt = firstFive
                     }
@@ -207,16 +212,20 @@ class RemindersManager: ObservableObject {
                     if !subtasks.isEmpty {
                         current.subtasks = subtasks
                     }
+                } else if current.estimatedMinutes <= 0 {
+                    current.estimatedMinutes = 5
                 }
                 SupabaseService.shared.tasks[index] = current
             } else {
+                let mins = TaskItem.extractEstimatedMinutes(from: r.notes ?? "") ?? 5
                 await SupabaseService.shared.createTask(
                     title: title,
                     description: r.notes,
                     listName: listName,
                     projectId: matchedProject?.id,
                     dueDate: dueDate,
-                    appleReminderId: reminderId
+                    appleReminderId: reminderId,
+                    estimatedMinutes: mins
                 )
             }
         }

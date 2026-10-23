@@ -46,7 +46,7 @@ enum TaskDuration: Int, CaseIterable, Identifiable {
     var label: String { "\(rawValue)m" }
     
     static func normalize(_ minutes: Int?) -> TaskDuration {
-        guard let m = minutes, m > 0 else { return .fifteen }
+        guard let m = minutes, m > 0 else { return .five }
         if m <= 7 { return .five }
         if m <= 12 { return .ten }
         if m <= 18 { return .fifteen }
@@ -213,41 +213,24 @@ struct TaskItem: Identifiable, Codable, Hashable {
     
     // MARK: - Helpers & Fallbacks
     
-    private static func heuristicMinutes(for title: String, description: String?) -> Int {
-        if let desc = description,
-           let range = desc.range(of: #"\[⏱\s*(\d+)m\]"#, options: .regularExpression) {
+    static func extractEstimatedMinutes(from desc: String) -> Int? {
+        if let range = desc.range(of: #"\[⏱\s*(\d+)m\]"#, options: .regularExpression) {
             let match = String(desc[range])
             let digits = match.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
             if let mins = Int(digits), mins > 0 {
                 return TaskDuration.normalize(mins).rawValue
             }
         }
-        let lower = title.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
-        
-        // 1. Explicit micro / quick tasks (5 - 10 min) - Never suggest 45m for simple tasks
-        let quickKeywords = [
-            "call", "text", "sms", "email", "reply", "send", "ping", "message",
-            "ask", "buy", "order", "clean", "put", "take", "check", "pay",
-            "sign", "schedule", "pick up", "drop off", "lookup", "look up",
-            "confirm", "remind", "cancel", "submit", "file", "download",
-            "upload", "copy", "print", "trash", "delete", "rsvp", "quick"
-        ]
-        if quickKeywords.contains(where: { lower.contains($0) }) {
-            return 10
+        return nil
+    }
+    
+    static func heuristicMinutes(for title: String, description: String?) -> Int {
+        if let desc = description, let mins = extractEstimatedMinutes(from: desc) {
+            return mins
         }
         
-        // 2. Heavy / Deep curriculum & audit tasks (45 - 60 min)
-        if lower.contains("deep") || lower.contains("curriculum") || lower.contains("audit") || lower.contains("reentry navigation") {
-            return 45
-        }
-        
-        // 3. Medium planning / writing / meeting tasks (25 - 30 min)
-        if lower.contains("plan") || lower.contains("draft") || lower.contains("build") || lower.contains("write") || lower.contains("meeting") || lower.contains("practice") {
-            return 30
-        }
-        
-        // 4. Standard default for all ordinary tasks (15 min)
-        return 15
+        // Default to 5 minutes for all added tasks as requested
+        return 5
     }
     
     static func extractFirstFive(from desc: String) -> String? {

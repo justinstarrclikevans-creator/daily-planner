@@ -36,7 +36,9 @@ struct AssistantHomeView: View {
     }
     
     var openTasks: [TaskItem] {
-        supabase.tasks.filter { !$0.isCompleted && isTaskVisibleNow($0) }
+        let visible = supabase.tasks.filter { !$0.isCompleted && isTaskVisibleNow($0) }
+        if !visible.isEmpty { return visible }
+        return supabase.tasks.filter { !$0.isCompleted }
     }
     
     var nextCalendarEvent: CalendarEventItem? {
@@ -154,6 +156,7 @@ struct AssistantHomeView: View {
                 CreateProjectSheetView(prefillName: prefill.name, prefillGoal: prefill.goal)
             }
             .task {
+                await SupabaseService.shared.fetchAll()
                 await RemindersManager.shared.syncDeviceReminders()
                 await calendar.refreshEvents()
             }
@@ -442,7 +445,7 @@ struct AssistantHomeView: View {
     }
     
     private func focusTaskByTitle(title: String) {
-        if let matched = openTasks.first(where: { $0.title.caseInsensitiveCompare(title) == .orderedSame || $0.title.localizedCaseInsensitiveContains(title) }) {
+        if let matched = supabase.tasks.first(where: { !$0.isCompleted && ($0.title.caseInsensitiveCompare(title) == .orderedSame || $0.title.localizedCaseInsensitiveContains(title)) }) {
             self.activeFocusTask = matched
         }
     }
@@ -495,7 +498,7 @@ struct ChatMessageBubbleView: View {
                                     .fontWeight(.bold)
                                     .foregroundColor(.orange)
                                 Spacer()
-                                Text("⏱ \(message.suggestedActionMinutes ?? 15)m")
+                                Text("⏱ \(message.suggestedActionMinutes ?? 5)m")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }

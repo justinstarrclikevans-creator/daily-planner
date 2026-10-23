@@ -377,7 +377,7 @@ async function checkAggressiveMotivationNudges() {
 
     // 2. Check for Overtime on active focused task
     if (state.focusedTask && state.focusedTaskStartedAt && !state.overtimeNudgeSent) {
-        const estimatedMin = state.focusedTask.estimatedMinutes || 15;
+        const estimatedMin = state.focusedTask.estimatedMinutes || 5;
         const elapsedMinutes = (Date.now() - state.focusedTaskStartedAt) / (60 * 1000);
         // Alert if 5 minutes beyond the task's assigned duration
         if (elapsedMinutes >= (estimatedMin + 5)) {

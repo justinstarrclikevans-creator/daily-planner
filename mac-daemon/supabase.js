@@ -55,7 +55,7 @@ async function syncTaskToSupabase(task, appleReminderId = null) {
         const rawDesc = task.description || '';
         
         // Extract Tiimo metadata from description if present
-        let estimatedMinutes = task.estimated_minutes || task.estimatedMinutes || 15;
+        let estimatedMinutes = task.estimated_minutes || task.estimatedMinutes || 5;
         const durMatch = rawDesc.match(/\[⏱\s*(\d+)m\]/);
         if (durMatch && durMatch[1]) {
             estimatedMinutes = parseInt(durMatch[1], 10);
