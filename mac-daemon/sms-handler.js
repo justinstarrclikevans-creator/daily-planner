@@ -26,7 +26,14 @@ async function processIncomingSMS() {
     return;
 }
 
+function isWithinAllowedTextWindow() {
+    const hour = new Date().getHours();
+    // Only send text messages between 8:00 AM and 9:00 PM every day
+    return hour >= 8 && hour < 21;
+}
+
 async function checkUpcomingMeetings() {
+    if (!isWithinAllowedTextWindow()) return;
     const state = loadState();
     state.alertedMeetings = state.alertedMeetings || [];
     
@@ -65,6 +72,7 @@ async function checkUpcomingMeetings() {
 }
 
 async function triggerStalePurgeOffer() {
+    if (!isWithinAllowedTextWindow()) return;
     console.log("[Stale Purge] Evaluating tasks for stale purge...");
     try {
         const openTasks = await getIncompleteReminders();
@@ -108,9 +116,8 @@ async function checkAggressiveMotivationNudges() {
     const myPhone = process.env.MY_PHONE_NUMBER;
     if (!myPhone) return;
 
-    const hour = new Date().getHours();
-    // Only send during waking hours (7 AM to 9 PM)
-    if (hour < 7 || hour >= 21) return;
+    // Only send text messages between 8:00 AM and 9:00 PM every day
+    if (!isWithinAllowedTextWindow()) return;
 
     try {
         const status = await getActivityStatus();

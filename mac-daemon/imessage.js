@@ -70,7 +70,17 @@ async function getRecentMessages(sinceTimestamp = 0) {
 
 module.exports = { getRecentMessages };
 
+function isWithinTextingHours() {
+    const hour = new Date().getHours();
+    // Strictly only send text messages between 8:00 AM and 9:00 PM (08:00 to 20:59) every day
+    return hour >= 8 && hour < 21;
+}
+
 function sendIMessage(target, text) {
+    if (!isWithinTextingHours()) {
+        console.log(`[iMessage Blocked] Outside allowed 8am-9pm window (${new Date().toLocaleTimeString()}). Message suppressed.`);
+        return Promise.resolve(false);
+    }
     const safeText = text.replace(/"/g, '\\"').replace(/\n/g, '\\n');
     const script = `
     tell application "Messages"

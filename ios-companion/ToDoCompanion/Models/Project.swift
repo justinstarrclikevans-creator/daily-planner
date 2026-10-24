@@ -3,6 +3,7 @@ import SwiftUI
 
 enum ProjectScheduleRule: String, Codable, CaseIterable, Identifiable {
     case always = "Always Visible"
+    case customHours = "Custom Hours"
     case workHours = "Work Hours (Mon–Fri 8am–5pm)"
     case offHours = "Off Hours (Evenings & Weekends)"
     case weekendsOnly = "Weekends Only"
@@ -13,6 +14,7 @@ enum ProjectScheduleRule: String, Codable, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .always: return "clock"
+        case .customHours: return "clock.badge.checkmark.fill"
         case .workHours: return "briefcase.fill"
         case .offHours: return "moon.stars.fill"
         case .weekendsOnly: return "sun.max.fill"
@@ -20,17 +22,34 @@ enum ProjectScheduleRule: String, Codable, CaseIterable, Identifiable {
         }
     }
     
-    var isVisibleNow: Bool {
+    static func evaluateVisibility(
+        rule: ProjectScheduleRule,
+        startMinutes: Int = 480,
+        endMinutes: Int = 1020,
+        activeDays: Set<Int> = [1, 2, 3, 4, 5, 6, 7],
+        at now: Date = Date()
+    ) -> Bool {
         let calendar = Calendar.current
-        let now = Date()
         let weekday = calendar.component(.weekday, from: now) // 1 = Sunday, 7 = Saturday
         let isWeekend = (weekday == 1 || weekday == 7)
         let hour = calendar.component(.hour, from: now)
+        let minute = calendar.component(.minute, from: now)
+        let currentMinutes = hour * 60 + minute
         let isWorkHours = !isWeekend && (hour >= 8 && hour < 17)
         
-        switch self {
+        switch rule {
         case .always:
             return true
+        case .customHours:
+            guard activeDays.contains(weekday) else { return false }
+            if startMinutes == endMinutes {
+                return true
+            } else if startMinutes < endMinutes {
+                return currentMinutes >= startMinutes && currentMinutes < endMinutes
+            } else {
+                // Overnight window (e.g., 8:00 PM to 2:00 AM)
+                return currentMinutes >= startMinutes || currentMinutes < endMinutes
+            }
         case .workHours:
             return isWorkHours
         case .offHours:
@@ -40,6 +59,10 @@ enum ProjectScheduleRule: String, Codable, CaseIterable, Identifiable {
         case .weekdaysOnly:
             return !isWeekend
         }
+    }
+    
+    var isVisibleNow: Bool {
+        Self.evaluateVisibility(rule: self)
     }
 }
 
@@ -52,6 +75,9 @@ struct Project: Identifiable, Codable, Hashable {
     var goal: String
     var instructions: String?
     var scheduleRule: ProjectScheduleRule?
+    var customStartMinutes: Int?
+    var customEndMinutes: Int?
+    var customActiveDays: [Int]?
     var createdAt: Date?
     
     enum CodingKeys: String, CodingKey {
@@ -63,6 +89,9 @@ struct Project: Identifiable, Codable, Hashable {
         case goal
         case instructions
         case scheduleRule = "schedule_rule"
+        case customStartMinutes = "custom_start_minutes"
+        case customEndMinutes = "custom_end_minutes"
+        case customActiveDays = "custom_active_days"
         case createdAt = "created_at"
     }
     
@@ -75,6 +104,9 @@ struct Project: Identifiable, Codable, Hashable {
         goal: String,
         instructions: String? = nil,
         scheduleRule: ProjectScheduleRule? = .always,
+        customStartMinutes: Int? = 480,
+        customEndMinutes: Int? = 1020,
+        customActiveDays: [Int]? = [1, 2, 3, 4, 5, 6, 7],
         createdAt: Date? = Date()
     ) {
         self.id = id
@@ -85,6 +117,9 @@ struct Project: Identifiable, Codable, Hashable {
         self.goal = goal
         self.instructions = instructions
         self.scheduleRule = scheduleRule
+        self.customStartMinutes = customStartMinutes
+        self.customEndMinutes = customEndMinutes
+        self.customActiveDays = customActiveDays
         self.createdAt = createdAt
     }
     
@@ -107,8 +142,91 @@ struct Project: Identifiable, Codable, Hashable {
         return scheduleRule ?? .always
     }
     
+    var effectiveCustomStartMinutes: Int {
+        if UserDefaults.standard.object(forKey: "project_custom_start_\(id.uuidString)") != nil {
+            return UserDefaults.standard.integer(forKey: "project_custom_start_\(id.uuidString)")
+        }
+        return customStartMinutes ?? 480 // Default 8:00 AM
+    }
+    
+    var effectiveCustomEndMinutes: Int {
+        if UserDefaults.standard.object(forKey: "project_custom_end_\(id.uuidString)") != nil {
+            return UserDefaults.standard.integer(forKey: "project_custom_end_\(id.uuidString)")
+        }
+        return customEndMinutes ?? 1020 // Default 5:00 PM
+    }
+    
+    var effectiveCustomActiveDays: Set<Int> {
+        if let saved = UserDefaults.standard.array(forKey: "project_custom_days_\(id.uuidString)") as? [Int], !saved.isEmpty {
+            return Set(saved)
+        }
+        if let days = customActiveDays, !days.isEmpty {
+            return Set(days)
+        }
+        return [1, 2, 3, 4, 5, 6, 7]
+    }
+    
     var isVisibleNow: Bool {
-        effectiveScheduleRule.isVisibleNow
+        ProjectScheduleRule.evaluateVisibility(
+            rule: effectiveScheduleRule,
+            startMinutes: effectiveCustomStartMinutes,
+            endMinutes: effectiveCustomEndMinutes,
+            activeDays: effectiveCustomActiveDays
+        )
+    }
+    
+    var scheduleSummaryText: String {
+        switch effectiveScheduleRule {
+        case .always:
+            return "Always Visible"
+        case .customHours:
+            let startStr = Self.formatMinutes(effectiveCustomStartMinutes)
+            let endStr = Self.formatMinutes(effectiveCustomEndMinutes)
+            let daysStr = Self.formatDays(effectiveCustomActiveDays)
+            return "\(daysStr) \(startStr)–\(endStr)"
+        case .workHours:
+            return "Mon–Fri 8am–5pm"
+        case .offHours:
+            return "Evenings & Weekends"
+        case .weekendsOnly:
+            return "Weekends Only"
+        case .weekdaysOnly:
+            return "Weekdays Only"
+        }
+    }
+    
+    static func formatMinutes(_ minutesFromMidnight: Int) -> String {
+        let clamped = ((minutesFromMidnight % 1440) + 1440) % 1440
+        let h24 = clamped / 60
+        let m = clamped % 60
+        let period = h24 >= 12 ? "PM" : "AM"
+        let h12 = h24 % 12 == 0 ? 12 : h24 % 12
+        if m == 0 {
+            return "\(h12)\(period)"
+        }
+        return String(format: "%d:%02d%@", h12, m, period)
+    }
+    
+    static func formatDays(_ days: Set<Int>) -> String {
+        if days.count == 7 { return "Daily" }
+        if days == [2, 3, 4, 5, 6] { return "Mon–Fri" }
+        if days == [1, 7] { return "Weekends" }
+        let names = [(1, "Sun"), (2, "Mon"), (3, "Tue"), (4, "Wed"), (5, "Thu"), (6, "Fri"), (7, "Sat")]
+        return names.filter { days.contains($0.0) }.map { $0.1 }.joined(separator: ", ")
+    }
+    
+    static func dateFromMinutes(_ minutesFromMidnight: Int) -> Date {
+        let cal = Calendar.current
+        let h = (minutesFromMidnight / 60) % 24
+        let m = minutesFromMidnight % 60
+        return cal.date(bySettingHour: h, minute: m, second: 0, of: Date()) ?? Date()
+    }
+    
+    static func minutesFromDate(_ date: Date) -> Int {
+        let cal = Calendar.current
+        let h = cal.component(.hour, from: date)
+        let m = cal.component(.minute, from: date)
+        return h * 60 + m
     }
     
     static let defaults: [Project] = [

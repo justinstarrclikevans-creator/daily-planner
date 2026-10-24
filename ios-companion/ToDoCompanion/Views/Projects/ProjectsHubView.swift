@@ -11,6 +11,7 @@ struct ProjectsHubView: View {
     @State private var playDeckIndex: Int = 0
     @State private var selectedFilter: TaskFilter = .all
     @State private var activeFocusTask: TaskItem? = nil
+    @State private var editingPlaybookProject: Project? = nil
     
     enum TaskFilter: String, CaseIterable, Identifiable {
         case all = "All"
@@ -155,6 +156,9 @@ struct ProjectsHubView: View {
             }
             .sheet(item: $activeFocusTask) { task in
                 TaskFocusSheetView(task: binding(for: task))
+            }
+            .sheet(item: $editingPlaybookProject) { project in
+                ProjectPlaybookEditorView(project: project)
             }
         }
     }
@@ -433,6 +437,12 @@ struct ProjectsHubView: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
+                            Button {
+                                editingPlaybookProject = project
+                            } label: {
+                                Label("Set Visibility Hours & Playbook", systemImage: "clock.badge.checkmark")
+                            }
+                            
                             Button(role: .destructive) {
                                 Task {
                                     await supabase.deleteProject(projectId: project.id)

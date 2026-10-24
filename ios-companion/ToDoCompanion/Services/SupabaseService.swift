@@ -139,7 +139,10 @@ class SupabaseService: ObservableObject {
         icon: String,
         goal: String,
         instructions: String? = nil,
-        scheduleRule: ProjectScheduleRule = .always
+        scheduleRule: ProjectScheduleRule = .always,
+        customStartMinutes: Int? = nil,
+        customEndMinutes: Int? = nil,
+        customActiveDays: [Int]? = nil
     ) async -> Project {
         let newProject = Project(
             id: UUID(),
@@ -150,12 +153,24 @@ class SupabaseService: ObservableObject {
             goal: goal,
             instructions: instructions,
             scheduleRule: scheduleRule,
+            customStartMinutes: customStartMinutes,
+            customEndMinutes: customEndMinutes,
+            customActiveDays: customActiveDays,
             createdAt: Date()
         )
         
         // 1. Memory update & local persistence
         self.projects.append(newProject)
         UserDefaults.standard.set(scheduleRule.rawValue, forKey: "project_schedule_\(newProject.id.uuidString)")
+        if let start = customStartMinutes {
+            UserDefaults.standard.set(start, forKey: "project_custom_start_\(newProject.id.uuidString)")
+        }
+        if let end = customEndMinutes {
+            UserDefaults.standard.set(end, forKey: "project_custom_end_\(newProject.id.uuidString)")
+        }
+        if let days = customActiveDays {
+            UserDefaults.standard.set(days, forKey: "project_custom_days_\(newProject.id.uuidString)")
+        }
         if let inst = instructions, !inst.isEmpty {
             UserDefaults.standard.set(inst, forKey: "project_instructions_\(newProject.id.uuidString)")
         }
@@ -187,6 +202,9 @@ class SupabaseService: ObservableObject {
         // 2. Clear UserDefaults keys
         UserDefaults.standard.removeObject(forKey: "project_instructions_\(projectId.uuidString)")
         UserDefaults.standard.removeObject(forKey: "project_schedule_\(projectId.uuidString)")
+        UserDefaults.standard.removeObject(forKey: "project_custom_start_\(projectId.uuidString)")
+        UserDefaults.standard.removeObject(forKey: "project_custom_end_\(projectId.uuidString)")
+        UserDefaults.standard.removeObject(forKey: "project_custom_days_\(projectId.uuidString)")
         
         // 3. Supabase delete if configured
         guard AppConfig.isSupabaseConfigured,
@@ -199,16 +217,42 @@ class SupabaseService: ObservableObject {
         _ = try? await URLSession.shared.data(for: request)
     }
     
-    func updateProjectPlaybook(projectId: UUID, instructions: String, scheduleRule: ProjectScheduleRule) async {
+    func updateProjectPlaybook(
+        projectId: UUID,
+        instructions: String,
+        scheduleRule: ProjectScheduleRule,
+        customStartMinutes: Int? = nil,
+        customEndMinutes: Int? = nil,
+        customActiveDays: [Int]? = nil
+    ) async {
         // 1. Save locally immediately
         UserDefaults.standard.set(instructions, forKey: "project_instructions_\(projectId.uuidString)")
         UserDefaults.standard.set(scheduleRule.rawValue, forKey: "project_schedule_\(projectId.uuidString)")
+        if let start = customStartMinutes {
+            UserDefaults.standard.set(start, forKey: "project_custom_start_\(projectId.uuidString)")
+        }
+        if let end = customEndMinutes {
+            UserDefaults.standard.set(end, forKey: "project_custom_end_\(projectId.uuidString)")
+        }
+        if let days = customActiveDays {
+            UserDefaults.standard.set(days, forKey: "project_custom_days_\(projectId.uuidString)")
+        }
         
         // 2. Update memory model
         if let idx = projects.firstIndex(where: { $0.id == projectId }) {
             projects[idx].instructions = instructions
             projects[idx].scheduleRule = scheduleRule
+            if let start = customStartMinutes {
+                projects[idx].customStartMinutes = start
+            }
+            if let end = customEndMinutes {
+                projects[idx].customEndMinutes = end
+            }
+            if let days = customActiveDays {
+                projects[idx].customActiveDays = days
+            }
         }
+        objectWillChange.send()
         persistCustomProjects()
         
         // 3. Sync to Supabase if configured
@@ -221,10 +265,19 @@ class SupabaseService: ObservableObject {
         request.setValue("Bearer \(AppConfig.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "instructions": instructions,
             "schedule_rule": scheduleRule.rawValue
         ]
+        if let start = customStartMinutes {
+            body["custom_start_minutes"] = start
+        }
+        if let end = customEndMinutes {
+            body["custom_end_minutes"] = end
+        }
+        if let days = customActiveDays {
+            body["custom_active_days"] = days
+        }
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
         _ = try? await URLSession.shared.data(for: request)
     }

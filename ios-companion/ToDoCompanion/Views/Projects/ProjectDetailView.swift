@@ -39,8 +39,8 @@ struct ProjectDetailView: View {
                             showPlaybookEditor = true
                         } label: {
                             HStack(spacing: 4) {
-                                Image(systemName: "slider.horizontal.3")
-                                Text("Playbook")
+                                Image(systemName: "clock.badge.checkmark")
+                                Text("Hours & Playbook")
                             }
                             .font(.caption)
                             .fontWeight(.bold)
@@ -50,6 +50,16 @@ struct ProjectDetailView: View {
                             .background(liveProject.swiftUIColor.opacity(0.12))
                             .cornerRadius(12)
                         }
+                    }
+                    
+                    HStack(spacing: 6) {
+                        Image(systemName: liveProject.effectiveScheduleRule.icon)
+                            .font(.caption2)
+                            .foregroundColor(liveProject.swiftUIColor)
+                        Text("Schedule: \(liveProject.scheduleSummaryText)")
+                            .font(.caption)
+                            .fontWeight(.semibold)
+                            .foregroundColor(liveProject.swiftUIColor)
                     }
                     
                     if !liveProject.goal.isEmpty {

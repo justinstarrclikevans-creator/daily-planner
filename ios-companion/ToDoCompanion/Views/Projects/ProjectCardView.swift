@@ -34,9 +34,25 @@ struct ProjectCardView: View {
                         .fontWeight(.bold)
                         .foregroundColor(.primary)
                     
-                    Text("\(openTasksCount) open tasks")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    HStack(spacing: 6) {
+                        Text("\(openTasksCount) open tasks")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        
+                        if project.effectiveScheduleRule != .always {
+                            HStack(spacing: 3) {
+                                Image(systemName: project.effectiveScheduleRule.icon)
+                                    .font(.system(size: 9))
+                                Text(project.scheduleSummaryText)
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(project.swiftUIColor.opacity(0.12))
+                            .foregroundColor(project.swiftUIColor)
+                            .cornerRadius(6)
+                        }
+                    }
                 }
                 
                 Spacer()

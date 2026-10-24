@@ -80,34 +80,49 @@ class NotificationService: NSObject, ObservableObject {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [halfwayId, completeId])
     }
     
+    private func isWithinAllowedAlertHours(at date: Date) -> Bool {
+        let hour = Calendar.current.component(.hour, from: date)
+        // Only send messages/alerts between 8:00 AM and 9:00 PM every day
+        return hour >= 8 && hour < 21
+    }
+    
     /// Resets the 1-hour angry notification timer whenever the user opens the app.
     func scheduleOneHourAppInactivityAngryNotification() {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [appInactive1HrId, appInactive2HrId])
         
-        let content1 = UNMutableNotificationContent()
-        content1.title = "😡 Where Are You?!"
-        content1.body = "You haven't opened the app in an hour! Stop stalling—that's a failure of nerve. Open your list and knock out a 5m task right now!"
-        content1.sound = .default
+        let fireDate1 = Date().addingTimeInterval(3600)
+        if isWithinAllowedAlertHours(at: fireDate1) {
+            let content1 = UNMutableNotificationContent()
+            content1.title = "😡 Where Are You?!"
+            content1.body = "You haven't opened the app in an hour! Stop stalling—that's a failure of nerve. Open your list and knock out a 5m task right now!"
+            content1.sound = .default
+            
+            let trigger1 = UNTimeIntervalNotificationTrigger(timeInterval: 3600, repeats: false)
+            let req1 = UNNotificationRequest(identifier: appInactive1HrId, content: content1, trigger: trigger1)
+            center.add(req1, withCompletionHandler: nil)
+        }
         
-        let trigger1 = UNTimeIntervalNotificationTrigger(timeInterval: 3600, repeats: false)
-        let req1 = UNNotificationRequest(identifier: appInactive1HrId, content: content1, trigger: trigger1)
-        center.add(req1, withCompletionHandler: nil)
-        
-        let content2 = UNMutableNotificationContent()
-        content2.title = "🔥 2 Hours With Zero Action"
-        content2.body = "Still dodging your tasks?! Open ToDo Companion NOW and finish one item before you do anything else."
-        content2.sound = .default
-        
-        let trigger2 = UNTimeIntervalNotificationTrigger(timeInterval: 7200, repeats: false)
-        let req2 = UNNotificationRequest(identifier: appInactive2HrId, content: content2, trigger: trigger2)
-        center.add(req2, withCompletionHandler: nil)
+        let fireDate2 = Date().addingTimeInterval(7200)
+        if isWithinAllowedAlertHours(at: fireDate2) {
+            let content2 = UNMutableNotificationContent()
+            content2.title = "🔥 2 Hours With Zero Action"
+            content2.body = "Still dodging your tasks?! Open ToDo Companion NOW and finish one item before you do anything else."
+            content2.sound = .default
+            
+            let trigger2 = UNTimeIntervalNotificationTrigger(timeInterval: 7200, repeats: false)
+            let req2 = UNNotificationRequest(identifier: appInactive2HrId, content: content2, trigger: trigger2)
+            center.add(req2, withCompletionHandler: nil)
+        }
     }
     
     /// Resets the 1-hour angry notification timer for task completions.
     func resetTaskCompletionInactivityTimer() {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [taskInactive1HrId])
+        
+        let fireDate = Date().addingTimeInterval(3600)
+        guard isWithinAllowedAlertHours(at: fireDate) else { return }
         
         let content = UNMutableNotificationContent()
         content.title = "⚠️ Zero Tasks Completed in 1 Hour"
