@@ -123,33 +123,6 @@ struct Routine: Identifiable, Codable, Hashable {
                 RoutineItemStep(title: "Check CM and Class evaluations", estimatedMinutes: 5),
                 RoutineItemStep(title: "Message teammates any needed feedback", estimatedMinutes: 5)
             ]
-        ),
-        Routine(
-            id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
-            projectId: nil,
-            defaultListName: "Turn90",
-            title: "Weekly 10s",
-            description: "Review class video folder and send feedback on videos via Slack.",
-            color: "#EF4444",
-            icon: "video.fill",
-            items: [
-                RoutineItemStep(title: "Check Class Video folder", estimatedMinutes: 5),
-                RoutineItemStep(title: "Send feedback on videos via Slack", estimatedMinutes: 5)
-            ]
-        ),
-        Routine(
-            id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
-            projectId: nil,
-            defaultListName: "Turn90",
-            title: "Check how the men did in Mock interviews (Fridays)",
-            description: "Review cohort phase 1 spreadsheets and celebrate/flag progress in T90 Slack.",
-            color: "#10B981",
-            icon: "person.3.fill",
-            items: [
-                RoutineItemStep(title: "Go into each cohort's phase 1 spreadsheet", estimatedMinutes: 5),
-                RoutineItemStep(title: "Look at each guy's progress and take notes", estimatedMinutes: 5),
-                RoutineItemStep(title: "Celebrate those who have achieved a 3 and point out guys who are stuck to the T90 channel in Slack", estimatedMinutes: 5)
-            ]
         )
     ]
 }

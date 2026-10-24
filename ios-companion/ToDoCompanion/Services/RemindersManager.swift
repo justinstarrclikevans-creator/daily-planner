@@ -213,79 +213,43 @@ class RemindersManager: ObservableObject {
     ]
     
     func migrateToNewPDFStructureIfNeeded() async {
-        let migrationKey = "did_migrate_pdf_structure_v5"
+        let migrationKey = "did_migrate_pdf_structure_v6_clean"
         guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
         guard isAuthorized else { return }
         
-        // 1. Ensure the 6 target lists exist
+        // 1. Wipe all existing reminders on device once so any bogus v5 tasks ("Bunny", etc.) are completely purged
+        let allPred = eventStore.predicateForReminders(in: nil)
+        let allExisting: [EKReminder] = await withCheckedContinuation { cont in
+            eventStore.fetchReminders(matching: allPred) { items in
+                cont.resume(returning: items ?? [])
+            }
+        }
+        for item in allExisting {
+            try? eventStore.remove(item, commit: false)
+        }
+        try? eventStore.commit()
+        
+        // 2. Ensure the 6 target lists exist and remove any deprecated lists
         let targetLists = ["General", "Turn90", "843FC", "Personal", "Nosa", "Book (Memoir) and Synapse"]
         for name in targetLists {
             _ = await createReminderList(named: name)
         }
         
-        // 2. Remove deprecated lists & their reminders on device if any remain
-        let calendars = eventStore.calendars(for: .reminder)
-        for cal in calendars {
+        let targetSet = Set(targetLists.map { $0.lowercased() })
+        for cal in eventStore.calendars(for: .reminder) {
             let lower = cal.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if deprecatedListNames.contains(lower) {
-                let pred = eventStore.predicateForReminders(in: [cal])
-                let oldReminders: [EKReminder] = await withCheckedContinuation { cont in
-                    eventStore.fetchReminders(matching: pred) { items in
-                        cont.resume(returning: items ?? [])
-                    }
-                }
-                for item in oldReminders {
-                    try? eventStore.remove(item, commit: false)
-                }
-                try? eventStore.commit()
+            if !targetSet.contains(lower) {
                 try? eventStore.removeCalendar(cal, commit: true)
             }
         }
         
-        // 3. Check if the 56 tasks from the PDF structure are already synced via iCloud; if not, seed missing ones
-        let existingIncomplete = await fetchIncompleteReminders()
+        // 3. Seed the exact 56 tasks and subtasks from the PDF document
         let seedStructure: [(list: String, tasks: [(title: String, subtasks: [String])])] = [
             ("General", [
                 ("Create a workflow for the end of the day", []),
-                ("Add a \"failure of nerve\" concept to the AI engines", [])
+                ("Add a failure of nerve to some of the ai engines", [])
             ]),
             ("Turn90", [
-                ("Talk to Adam about making digital worksheets for guys to do outside of the classroom", []),
-                ("Complete Turn90 assessment", []),
-                ("Prepare presentation for the T90 conference in May", [
-                    "Read through materials in Drive Folder",
-                    "Write an outline for what I will cover in each session I am responsible for",
-                    "Confirm the outline is good",
-                    "Practice the sections I am responsible for"
-                ]),
-                ("Explore and analyze our data and run correlations", []),
-                ("Make guide for using data apps", []),
-                ("Show guide for using data apps to Bunny", []),
-                ("Write a proposal on how we can incorporate testing the soft skills of the staff on these traits during the hiring process and ongoing staff training.", []),
-                ("Meet with different centers to teach the new fidelity platform", []),
-                ("Prepare the new evaluation method for replication sites", []),
-                ("Review the retention data report that I made on Google Drive", []),
-                ("Work on replication workbook", []),
-                ("Finish adding fidelity checklist to workbook and email to Bunny", []),
-                ("Complete phase 1 fidelity platform", [
-                    "Test the recording using an external mic for the classroom",
-                    "Fix any bugs from tests",
-                    "Show the app to Bunny for approval",
-                    "Prep the one-pager for meeting with each site",
-                    "Give it to them to use"
-                ]),
-                ("Evaluate at least 1 class session and 1 case management session for Toyin", []),
-                ("Look at program tracker to see where I may need to assist", []),
-                ("Compare notes from Google doc and handbook to see what fits cleanly into replication handbook", []),
-                ("Do annotations for cognitive scripts for Turn90 research project", []),
-                ("See how long they are maintaining checklists at Columbia after starting", []),
-                ("Brainstorm an observational checklist for watching someone teach a checklist (fidelity checklist)", []),
-                ("Send my notes on a call with Michigan to Bunny", []),
-                ("Review other curricula (5 key model, emotional regulation, the Duluth model, matrix model)", []),
-                ("Follow up with Shaddai to review cognitive behavioral sessions on video", []),
-                ("Assess one phone follow up with a partner site", []),
-                ("Evaluate at least 1 class session and 1 case management session for Crosswell", []),
-                ("Identify strong examples of active engagement in T90 classes", []),
                 ("Start the day", [
                     "Open Apricot",
                     "Run Main Report and export",
@@ -294,97 +258,122 @@ class RemindersManager: ObservableObject {
                     "Check CM and Class evaluations",
                     "Message teammates any needed feedback"
                 ]),
-                ("Weekly 10s", [
-                    "Check Class Video folder",
-                    "Send feedback on videos via Slack"
+                ("Finish the lscmi’s", []),
+                ("Put in Lawrence's case plan and Notes, including job placement", []),
+                ("Ask Amy about moving stuff out of the drive", []),
+                ("Make an apricot report that tells me how many points everyone's earned to determine dollar amount", []),
+                ("Columbia jobs", [
+                    "Use the ai app to look for leads",
+                    "Email and call to set appointments",
+                    "Ask AI to cross check for indeed postings"
                 ]),
-                ("Check how the men did in Mock interviews (Fridays)", [
-                    "Go into each cohort's phase 1 spreadsheet",
-                    "Look at each guy's progress and take notes",
-                    "Celebrate those who have achieved a 3 and point out guys who are stuck to the T90 channel in Slack"
-                ])
+                ("Create a feedback loop for class in case management feedback that informs training", [
+                    "Look at the feedback",
+                    "Download feedback",
+                    "Ask ai to create needed trainings based on feedback"
+                ]),
+                ("Schedule time for the transfer training with Jenn", []),
+                ("Reach out lashawn about VR funding and Anthony", []),
+                ("Set goals for reentry navigation as a mini project under Turn 90:", [
+                    "Decide whether to log goals in Apricot or T90 app",
+                    "Figure out reporting and tracking methods."
+                ]),
+                ("Identify assessments, tracks, and job placement opportunities for SkillCat tracks.", []),
+                ("Submit Walmart job applications for Arthur and Al.", []),
+                ("Add daily reminder to remove people from SkillCat.morning check class and cm scores, open these websites, skillcat progress. Flag issues.", []),
+                ("Define briefcase completion process and create relevant flags.", []),
+                ("Create a training log to track all training sessions (planned and ad hoc) and frequency of similar conversations.", []),
+                ("Provide Greg Miller (potential headhunter) with requested information.", []),
+                ("Purchase appreciation gifts for program staff.", []),
+                ("Use Tiimo-style checklists for program managers to track progress.", []),
+                ("Explore development of an Android/Apple app for direct session recording and upload.", []),
+                ("Define dashboard report requirements (e.g., weekly drug tests, case management) and automate reporting.", []),
+                ("Run last year’s case notes through AI to extract insights and evaluate program effectiveness.", []),
+                ("Fix employment check-in reporting in Apricot and update playbook with definitions", []),
+                ("Have the algo give an updated goals list. So process is first session is setting goals, goals are listed in each next session game plan, then updates to the goals are in the case notes.", []),
+                ("Write the todo brain. Ask slacks go here. Priority. Talk it out!!!", []),
+                ("Look up Zune? warehouse in Orangeburg for Lawrence", []),
+                ("Try to implement a feature where people can record their conversations and automatically link them to a person", []),
+                ("Just focus on the playbook and everything else stems from that. Talk/write out every process", []),
+                ("How are we holding case plans now?", [])
             ]),
             ("843FC", [
-                ("Finish end of season party planning", [
-                    "Reserve space at Container bar for the team",
-                    "Make awards",
-                    "Make matching T-shirts for team and coaches",
-                    "Prep games and competition for the families",
-                    "Let families know what day and time it is"
+                ("Invites for the synapse app.", []),
+                ("Christmas Initiative", [
+                    "Plan out the structure",
+                    "Look for products and costs",
+                    "Write a one pager",
+                    "Deliver to team and potential partners"
                 ]),
-                ("Identify different clubs for next year in the area", []),
-                ("Look for courses for coaching education", []),
-                ("Explore using Veo for individual player monitoring", []),
-                ("Update how the cognitive roadmap shows on the player dashboard", []),
-                ("Add cognitive scoring into the system", []),
-                ("Add instructions for the discovery phase of the coaching roadmap", []),
-                ("Rewrite the coaching syllabus to emphasize discovery and iterative problem solving", []),
-                ("Plan summer tournaments and trainings", [
-                    "Make team flyer",
-                    "Distribute team flyer",
-                    "Reserve a spot in the Charleston Summer Classic",
-                    "Schedule out summer trainings",
-                    "Create registration and collect registration fees"
+                ("One Pager for holiday event", [
+                    "Identify full list of potential partners",
+                    "Go to Lloyd’s",
+                    "Kasi",
+                    "restaurants",
+                    "Pat",
+                    "Awaken church"
                 ]),
-                ("Set up meeting for soccer coaching panel", []),
-                ("Create 1-on-1 training tracking in the coaching app", []),
-                ("Reach out to clubs who are losing teams next year for players", [
-                    "Find clubs losing the 2015 team due to age changes",
-                    "See how I can contact the families or coaches of those teams",
-                    "Send team flyers"
+                ("Switch away from fourth wall", [
+                    "Change the links on 843fc.org to crowded"
                 ]),
-                ("Plan out team camp in July", [
-                    "Create curriculum",
-                    "Decide Dates",
-                    "Decide Cost",
-                    "Make Flyer",
-                    "Send Flyer"
-                ])
+                ("Set up recurring donations", []),
+                ("Launch a campaign (including app) on November 1st; 10 days remaining for preparation.", [
+                    "App may not be fully ready but campaign will proceed."
+                ]),
+                ("Use Google to recreate \"best version\" videos from existing transcripts.", []),
+                ("Email outreach to Casey Sexton, lawyers (including Brooke), and realtors:", [
+                    "Pitch nonprofit advertising benefits."
+                ]),
+                ("Focus on campaign timing to capitalize on seasonal giving.", []),
+                ("Meet with Coach Kevin to discuss:", [
+                    "App development for him.",
+                    "EFC Christmas shopping list.",
+                    "General catch-up and collaboration."
+                ]),
+                ("Plan to deliver mini sermons (inspired by Rob Bell) on topics like Albertine.", []),
+                ("London and Reece to help me", []),
+                ("Switch 4th wall to crowded. Use 4wall for swag crowded for 5k registration", [])
             ]),
             ("Personal", [
-                ("Pick a primary care physician", []),
-                ("Update public health tracking board", []),
-                ("Look for small funding options in North Charleston", []),
-                ("Research narrative psychology and identity transformation", []),
-                ("Check details on student loan forgiveness", []),
-                ("Schedule biometric screening", [])
+                ("Ask antigravity to read richard rohr emails and text those instead of common prayer", []),
+                ("Administer flea treatments to cats.", []),
+                ("Pay Charleston water bill.", []),
+                ("Order Ninja transfers for shirts (finish designs first). T90 badges as well", []),
+                ("Incorporate cardio, yoga, meditation, and medication into a daily routine (using an app like Tiimo or one being developed).", []),
+                ("Make a training app for the boys to enable them to charge for soccer training.", [])
             ]),
             ("Nosa", [
-                ("Review roadmap for Nosa", []),
-                ("Update the website to reflect Nosa's direction", [
-                    "Check all tabs for consistent language",
-                    "Check all documents and validate claims",
-                    "Send website to two people to check out and ask them what they think the product is",
-                    "Find three target customers and ask them what it would take to get them to try it"
+                ("Talk to Robert about Royvi $", []),
+                ("Get Royvi picture for ID", [
+                    "Finish ID",
+                    "Send to Claire"
                 ])
             ]),
             ("Book (Memoir) and Synapse", [
-                ("Review and refine the core message", []),
-                ("Organize current notes and reflections", [
-                    "Pull from Google Drive and other places",
-                    "Put them into the book app"
+                ("Set aside dedicated time to work on the book.", []),
+                ("Remember the book is a side income source with potential for further opportunities.", []),
+                ("Develop an app component for passive training income/certification:", [
+                    "Include CBT skills, interview skills, sales training (Sandler method), and Synapse content.",
+                    "Determine if this will be part of the Free and Forward app or a separate project."
                 ]),
-                ("Outline the structure or chapters", []),
-                ("Set a regular writing schedule", []),
-                ("Identify key stories or examples to include", [])
+                ("Create viral videos for Synapse using analogies (e.g., grocery store, driving your own car). Add grocery store and driving into app", []),
+                ("Focus on developing the Synapse AI engine as a standalone, coachable app.", [])
             ])
         ]
         
+        // Clear local task cache so only fresh tasks from the PDF structure exist
+        SupabaseService.shared.tasks.removeAll()
+        
         for group in seedStructure {
             for item in group.tasks {
-                let alreadyExists = existingIncomplete.contains { r in
-                    (r.title ?? "").caseInsensitiveCompare(item.title) == .orderedSame
-                }
-                if !alreadyExists {
-                    let subtasks = item.subtasks.map { SubtaskItem(title: $0, isCompleted: false) }
-                    let notes = TaskItem.buildDescription(
-                        cleanNotes: "",
-                        estimatedMinutes: 5,
-                        inPlayQueue: false,
-                        subtasks: subtasks
-                    )
-                    _ = try? await addReminder(title: item.title, notes: notes, listName: group.list)
-                }
+                let subtasks = item.subtasks.map { SubtaskItem(title: $0, isCompleted: false) }
+                let notes = TaskItem.buildDescription(
+                    cleanNotes: "",
+                    estimatedMinutes: 5,
+                    inPlayQueue: false,
+                    subtasks: subtasks
+                )
+                _ = try? await addReminder(title: item.title, notes: notes, listName: group.list)
             }
         }
         

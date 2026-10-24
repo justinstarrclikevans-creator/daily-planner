@@ -12,9 +12,9 @@ class SupabaseService: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
     
-    private let customProjectsKey = "saved_custom_projects_v5"
-    private let customTasksKey = "saved_custom_tasks_v5"
-    private let customRoutinesKey = "saved_do_it_again_v5"
+    private let customProjectsKey = "saved_custom_projects_v6_clean"
+    private let customTasksKey = "saved_custom_tasks_v6_clean"
+    private let customRoutinesKey = "saved_do_it_again_v6_clean"
     
     private init() {
         loadLocalProjects()
