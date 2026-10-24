@@ -12,14 +12,38 @@ class SupabaseService: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var errorMessage: String? = nil
     
-    private let customProjectsKey = "saved_custom_projects_v1"
-    private let customTasksKey = "saved_custom_tasks_v1"
+    private let customProjectsKey = "saved_custom_projects_v5"
+    private let customTasksKey = "saved_custom_tasks_v5"
+    private let customRoutinesKey = "saved_do_it_again_v5"
     
     private init() {
         loadLocalProjects()
         loadLocalTasks()
+        loadLocalRoutines()
         Task {
             await fetchAll()
+        }
+    }
+    
+    func loadLocalRoutines() {
+        if let data = UserDefaults.standard.data(forKey: customRoutinesKey),
+           let saved = try? JSONDecoder().decode([Routine].self, from: data),
+           !saved.isEmpty {
+            var combined = Routine.defaults
+            for r in saved {
+                if !combined.contains(where: { $0.id == r.id || $0.title.caseInsensitiveCompare(r.title) == .orderedSame }) {
+                    combined.insert(r, at: 0)
+                }
+            }
+            self.routines = combined
+        } else {
+            self.routines = Routine.defaults
+        }
+    }
+    
+    func persistLocalRoutines() {
+        if let data = try? JSONEncoder().encode(self.routines) {
+            UserDefaults.standard.set(data, forKey: customRoutinesKey)
         }
     }
     
@@ -306,8 +330,11 @@ class SupabaseService: ObservableObject {
         persistLocalTasks()
         
         // Also mark complete in Apple Reminders on device
-        if let reminderId = updated.appleReminderId, updated.isCompleted {
-            _ = await RemindersManager.shared.completeReminder(identifier: reminderId)
+        if updated.isCompleted {
+            NotificationService.shared.resetTaskCompletionInactivityTimer()
+            if let reminderId = updated.appleReminderId {
+                _ = await RemindersManager.shared.completeReminder(identifier: reminderId)
+            }
         }
         
         await updateTask(updated)
@@ -318,6 +345,9 @@ class SupabaseService: ObservableObject {
             tasks[index] = updatedTask
             persistLocalTasks()
         }
+        
+        // Sync updated title, subtasks (in notes), dueDate, and listName back to Apple Reminders
+        await RemindersManager.shared.updateReminder(from: updatedTask)
         
         guard AppConfig.isSupabaseConfigured,
               let url = URL(string: "\(AppConfig.supabaseURL)/rest/v1/tasks?id=eq.\(updatedTask.id)") else { return }
@@ -338,6 +368,17 @@ class SupabaseService: ObservableObject {
         }
     }
     
+    func moveTask(_ task: TaskItem, toProjectNamed targetListName: String) async {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var copy = tasks[index]
+        copy.listName = targetListName
+        let matchedProject = projects.first { p in
+            p.name.caseInsensitiveCompare(targetListName) == .orderedSame
+        }
+        copy.projectId = matchedProject?.id
+        await updateTask(copy)
+    }
+    
     func togglePlayQueue(for task: TaskItem) async {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         var copy = tasks[index]
@@ -354,8 +395,9 @@ class SupabaseService: ObservableObject {
         await updateTask(copy)
     }
     
-    // MARK: - Routines (Tiimo-Style Modular Bundles)
+    // MARK: - "Do it again" (Repeatable Tasks & Subtasks)
     func fetchRoutines() async {
+        loadLocalRoutines()
         guard let url = URL(string: "\(AppConfig.supabaseURL)/rest/v1/routines?select=*&order=created_at.asc") else { return }
         
         var request = URLRequest(url: url)
@@ -372,17 +414,87 @@ class SupabaseService: ObservableObject {
             decoder.dateDecodingStrategy = .iso8601
             let fetched = try decoder.decode([Routine].self, from: data)
             if !fetched.isEmpty {
-                self.routines = fetched
+                for r in fetched {
+                    if !self.routines.contains(where: { $0.id == r.id || $0.title.caseInsensitiveCompare(r.title) == .orderedSame }) {
+                        self.routines.append(r)
+                    }
+                }
+                persistLocalRoutines()
             }
         } catch {
-            print("Note: Using local default routines: \(error.localizedDescription)")
+            print("Note: Using local Do It Again routines: \(error.localizedDescription)")
         }
     }
     
-    func createRoutine(title: String, description: String = "", color: String = "#6366F1", icon: String = "sparkles", items: [RoutineItemStep], projectId: UUID? = nil) async {
+    func saveTaskToDoItAgain(_ task: TaskItem) {
+        let matchedProject = projects.first { p in
+            p.name.caseInsensitiveCompare(task.listName) == .orderedSame
+        }
+        let steps = task.subtasks.map { SubtaskItem in
+            RoutineItemStep(title: SubtaskItem.title, estimatedMinutes: 5)
+        }
+        let newRoutine = Routine(
+            id: UUID(),
+            projectId: matchedProject?.id ?? task.projectId,
+            defaultListName: task.listName,
+            title: task.title,
+            description: task.cleanDescription,
+            color: matchedProject?.color ?? "#6366F1",
+            icon: matchedProject?.icon ?? "arrow.triangle.2.circlepath.circle.fill",
+            items: steps,
+            createdAt: Date()
+        )
+        
+        if let existingIdx = routines.firstIndex(where: { $0.title.caseInsensitiveCompare(task.title) == .orderedSame }) {
+            routines[existingIdx] = newRoutine
+        } else {
+            routines.insert(newRoutine, at: 0)
+        }
+        persistLocalRoutines()
+    }
+    
+    func deleteRoutine(_ routine: Routine) {
+        routines.removeAll { $0.id == routine.id }
+        persistLocalRoutines()
+    }
+    
+    func addDoItAgainToReminders(routine: Routine, projectName: String, scheduledDate: Date? = nil) async {
+        let matchedProject = projects.first { p in
+            p.name.caseInsensitiveCompare(projectName) == .orderedSame
+        }
+        let subtasks = routine.items.map { step in
+            SubtaskItem(title: step.title, isCompleted: false)
+        }
+        let serializedNotes = TaskItem.buildDescription(
+            cleanNotes: routine.description,
+            estimatedMinutes: 5,
+            inPlayQueue: scheduledDate == nil,
+            subtasks: subtasks
+        )
+        let reminderId = try? await RemindersManager.shared.addReminder(
+            title: routine.title,
+            notes: serializedNotes,
+            listName: projectName,
+            dueDate: scheduledDate
+        )
+        await createTask(
+            title: routine.title,
+            description: routine.description,
+            listName: projectName,
+            projectId: matchedProject?.id,
+            dueDate: scheduledDate,
+            appleReminderId: reminderId,
+            estimatedMinutes: 5,
+            inPlayQueue: scheduledDate == nil,
+            subtasks: subtasks
+        )
+    }
+    
+    func createRoutine(title: String, description: String = "", color: String = "#6366F1", icon: String = "sparkles", items: [RoutineItemStep], projectId: UUID? = nil, defaultListName: String = "General") async {
         let newRoutine = Routine(
             id: UUID(),
             projectId: projectId,
+            defaultListName: defaultListName,
             title: title,
             description: description,
             color: color,
@@ -390,65 +502,12 @@ class SupabaseService: ObservableObject {
             items: items,
             createdAt: Date()
         )
-        self.routines.append(newRoutine)
-        
-        guard AppConfig.isSupabaseConfigured,
-              let url = URL(string: "\(AppConfig.supabaseURL)/rest/v1/routines") else { return }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue(AppConfig.supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("Bearer \(AppConfig.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        do {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            request.httpBody = try encoder.encode(newRoutine)
-            _ = try await URLSession.shared.data(for: request)
-        } catch {
-            print("Error creating routine in Supabase: \(error.localizedDescription)")
-        }
+        self.routines.insert(newRoutine, at: 0)
+        persistLocalRoutines()
     }
     
     func insertRoutineIntoQueue(routine: Routine) async {
-        // Determine target list by title or projectId
-        let targetList: String
-        let titleLower = routine.title.lowercased()
-        if titleLower.contains("first shift") {
-            targetList = "First shift"
-        } else if titleLower.contains("football") || titleLower.contains("843") {
-            targetList = "Football"
-        } else {
-            targetList = "Personal"
-        }
-        
-        for step in routine.items {
-            let reminderId = try? await RemindersManager.shared.addReminder(
-                title: step.title,
-                notes: TaskItem.buildDescription(
-                    cleanNotes: "",
-                    estimatedMinutes: step.estimatedMinutes,
-                    inPlayQueue: true,
-                    firstFiveMinutes: step.firstFiveMinutes,
-                    subtasks: []
-                ),
-                listName: targetList
-            )
-            
-            await createTask(
-                title: step.title,
-                description: "",
-                listName: targetList,
-                projectId: routine.projectId,
-                dueDate: Date(),
-                appleReminderId: reminderId,
-                estimatedMinutes: step.estimatedMinutes,
-                inPlayQueue: true,
-                firstFiveMinutes: step.firstFiveMinutes,
-                subtasks: []
-            )
-        }
+        await addDoItAgainToReminders(routine: routine, projectName: routine.defaultListName, scheduledDate: nil)
     }
     
     // MARK: - Ideas

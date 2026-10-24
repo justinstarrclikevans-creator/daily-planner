@@ -28,6 +28,7 @@ struct TaskFocusSheetView: View {
     @State private var selectedDetailLevel: BreakdownDetailLevel = .balanced
     @State private var isGeneratingBreakdown: Bool = false
     @State private var breakdownError: String? = nil
+    @State private var didSaveToDoItAgain: Bool = false
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
@@ -41,50 +42,52 @@ struct TaskFocusSheetView: View {
                         // Task Header
                         headerSection
                         
-                        // Single-Step Zero-Paralysis Runner Action Card
-                        Button {
-                            showSingleStepRunner = true
-                        } label: {
-                            HStack(spacing: 12) {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color.white.opacity(0.2))
-                                        .frame(width: 40, height: 40)
-                                    Image(systemName: "flame.fill")
-                                        .font(.headline)
+                        // Single-Step Zero-Paralysis Runner Action Card (ONLY shown if the item has subtasks)
+                        if !task.subtasks.isEmpty {
+                            Button {
+                                showSingleStepRunner = true
+                            } label: {
+                                HStack(spacing: 12) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(Color.white.opacity(0.2))
+                                            .frame(width: 40, height: 40)
+                                        Image(systemName: "flame.fill")
+                                            .font(.headline)
+                                            .foregroundColor(.white)
+                                    }
+                                    
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("RUN 1-STEP ZERO-PARALYSIS MODE")
+                                            .font(.subheadline)
+                                            .fontWeight(.black)
+                                            .foregroundColor(.white)
+                                        Text("Shows 1 step at a time • Overall \(task.estimatedMinutes)m timer • Fighting quotes")
+                                            .font(.caption2)
+                                            .foregroundColor(.white.opacity(0.9))
+                                    }
+                                    
+                                    Spacer()
+                                    
+                                    Image(systemName: "arrow.right.circle.fill")
+                                        .font(.title3)
                                         .foregroundColor(.white)
                                 }
-                                
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text("RUN 1-STEP ZERO-PARALYSIS MODE")
-                                        .font(.subheadline)
-                                        .fontWeight(.black)
-                                        .foregroundColor(.white)
-                                    Text("Shows 1 step at a time • Overall \(task.estimatedMinutes)m timer • Fighting quotes")
-                                        .font(.caption2)
-                                        .foregroundColor(.white.opacity(0.9))
-                                }
-                                
-                                Spacer()
-                                
-                                Image(systemName: "arrow.right.circle.fill")
-                                    .font(.title3)
-                                    .foregroundColor(.white)
-                            }
-                            .padding(14)
-                            .background(
-                                LinearGradient(
-                                    colors: [.red, .orange],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
+                                .padding(14)
+                                .background(
+                                    LinearGradient(
+                                        colors: [.red, .orange],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )
                                 )
-                            )
-                            .cornerRadius(14)
-                            .shadow(color: Color.red.opacity(0.3), radius: 6, x: 0, y: 3)
-                        }
-                        .padding(.horizontal)
-                        .fullScreenCover(isPresented: $showSingleStepRunner) {
-                            SingleStepFocusView(task: $task)
+                                .cornerRadius(14)
+                                .shadow(color: Color.red.opacity(0.3), radius: 6, x: 0, y: 3)
+                            }
+                            .padding(.horizontal)
+                            .fullScreenCover(isPresented: $showSingleStepRunner) {
+                                SingleStepFocusView(task: $task)
+                            }
                         }
                         
                         // Interactive Time Frame Preset Selector Bar
@@ -92,9 +95,6 @@ struct TaskFocusSheetView: View {
                         
                         // Circular Focus Timer Ring
                         timerRingSection
-                        
-                        // First 5 Minutes Starter Prompt Callout
-                        starterPromptSection
                         
                         // Subtasks Checklist
                         subtasksSection
@@ -143,14 +143,38 @@ struct TaskFocusSheetView: View {
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text(task.listName)
-                    .font(.caption2)
-                    .fontWeight(.bold)
+                // Interactive Project Switcher (Move task between projects)
+                Menu {
+                    Section("Move to Project") {
+                        ForEach(supabase.projects) { project in
+                            Button {
+                                moveTaskToProject(project)
+                            } label: {
+                                HStack {
+                                    Label(project.name, systemImage: project.icon)
+                                    if task.listName.caseInsensitiveCompare(project.name) == .orderedSame {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "folder.fill")
+                            .font(.system(size: 10))
+                        Text(task.listName)
+                            .font(.caption2)
+                            .fontWeight(.bold)
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
+                    .padding(.vertical, 4)
                     .background(Color.indigo.opacity(0.15))
                     .foregroundColor(.indigo)
                     .cornerRadius(6)
+                }
                 
                 Spacer()
                 
@@ -352,36 +376,6 @@ struct TaskFocusSheetView: View {
         }
     }
     
-    // MARK: - First 5 Minutes Starter Prompt
-    private var starterPromptSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Label("First 5 Minutes Starter", systemImage: "bolt.fill")
-                    .font(.footnote)
-                    .fontWeight(.bold)
-                    .foregroundColor(.orange)
-                
-                Spacer()
-            }
-            
-            if let prompt = task.firstFiveMinutesPrompt, !prompt.isEmpty {
-                Text(prompt)
-                    .font(.subheadline)
-                    .fontWeight(.medium)
-                    .foregroundColor(.primary)
-            } else {
-                Text("Start with the smallest 60-second action: open the workspace, read line 1, or type 1 sentence.")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.orange.opacity(0.1))
-        .cornerRadius(14)
-        .padding(.horizontal)
-    }
-    
     // MARK: - Subtasks Section
     private var subtasksSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -466,7 +460,7 @@ struct TaskFocusSheetView: View {
     private var aiBreakdownSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Label("AI Step Breakdown", systemImage: "sparkles")
+                Label("AI Step Breakdown (Syncs to Reminders)", systemImage: "sparkles")
                     .font(.subheadline)
                     .fontWeight(.semibold)
                     .foregroundColor(.indigo)
@@ -491,7 +485,7 @@ struct TaskFocusSheetView: View {
                         ProgressView()
                             .tint(.white)
                             .padding(.trailing, 4)
-                        Text("Breaking down task with Gemini...")
+                        Text("Breaking down & syncing to Reminders...")
                     } else {
                         Image(systemName: "sparkles")
                         Text("Generate \(selectedDetailLevel.shortLabel)")
@@ -522,6 +516,27 @@ struct TaskFocusSheetView: View {
     // MARK: - Bottom Actions
     private var bottomActionsSection: some View {
         VStack(spacing: 12) {
+            // Save to "Do it again" section button
+            Button {
+                supabase.saveTaskToDoItAgain(task)
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                withAnimation {
+                    didSaveToDoItAgain = true
+                }
+            } label: {
+                HStack {
+                    Image(systemName: didSaveToDoItAgain ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath.circle.fill")
+                    Text(didSaveToDoItAgain ? "Saved to 'Do it again'!" : "Save Task & Subtasks to 'Do it again'")
+                }
+                .font(.subheadline)
+                .fontWeight(.bold)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(didSaveToDoItAgain ? Color.indigo.opacity(0.2) : Color.indigo.opacity(0.12))
+                .foregroundColor(.indigo)
+                .cornerRadius(12)
+            }
+            
             Button {
                 markTaskComplete()
             } label: {
@@ -540,6 +555,15 @@ struct TaskFocusSheetView: View {
         }
         .padding(.horizontal)
         .padding(.top, 8)
+    }
+    
+    private func moveTaskToProject(_ project: Project) {
+        task.listName = project.name
+        task.projectId = project.id
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            await supabase.moveTask(task, toProjectNamed: project.name)
+        }
     }
     
     // MARK: - Timer Logic

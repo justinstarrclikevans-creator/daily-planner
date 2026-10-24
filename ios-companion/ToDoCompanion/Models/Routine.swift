@@ -32,6 +32,7 @@ struct RoutineItemStep: Identifiable, Codable, Hashable {
 struct Routine: Identifiable, Codable, Hashable {
     var id: UUID
     var projectId: UUID?
+    var defaultListName: String
     var title: String
     var description: String
     var color: String
@@ -42,7 +43,43 @@ struct Routine: Identifiable, Codable, Hashable {
     enum CodingKeys: String, CodingKey {
         case id, title, description, color, icon, items
         case projectId = "project_id"
+        case defaultListName = "default_list_name"
         case createdAt = "created_at"
+    }
+    
+    init(
+        id: UUID = UUID(),
+        projectId: UUID? = nil,
+        defaultListName: String = "General",
+        title: String,
+        description: String = "",
+        color: String = "#6366F1",
+        icon: String = "arrow.triangle.2.circlepath.circle.fill",
+        items: [RoutineItemStep] = [],
+        createdAt: Date? = Date()
+    ) {
+        self.id = id
+        self.projectId = projectId
+        self.defaultListName = defaultListName
+        self.title = title
+        self.description = description
+        self.color = color
+        self.icon = icon
+        self.items = items
+        self.createdAt = createdAt
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.projectId = try container.decodeIfPresent(UUID.self, forKey: .projectId)
+        self.defaultListName = try container.decodeIfPresent(String.self, forKey: .defaultListName) ?? "General"
+        self.title = try container.decode(String.self, forKey: .title)
+        self.description = try container.decodeIfPresent(String.self, forKey: .description) ?? ""
+        self.color = try container.decodeIfPresent(String.self, forKey: .color) ?? "#6366F1"
+        self.icon = try container.decodeIfPresent(String.self, forKey: .icon) ?? "arrow.triangle.2.circlepath.circle.fill"
+        self.items = try container.decodeIfPresent([RoutineItemStep].self, forKey: .items) ?? []
+        self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
     }
     
     var swiftUIColor: Color {
@@ -50,60 +87,68 @@ struct Routine: Identifiable, Codable, Hashable {
     }
     
     var totalEstimatedMinutes: Int {
-        items.reduce(0) { $0 + $1.estimatedMinutes }
+        max(5, items.reduce(0) { $0 + $1.estimatedMinutes })
     }
     
     static let defaults: [Routine] = [
         Routine(
             id: UUID(uuidString: "11111111-1111-1111-1111-111111111111")!,
             projectId: nil,
-            title: "First Shift: Morning Intake & Casework Kickoff",
-            description: "Review participant notes, complete Apricot updates, and check volunteer coach pairings.",
-            color: "#EF4444",
-            icon: "briefcase.fill",
+            defaultListName: "General",
+            title: "End of the day workflow",
+            description: "Close out open loops, update notes, and prep tomorrow's priorities before shutting down.",
+            color: "#6366F1",
+            icon: "moon.stars.fill",
             items: [
-                RoutineItemStep(title: "Review Antoine Turner intake notes & Google Meet log", estimatedMinutes: 10, firstFiveMinutes: "Open the intake doc and read line 1."),
-                RoutineItemStep(title: "Fill out Apricot employment update form", estimatedMinutes: 15, firstFiveMinutes: "Log into Apricot portal and find participant profile."),
-                RoutineItemStep(title: "Send PIC volunteer coaching check-in email", estimatedMinutes: 10, firstFiveMinutes: "Open Gmail draft and type opening 2 sentences.")
+                RoutineItemStep(title: "Review completed tasks and open loops across projects", estimatedMinutes: 5),
+                RoutineItemStep(title: "Update Apricot & Turn90 notes before signing off", estimatedMinutes: 5),
+                RoutineItemStep(title: "Move unfinished today tasks or schedule for tomorrow", estimatedMinutes: 5),
+                RoutineItemStep(title: "Check tomorrow's calendar and prep top 3 priorities", estimatedMinutes: 5),
+                RoutineItemStep(title: "Clear browser tabs and reset workspace", estimatedMinutes: 5)
             ]
         ),
         Routine(
             id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
             projectId: nil,
-            title: "Football / 843: Practice & Drill Prep",
-            description: "Ensure field permits, equipment, and drills are locked in before practice.",
-            color: "#10B981",
-            icon: "sportscourt.fill",
+            defaultListName: "Turn90",
+            title: "Start the day",
+            description: "Daily morning Turn90 reporting, evaluations, and team feedback workflow.",
+            color: "#EF4444",
+            icon: "sun.max.fill",
             items: [
-                RoutineItemStep(title: "Check field permit status & confirm practice slot", estimatedMinutes: 5, firstFiveMinutes: "Check Parks & Rec confirmation email."),
-                RoutineItemStep(title: "Prep cones, footballs & coaching drill sheet", estimatedMinutes: 15, firstFiveMinutes: "Grab gear bag from trunk and inspect inventory."),
-                RoutineItemStep(title: "Send parent/coach reminder text on group chat", estimatedMinutes: 5, firstFiveMinutes: "Draft text with start time and field number.")
+                RoutineItemStep(title: "Open Apricot", estimatedMinutes: 5),
+                RoutineItemStep(title: "Run Main Report and export", estimatedMinutes: 5),
+                RoutineItemStep(title: "Open T90 app", estimatedMinutes: 5),
+                RoutineItemStep(title: "Feed report into app", estimatedMinutes: 5),
+                RoutineItemStep(title: "Check CM and Class evaluations", estimatedMinutes: 5),
+                RoutineItemStep(title: "Message teammates any needed feedback", estimatedMinutes: 5)
             ]
         ),
         Routine(
             id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
             projectId: nil,
-            title: "Executive Daily Shutdown & Stale Purge",
-            description: "Clear mental cache, sweep completed items, and set tomorrow up for zero friction.",
-            color: "#6366F1",
-            icon: "moon.stars.fill",
+            defaultListName: "Turn90",
+            title: "Weekly 10s",
+            description: "Review class video folder and send feedback on videos via Slack.",
+            color: "#EF4444",
+            icon: "video.fill",
             items: [
-                RoutineItemStep(title: "Clear browser tabs & review scratch notes", estimatedMinutes: 5, firstFiveMinutes: "Close finished tabs and save keepers to project notes."),
-                RoutineItemStep(title: "Review Play Queue and bump unstarted tasks to tomorrow", estimatedMinutes: 5, firstFiveMinutes: "Open ToDo Companion and tap Bump to Tomorrow."),
-                RoutineItemStep(title: "Pin top 3 priority tasks for tomorrow morning", estimatedMinutes: 5, firstFiveMinutes: "Tap +Queue on tomorrow morning’s primary focus.")
+                RoutineItemStep(title: "Check Class Video folder", estimatedMinutes: 5),
+                RoutineItemStep(title: "Send feedback on videos via Slack", estimatedMinutes: 5)
             ]
         ),
         Routine(
             id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
             projectId: nil,
-            title: "Momentum Kickstart (Beat Paralysis)",
-            description: "Three micro-sprints designed to destroy task paralysis in under 25 minutes.",
-            color: "#F59E0B",
-            icon: "bolt.fill",
+            defaultListName: "Turn90",
+            title: "Check how the men did in Mock interviews (Fridays)",
+            description: "Review cohort phase 1 spreadsheets and celebrate/flag progress in T90 Slack.",
+            color: "#10B981",
+            icon: "person.3.fill",
             items: [
-                RoutineItemStep(title: "2-minute physical desk & environment reset", estimatedMinutes: 5, firstFiveMinutes: "Pick up 3 stray items and throw away trash."),
-                RoutineItemStep(title: "5-minute triage of incoming Slack & Gmail", estimatedMinutes: 5, firstFiveMinutes: "Scan subject lines without opening reply rabbit holes."),
-                RoutineItemStep(title: "15-minute deep focus sprint on #1 priority", estimatedMinutes: 15, firstFiveMinutes: "Start the timer and work on line 1 for 60 seconds.")
+                RoutineItemStep(title: "Go into each cohort's phase 1 spreadsheet", estimatedMinutes: 5),
+                RoutineItemStep(title: "Look at each guy's progress and take notes", estimatedMinutes: 5),
+                RoutineItemStep(title: "Celebrate those who have achieved a 3 and point out guys who are stuck to the T90 channel in Slack", estimatedMinutes: 5)
             ]
         )
     ]

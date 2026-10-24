@@ -89,10 +89,25 @@ async function updateReminderNotes(id, notes) {
     });
 }
 
+async function getActivityStatus() {
+    const binPath = path.join(__dirname, 'get_activity_status');
+    return new Promise((resolve) => {
+        exec(`"${binPath}"`, (error, stdout) => {
+            if (error) return resolve({ lastAppOpened: 0, lastTaskCompleted: 0, openCount: 0 });
+            try {
+                resolve(JSON.parse(stdout.trim()));
+            } catch (e) {
+                resolve({ lastAppOpened: 0, lastTaskCompleted: 0, openCount: 0 });
+            }
+        });
+    });
+}
+
 module.exports = {
     getIncompleteReminders,
     completeReminder,
     addReminder,
     moveReminderToSomeday,
-    updateReminderNotes
+    updateReminderNotes,
+    getActivityStatus
 };

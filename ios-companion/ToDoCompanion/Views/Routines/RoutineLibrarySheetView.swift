@@ -3,19 +3,23 @@ import SwiftUI
 struct RoutineLibrarySheetView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var supabase = SupabaseService.shared
-    @State private var expandedRoutineId: UUID? = nil
+    @State private var selectedProjects: [UUID: String] = [:]
     @State private var deployingRoutineId: UUID? = nil
+    @State private var schedulingRoutine: Routine? = nil
+    @State private var scheduleDate: Date = Date().addingTimeInterval(3600)
     @State private var showCreateSheet: Bool = false
     @State private var showAudioSheet: Bool = false
     @State private var statusMessage: String? = nil
     @State private var runningRoutineTask: TaskItem? = nil
+    
+    var isEmbeddedTab: Bool = false
     
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     // Header Subtitle
-                    Text("Select a multi-step routine to instantly populate your Play Queue or run 1 step at a time.")
+                    Text("Saved tasks and their subtasks. Choose a Project to add them to Apple Reminders now, or schedule a date and time.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .padding(.horizontal)
@@ -39,7 +43,7 @@ struct RoutineLibrarySheetView: View {
                                     .font(.subheadline)
                                     .fontWeight(.bold)
                                     .foregroundColor(.primary)
-                                Text("AI converts notes or audio into a sequential 1-step workflow.")
+                                Text("AI converts notes or audio into a repeatable 'Do it again' task & subtasks.")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
@@ -73,7 +77,7 @@ struct RoutineLibrarySheetView: View {
                         .padding(.horizontal)
                     }
                     
-                    // Routine Cards
+                    // "Do it again" Task Cards
                     LazyVStack(spacing: 16) {
                         ForEach(supabase.routines) { routine in
                             routineCard(for: routine)
@@ -83,12 +87,14 @@ struct RoutineLibrarySheetView: View {
                 }
                 .padding(.vertical)
             }
-            .navigationTitle("Routine Library")
+            .navigationTitle("Do it again")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Close") {
-                        dismiss()
+                if !isEmbeddedTab {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("Close") {
+                            dismiss()
+                        }
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -102,7 +108,7 @@ struct RoutineLibrarySheetView: View {
                         Button {
                             showCreateSheet = true
                         } label: {
-                            Label("Manual Step-by-Step", systemImage: "plus")
+                            Label("New 'Do it again' Task", systemImage: "plus")
                         }
                     } label: {
                         Image(systemName: "plus.circle.fill")
@@ -115,6 +121,9 @@ struct RoutineLibrarySheetView: View {
             }
             .sheet(isPresented: $showAudioSheet) {
                 CreateWorkflowFromAudioSheetView()
+            }
+            .sheet(item: $schedulingRoutine) { routine in
+                scheduleRoutineSheet(for: routine)
             }
             .fullScreenCover(item: $runningRoutineTask) { task in
                 SingleStepFocusView(task: binding(for: task))
@@ -129,9 +138,91 @@ struct RoutineLibrarySheetView: View {
         )
     }
     
-    // MARK: - Routine Card
+    private func targetProjectName(for routine: Routine) -> String {
+        if let chosen = selectedProjects[routine.id] {
+            return chosen
+        }
+        return routine.defaultListName
+    }
+    
+    // MARK: - Schedule Sheet
+    private func scheduleRoutineSheet(for routine: Routine) -> some View {
+        let projectName = targetProjectName(for: routine)
+        return NavigationStack {
+            Form {
+                Section("Task & Subtasks") {
+                    Text(routine.title)
+                        .font(.headline)
+                    if !routine.items.isEmpty {
+                        ForEach(routine.items) { step in
+                            HStack(spacing: 6) {
+                                Image(systemName: "circle")
+                                    .font(.caption2)
+                                    .foregroundColor(.secondary)
+                                Text(step.title)
+                                    .font(.subheadline)
+                            }
+                        }
+                    }
+                }
+                
+                Section("Choose Project") {
+                    Picker("Project", selection: Binding(
+                        get: { targetProjectName(for: routine) },
+                        set: { selectedProjects[routine.id] = $0 }
+                    )) {
+                        ForEach(supabase.projects) { project in
+                            Text(project.name).tag(project.name)
+                        }
+                    }
+                }
+                
+                Section("Schedule Date & Time") {
+                    DatePicker(
+                        "When to add/remind",
+                        selection: $scheduleDate,
+                        in: Date()...,
+                        displayedComponents: [.date, .hourAndMinute]
+                    )
+                    .datePickerStyle(.graphical)
+                }
+            }
+            .navigationTitle("Schedule Task")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Cancel") {
+                        schedulingRoutine = nil
+                    }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Schedule") {
+                        let chosenProject = targetProjectName(for: routine)
+                        let chosenDate = scheduleDate
+                        schedulingRoutine = nil
+                        Task {
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            await supabase.addDoItAgainToReminders(
+                                routine: routine,
+                                projectName: chosenProject,
+                                scheduledDate: chosenDate
+                            )
+                            let formatted = chosenDate.formatted(date: .abbreviated, time: .shortened)
+                            statusMessage = "Scheduled '\(routine.title)' in \(chosenProject) for \(formatted)!"
+                        }
+                    }
+                    .fontWeight(.bold)
+                }
+            }
+        }
+        .presentationDetents([.large])
+    }
+    
+    // MARK: - "Do it again" Card
     private func routineCard(for routine: Routine) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let currentProject = targetProjectName(for: routine)
+        
+        return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 // Colored Icon Badge
                 ZStack {
@@ -150,41 +241,60 @@ struct RoutineLibrarySheetView: View {
                         .foregroundColor(.primary)
                     
                     HStack(spacing: 8) {
-                        Text("\(routine.items.count) steps")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(Color.secondary.opacity(0.12))
-                            .foregroundColor(.secondary)
+                        // Project Selector Menu
+                        Menu {
+                            Section("Choose Project for Reminders") {
+                                ForEach(supabase.projects) { project in
+                                    Button {
+                                        selectedProjects[routine.id] = project.name
+                                    } label: {
+                                        HStack {
+                                            Label(project.name, systemImage: project.icon)
+                                            if currentProject.caseInsensitiveCompare(project.name) == .orderedSame {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "folder.fill")
+                                    .font(.system(size: 10))
+                                Text(currentProject)
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.system(size: 8, weight: .bold))
+                            }
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color.indigo.opacity(0.15))
+                            .foregroundColor(.indigo)
                             .cornerRadius(6)
+                        }
                         
-                        Text("⏱ ~\(routine.totalEstimatedMinutes)m")
-                            .font(.caption2)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(routine.swiftUIColor.opacity(0.12))
-                            .foregroundColor(routine.swiftUIColor)
-                            .cornerRadius(6)
+                        if !routine.items.isEmpty {
+                            Text("\(routine.items.count) subtasks")
+                                .font(.caption2)
+                                .fontWeight(.bold)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.secondary.opacity(0.12))
+                                .foregroundColor(.secondary)
+                                .cornerRadius(6)
+                        }
                     }
                 }
                 
                 Spacer()
                 
-                // Expand / Collapse Chevron
                 Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        if expandedRoutineId == routine.id {
-                            expandedRoutineId = nil
-                        } else {
-                            expandedRoutineId = routine.id
-                        }
-                    }
+                    supabase.deleteRoutine(routine)
                 } label: {
-                    Image(systemName: expandedRoutineId == routine.id ? "chevron.up.circle.fill" : "chevron.down.circle")
-                        .font(.title3)
-                        .foregroundColor(.secondary)
+                    Image(systemName: "trash")
+                        .font(.caption)
+                        .foregroundColor(.secondary.opacity(0.7))
                 }
                 .buttonStyle(.plain)
             }
@@ -195,85 +305,41 @@ struct RoutineLibrarySheetView: View {
                     .foregroundColor(.secondary)
             }
             
-            // Expanded Steps Preview
-            if expandedRoutineId == routine.id {
-                VStack(alignment: .leading, spacing: 8) {
+            // Always list subtasks clearly inside the "Do it again" card
+            if !routine.items.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
                     Divider()
                         .padding(.vertical, 2)
                     
-                    Text("STEPS IN THIS ROUTINE")
-                        .font(.system(size: 10, weight: .black))
-                        .tracking(1)
-                        .foregroundColor(.secondary)
-                    
                     ForEach(Array(routine.items.enumerated()), id: \.element.id) { index, step in
-                        HStack(alignment: .firstTextBaseline, spacing: 10) {
-                            Text("\(index + 1)")
-                                .font(.caption2)
+                        HStack(alignment: .firstTextBaseline, spacing: 8) {
+                            Text("•")
+                                .font(.subheadline)
                                 .fontWeight(.bold)
-                                .foregroundColor(.white)
-                                .frame(width: 18, height: 18)
-                                .background(routine.swiftUIColor)
-                                .clipShape(Circle())
+                                .foregroundColor(routine.swiftUIColor)
                             
-                            VStack(alignment: .leading, spacing: 2) {
-                                HStack {
-                                    Text(step.title)
-                                        .font(.subheadline)
-                                        .fontWeight(.medium)
-                                    Spacer()
-                                    Text("\(step.estimatedMinutes)m")
-                                        .font(.caption2)
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                if let prompt = step.firstFiveMinutes {
-                                    Text("⚡ 5m: \(prompt)")
-                                        .font(.caption2)
-                                        .foregroundColor(.orange)
-                                }
-                            }
+                            Text(step.title)
+                                .font(.subheadline)
+                                .foregroundColor(.primary)
+                            
+                            Spacer()
                         }
-                        .padding(.vertical, 2)
                     }
                 }
             }
             
-            // Action Buttons: Run 1-Step Focus vs Deploy All
+            // Action Buttons: Add to Reminders (with Project) | Schedule Time | (1-Step Mode if has subtasks)
             HStack(spacing: 8) {
-                Button {
-                    let subtasks = routine.items.map { SubtaskItem(title: $0.title, isCompleted: false) }
-                    let totalMins = TaskDuration.normalize(routine.totalEstimatedMinutes).rawValue
-                    let runnerTask = TaskItem(
-                        title: routine.title,
-                        description: routine.description,
-                        listName: "Routine",
-                        estimatedMinutes: totalMins,
-                        firstFiveMinutesPrompt: routine.items.first?.firstFiveMinutes,
-                        subtasks: subtasks
-                    )
-                    runningRoutineTask = runnerTask
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "flame.fill")
-                        Text("Run 1-Step Focus")
-                    }
-                    .font(.footnote)
-                    .fontWeight(.bold)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                    .background(Color.red)
-                    .foregroundColor(.white)
-                    .cornerRadius(10)
-                }
-                
                 Button {
                     Task {
                         deployingRoutineId = routine.id
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                        await supabase.insertRoutineIntoQueue(routine: routine)
-                        SpeechSynthesisService.shared.speak("Deployed \(routine.title) into today's play queue.")
-                        statusMessage = "Deployed \(routine.title) (\(routine.items.count) tasks added to queue)!"
+                        await supabase.addDoItAgainToReminders(
+                            routine: routine,
+                            projectName: currentProject,
+                            scheduledDate: nil
+                        )
+                        statusMessage = "Added '\(routine.title)' to \(currentProject) in Reminders!"
                         deployingRoutineId = nil
                     }
                 } label: {
@@ -282,19 +348,59 @@ struct RoutineLibrarySheetView: View {
                             ProgressView()
                                 .tint(.white)
                         } else {
-                            Image(systemName: "play.circle.fill")
-                            Text("Queue All")
+                            Image(systemName: "plus.circle.fill")
+                            Text("Add to \(currentProject)")
                         }
+                    }
+                    .font(.footnote)
+                    .fontWeight(.bold)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(Color.indigo)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                }
+                .disabled(deployingRoutineId != nil)
+                
+                Button {
+                    scheduleDate = Date().addingTimeInterval(3600)
+                    schedulingRoutine = routine
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "calendar.badge.clock")
+                        Text("Schedule")
                     }
                     .font(.footnote)
                     .fontWeight(.bold)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(routine.swiftUIColor)
-                    .foregroundColor(.white)
+                    .background(Color.orange.opacity(0.15))
+                    .foregroundColor(.orange)
                     .cornerRadius(10)
                 }
-                .disabled(deployingRoutineId != nil)
+                
+                if !routine.items.isEmpty {
+                    Button {
+                        let subtasks = routine.items.map { SubtaskItem(title: $0.title, isCompleted: false) }
+                        let runnerTask = TaskItem(
+                            title: routine.title,
+                            description: routine.description,
+                            listName: currentProject,
+                            estimatedMinutes: 5,
+                            subtasks: subtasks
+                        )
+                        runningRoutineTask = runnerTask
+                    } label: {
+                        Image(systemName: "flame.fill")
+                            .font(.footnote)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 10)
+                            .background(Color.red)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                    }
+                }
             }
             .padding(.top, 4)
         }
@@ -304,37 +410,37 @@ struct RoutineLibrarySheetView: View {
     }
 }
 
-// MARK: - Quick Create Routine Sheet
+// MARK: - Quick Create "Do it again" Task Sheet
 struct CreateRoutineSheetView: View {
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var supabase = SupabaseService.shared
     
     @State private var routineTitle: String = ""
     @State private var routineDescription: String = ""
+    @State private var defaultListName: String = "General"
     @State private var selectedColorHex: String = "#6366F1"
-    @State private var selectedIcon: String = "sparkles"
+    @State private var selectedIcon: String = "arrow.triangle.2.circlepath.circle.fill"
     
     @State private var step1Title: String = ""
-    @State private var step1Mins: Int = 10
-    @State private var step1Prompt: String = ""
-    
     @State private var step2Title: String = ""
-    @State private var step2Mins: Int = 15
-    @State private var step2Prompt: String = ""
-    
     @State private var step3Title: String = ""
-    @State private var step3Mins: Int = 10
-    @State private var step3Prompt: String = ""
+    @State private var step4Title: String = ""
     
     let colors = ["#EF4444", "#3B82F6", "#10B981", "#8B5CF6", "#F59E0B", "#EC4899"]
-    let icons = ["sparkles", "briefcase.fill", "sportscourt.fill", "moon.stars.fill", "bolt.fill", "heart.fill", "book.fill"]
+    let icons = ["arrow.triangle.2.circlepath.circle.fill", "sparkles", "briefcase.fill", "sportscourt.fill", "moon.stars.fill", "bolt.fill", "book.fill"]
     
     var body: some View {
         NavigationStack {
             Form {
-                Section("Routine Details") {
-                    TextField("Routine Title (e.g. Morning Casework)", text: $routineTitle)
-                    TextField("Description (e.g. 3-step daily startup)", text: $routineDescription)
+                Section("Task Details") {
+                    TextField("Task Title", text: $routineTitle)
+                    TextField("Notes / Context (optional)", text: $routineDescription)
+                    
+                    Picker("Default Project", selection: $defaultListName) {
+                        ForEach(supabase.projects) { project in
+                            Text(project.name).tag(project.name)
+                        }
+                    }
                     
                     // Color Picker Row
                     HStack(spacing: 12) {
@@ -370,25 +476,14 @@ struct CreateRoutineSheetView: View {
                     .padding(.vertical, 4)
                 }
                 
-                Section("Step 1") {
-                    TextField("Action title", text: $step1Title)
-                    Stepper("\(step1Mins) minutes", value: $step1Mins, in: 2...60, step: 5)
-                    TextField("⚡ First 5m micro-action", text: $step1Prompt)
-                }
-                
-                Section("Step 2 (Optional)") {
-                    TextField("Action title", text: $step2Title)
-                    Stepper("\(step2Mins) minutes", value: $step2Mins, in: 2...60, step: 5)
-                    TextField("⚡ First 5m micro-action", text: $step2Prompt)
-                }
-                
-                Section("Step 3 (Optional)") {
-                    TextField("Action title", text: $step3Title)
-                    Stepper("\(step3Mins) minutes", value: $step3Mins, in: 2...60, step: 5)
-                    TextField("⚡ First 5m micro-action", text: $step3Prompt)
+                Section("Subtasks (Optional)") {
+                    TextField("Subtask 1", text: $step1Title)
+                    TextField("Subtask 2", text: $step2Title)
+                    TextField("Subtask 3", text: $step3Title)
+                    TextField("Subtask 4", text: $step4Title)
                 }
             }
-            .navigationTitle("New Routine")
+            .navigationTitle("New 'Do it again' Task")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -398,23 +493,17 @@ struct CreateRoutineSheetView: View {
                     Button("Save") {
                         saveRoutine()
                     }
-                    .disabled(routineTitle.trimmingCharacters(in: .whitespaces).isEmpty || step1Title.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(routineTitle.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
         }
     }
     
     private func saveRoutine() {
-        var items: [RoutineItemStep] = []
-        if !step1Title.trimmingCharacters(in: .whitespaces).isEmpty {
-            items.append(RoutineItemStep(title: step1Title.trimmingCharacters(in: .whitespaces), estimatedMinutes: step1Mins, firstFiveMinutes: step1Prompt.isEmpty ? nil : step1Prompt))
-        }
-        if !step2Title.trimmingCharacters(in: .whitespaces).isEmpty {
-            items.append(RoutineItemStep(title: step2Title.trimmingCharacters(in: .whitespaces), estimatedMinutes: step2Mins, firstFiveMinutes: step2Prompt.isEmpty ? nil : step2Prompt))
-        }
-        if !step3Title.trimmingCharacters(in: .whitespaces).isEmpty {
-            items.append(RoutineItemStep(title: step3Title.trimmingCharacters(in: .whitespaces), estimatedMinutes: step3Mins, firstFiveMinutes: step3Prompt.isEmpty ? nil : step3Prompt))
-        }
+        let rawSteps = [step1Title, step2Title, step3Title, step4Title]
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let items = rawSteps.map { RoutineItemStep(title: $0, estimatedMinutes: 5) }
         
         Task {
             await supabase.createRoutine(
@@ -422,7 +511,8 @@ struct CreateRoutineSheetView: View {
                 description: routineDescription.trimmingCharacters(in: .whitespaces),
                 color: selectedColorHex,
                 icon: selectedIcon,
-                items: items
+                items: items,
+                defaultListName: defaultListName
             )
             dismiss()
         }

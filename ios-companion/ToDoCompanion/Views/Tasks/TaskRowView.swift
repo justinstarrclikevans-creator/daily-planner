@@ -78,32 +78,49 @@ struct TaskRowView: View {
                         .lineLimit(2)
                 }
                 
-                // First 5 Minutes Starter Callout (if present)
-                if let starter = task.firstFiveMinutesPrompt, !task.isCompleted {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Image(systemName: "bolt.fill")
-                            .font(.caption2)
-                            .foregroundColor(.orange)
-                        Text(starter)
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundColor(.orange)
-                            .lineLimit(1)
-                    }
-                    .padding(.vertical, 1)
-                }
-                
                 // Badges Row
                 HStack(spacing: 6) {
-                    // List Badge
-                    Text(task.listName)
-                        .font(.caption2)
-                        .fontWeight(.semibold)
+                    // Interactive Project Switcher Badge (Move task between projects)
+                    Menu {
+                        Section("Move to Project") {
+                            ForEach(supabase.projects) { project in
+                                Button {
+                                    Task {
+                                        await supabase.moveTask(task, toProjectNamed: project.name)
+                                    }
+                                } label: {
+                                    HStack {
+                                        Label(project.name, systemImage: project.icon)
+                                        if task.listName.caseInsensitiveCompare(project.name) == .orderedSame {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Section("Do it again") {
+                            Button {
+                                supabase.saveTaskToDoItAgain(task)
+                                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            } label: {
+                                Label("Save to 'Do it again'", systemImage: "arrow.triangle.2.circlepath.circle")
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 3) {
+                            Text(task.listName)
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 7, weight: .bold))
+                        }
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background(listBadgeColor.opacity(0.15))
                         .foregroundColor(listBadgeColor)
                         .cornerRadius(6)
+                    }
+                    .buttonStyle(.borderless)
                     
                     // Subtask Progress Pill
                     if !task.subtasks.isEmpty {
@@ -120,6 +137,25 @@ struct TaskRowView: View {
                         .foregroundColor(.secondary)
                         .cornerRadius(6)
                     }
+                    
+                    // Save to "Do it again" quick button
+                    Button {
+                        supabase.saveTaskToDoItAgain(task)
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: "arrow.triangle.2.circlepath")
+                                .font(.system(size: 9))
+                            Text("Do Again")
+                                .font(.system(size: 9, weight: .semibold))
+                        }
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.indigo.opacity(0.1))
+                        .foregroundColor(.indigo)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.borderless)
                     
                     // Queue Pill / Toggle
                     Button {
@@ -173,6 +209,25 @@ struct TaskRowView: View {
             }
         }
         .padding(.vertical, 6)
+        .contextMenu {
+            Menu("Move to Project") {
+                ForEach(supabase.projects) { project in
+                    Button {
+                        Task {
+                            await supabase.moveTask(task, toProjectNamed: project.name)
+                        }
+                    } label: {
+                        Label(project.name, systemImage: project.icon)
+                    }
+                }
+            }
+            Button {
+                supabase.saveTaskToDoItAgain(task)
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            } label: {
+                Label("Save to 'Do it again'", systemImage: "arrow.triangle.2.circlepath.circle")
+            }
+        }
     }
     
     private var durationBadgeColor: Color {
@@ -187,12 +242,16 @@ struct TaskRowView: View {
     
     private var listBadgeColor: Color {
         switch task.listName.lowercased() {
-        case let name where name.contains("first shift"):
+        case let name where name.contains("turn90") || name.contains("first shift"):
             return .red
-        case let name where name.contains("football") || name.contains("843"):
+        case let name where name.contains("843") || name.contains("football"):
             return .green
-        case let name where name.contains("albertine"):
+        case let name where name.contains("nosa"):
+            return .orange
+        case let name where name.contains("book") || name.contains("synapse"):
             return .blue
+        case let name where name.contains("general"):
+            return .indigo
         default:
             return .purple
         }

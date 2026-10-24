@@ -6,7 +6,9 @@ struct ProjectCardView: View {
     var ideas: [Idea]
     
     var openTasksCount: Int {
-        tasks.filter { $0.projectId == project.id && !$0.isCompleted }.count
+        tasks.filter {
+            !$0.isCompleted && ($0.projectId == project.id || $0.listName.caseInsensitiveCompare(project.name) == .orderedSame)
+        }.count
     }
     
     var latestIdea: Idea? {

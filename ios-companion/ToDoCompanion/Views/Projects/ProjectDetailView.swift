@@ -13,7 +13,9 @@ struct ProjectDetailView: View {
     }
     
     var projectTasks: [TaskItem] {
-        supabase.tasks.filter { $0.projectId == project.id }
+        supabase.tasks.filter {
+            !$0.isCompleted && ($0.projectId == project.id || $0.listName.caseInsensitiveCompare(project.name) == .orderedSame)
+        }
     }
     
     var projectIdeas: [Idea] {
@@ -140,6 +142,10 @@ struct ProjectDetailView: View {
                             self.activeFocusTask = task
                         }
                     )
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        self.activeFocusTask = task
+                    }
                     Divider()
                 }
             }

@@ -43,29 +43,6 @@ struct ProjectsHubView: View {
         supabase.projects.filter { !$0.isVisibleNow }.count
     }
     
-    private var detectedRuleOfThreeTopic: String? {
-        let unassignedTasks = supabase.tasks.filter { task in
-            !task.isCompleted && (task.projectId == nil || task.listName.caseInsensitiveCompare("Personal") == .orderedSame)
-        }
-        
-        var wordCounts: [String: Int] = [:]
-        let stopWords: Set<String> = ["with", "from", "that", "this", "have", "call", "send", "review", "email", "check", "need", "update", "make", "task", "todo", "meet", "prep"]
-        
-        for task in unassignedTasks {
-            let words = task.title.lowercased()
-                .components(separatedBy: CharacterSet.alphanumerics.inverted)
-                .filter { $0.count >= 4 && !stopWords.contains($0) }
-            for w in Set(words) {
-                wordCounts[w, default: 0] += 1
-            }
-        }
-        
-        if let (word, _) = wordCounts.first(where: { $0.value >= 3 }) {
-            return word.capitalized
-        }
-        return nil
-    }
-    
     private var queuedTasks: [TaskItem] {
         supabase.tasks.filter { $0.inPlayQueue && !$0.isCompleted && isTaskVisibleNow($0) }
     }
@@ -91,11 +68,6 @@ struct ProjectsHubView: View {
                     VStack(alignment: .leading, spacing: 24) {
                         // Header
                         headerSection
-                        
-                        // Rule of 3 Suggestion Banner
-                        if let topic = detectedRuleOfThreeTopic {
-                            ruleOfThreeBanner(for: topic)
-                        }
                         
                         // Today's Play Queue Spotlight / Play Deck (Tiimo-Style)
                         playQueueSpotlightSection
@@ -138,8 +110,8 @@ struct ProjectsHubView: View {
                             showRoutineLibrary = true
                         } label: {
                             HStack(spacing: 4) {
-                                Image(systemName: "sparkles")
-                                Text("Routines")
+                                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                                Text("Do it again")
                                     .font(.caption)
                                     .fontWeight(.bold)
                             }
@@ -228,8 +200,8 @@ struct ProjectsHubView: View {
                             showRoutineLibrary = true
                         } label: {
                             HStack(spacing: 4) {
-                                Image(systemName: "sparkles")
-                                Text("Explore Routines")
+                                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
+                                Text("Do it again")
                             }
                             .font(.caption)
                             .fontWeight(.bold)
@@ -240,7 +212,7 @@ struct ProjectsHubView: View {
                             .cornerRadius(8)
                         }
                     }
-                    Text("No tasks active in your Play Queue right now. Deploy a ready-to-go routine above or tap +Queue on any task below to build momentum without calendar pressure.")
+                    Text("No tasks active in your Play Queue right now. Open 'Do it again' above or tap +Queue on any task below to build momentum without calendar pressure.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -295,22 +267,6 @@ struct ProjectsHubView: View {
                             .font(.title3)
                             .fontWeight(.bold)
                             .foregroundColor(.white)
-                        
-                        if let starter = current.firstFiveMinutesPrompt, !starter.isEmpty {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("⚡ First 5-Minute Micro-Action:")
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.yellow)
-                                Text(starter)
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.95))
-                            }
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.black.opacity(0.18))
-                            .cornerRadius(8)
-                        }
                         
                         // Action Bar: Focus Sprint, Tomorrow deferral, Next, Done
                         HStack(spacing: 8) {
@@ -396,50 +352,6 @@ struct ProjectsHubView: View {
                 .shadow(color: Color.indigo.opacity(0.25), radius: 8, x: 0, y: 4)
             }
         }
-    }
-    
-    // MARK: - Rule of 3 Banner
-    private func ruleOfThreeBanner(for topic: String) -> some View {
-        HStack(spacing: 12) {
-            ZStack {
-                Circle()
-                    .fill(Color.orange.opacity(0.18))
-                    .frame(width: 36, height: 36)
-                Image(systemName: "folder.badge.plus")
-                    .foregroundColor(.orange)
-                    .font(.footnote)
-            }
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Rule of 3: Emerging Project")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(.orange)
-                Text("3+ tasks identified for '\(topic)'. Promote to a dedicated Project for custom schedule & playbook.")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-            
-            Spacer()
-            
-            Button {
-                suggestedProjectName = topic
-                showCreateProject = true
-            } label: {
-                Text("Create")
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(Color.orange)
-                    .foregroundColor(.white)
-                    .cornerRadius(8)
-            }
-        }
-        .padding(12)
-        .background(Color.orange.opacity(0.08))
-        .cornerRadius(12)
     }
 
     // MARK: - Projects Section

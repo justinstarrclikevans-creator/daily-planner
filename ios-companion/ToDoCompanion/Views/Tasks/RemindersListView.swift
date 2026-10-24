@@ -259,12 +259,12 @@ struct RemindersListView: View {
                     .pickerStyle(.segmented)
                 }
                 
-                Section(header: Text("List")) {
-                    Picker("List", selection: Binding(
-                        get: { selectedList ?? "Personal" },
+                Section(header: Text("Project / List")) {
+                    Picker("Project", selection: Binding(
+                        get: { selectedList ?? "General" },
                         set: { selectedList = $0 }
                     )) {
-                        ForEach(uniqueLists.isEmpty ? ["Personal", "First shift", "Football"] : uniqueLists, id: \.self) {
+                        ForEach(supabase.projects.map { $0.name }, id: \.self) {
                             Text($0).tag($0)
                         }
                     }

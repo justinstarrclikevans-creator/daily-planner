@@ -270,19 +270,6 @@ struct AssistantHomeView: View {
                 }
                 
                 Button {
-                    sendQuickPrompt("Do I have 3 or more todos that should be promoted into a project under the Rule of 3?")
-                } label: {
-                    Label("Rule of 3 Audit", systemImage: "folder.badge.plus")
-                        .font(.caption)
-                        .fontWeight(.medium)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .background(Color.yellow.opacity(0.15))
-                        .foregroundColor(.orange)
-                        .cornerRadius(16)
-                }
-                
-                Button {
                     sendQuickPrompt("What does my day look like tomorrow?")
                 } label: {
                     Label("Tomorrow's Agenda", systemImage: "calendar")
@@ -506,12 +493,6 @@ struct ChatMessageBubbleView: View {
                             Text(taskTitle)
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
-                            
-                            if let prompt = message.suggestedActionPrompt {
-                                Text("⚡ First step: \(prompt)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
                             
                             Button {
                                 onFocus(taskTitle)

@@ -258,6 +258,11 @@ struct TaskItem: Identifiable, Codable, Hashable {
                 if !stepTitle.isEmpty {
                     items.append(SubtaskItem(title: stepTitle, isCompleted: true))
                 }
+            } else if trimmed.hasPrefix("◦ ") || trimmed.hasPrefix("• ") {
+                let stepTitle = String(trimmed.dropFirst(2)).trimmingCharacters(in: .whitespaces)
+                if !stepTitle.isEmpty {
+                    items.append(SubtaskItem(title: stepTitle, isCompleted: false))
+                }
             }
         }
         return items
@@ -273,18 +278,19 @@ struct TaskItem: Identifiable, Codable, Hashable {
                 .trimmingCharacters(in: .whitespaces)
             if cleaned.isEmpty { return nil }
             if cleaned.hasPrefix("- [ ] ") || cleaned.lowercased().hasPrefix("- [x] ") { return nil }
+            if cleaned.hasPrefix("◦ ") || cleaned.hasPrefix("• ") { return nil }
             if cleaned.hasPrefix("⚡ First 5 Minutes:") { return nil }
             return cleaned
         }
         return filteredLines.joined(separator: "\n")
     }
     
-    /// Rebuilds serialized description preserving clean notes, First 5 Minutes prompt, subtasks, duration, and queue state.
+    /// Rebuilds serialized description preserving clean notes, subtasks, duration, and queue state.
     static func buildDescription(
         cleanNotes: String,
         estimatedMinutes: Int?,
         inPlayQueue: Bool,
-        firstFiveMinutes: String?,
+        firstFiveMinutes: String? = nil,
         subtasks: [SubtaskItem]
     ) -> String {
         var parts: [String] = []
@@ -298,10 +304,6 @@ struct TaskItem: Identifiable, Codable, Hashable {
         }
         if !headerTags.isEmpty {
             parts.append(headerTags.joined(separator: " "))
-        }
-        
-        if let prompt = firstFiveMinutes?.trimmingCharacters(in: .whitespacesAndNewlines), !prompt.isEmpty {
-            parts.append("⚡ First 5 Minutes: \(prompt)")
         }
         
         let trimmedNotes = cleanNotes.trimmingCharacters(in: .whitespacesAndNewlines)

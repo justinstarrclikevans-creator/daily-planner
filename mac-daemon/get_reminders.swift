@@ -17,6 +17,7 @@ store.requestAccess(to: .reminder) { (granted, error) in
             var result: [[String: Any]] = []
             let formatter = ISO8601DateFormatter()
             for r in reminders {
+                if r.title == "[App Heartbeat]" { continue }
                 let updatedStr = r.lastModifiedDate != nil ? formatter.string(from: r.lastModifiedDate!) : formatter.string(from: Date())
                 var dueDateStr = ""
                 if let due = r.dueDateComponents, let date = Calendar.current.date(from: due) {
