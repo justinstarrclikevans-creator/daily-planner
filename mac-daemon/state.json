@@ -1,13 +1,16 @@
 {
-  "lastSlackSync": 1792872969.378,
+  "lastSlackSync": 1792946769.228569,
   "lastEmailSync": {
-    "token.json": 1792878334000,
-    "token_2.json": 1792872969378,
-    "token_3.json": 1792873197000
+    "token.json": 1792970164000,
+    "token_2.json": 1792962075000,
+    "token_3.json": 1792965745000
   },
   "lastLetterlySync": 1792872969378,
   "lastAppOpenedAt": 1792872969378,
   "lastTaskCompletedAt": 1792872969378,
-  "lastAngryNudgeSentAt": 1792881900212,
-  "alertedMeetings": []
+  "lastAngryNudgeSentAt": 1792974600134,
+  "alertedMeetings": [
+    "1eh9i8kt46l00rojprh8552g9s",
+    "3cgo0s1e90664tau0bebgsri2j_20261025T223000Z"
+  ]
 }

@@ -201,12 +201,46 @@ class GeminiVoiceService {
         return res.tasks
     }
     
-    private func callGeminiJSON<T: Decodable>(prompt: String, responseType: T.Type) async throws -> T {
-        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(AppConfig.geminiAPIKey)"
-        guard let url = URL(string: urlString) else {
-            throw URLError(.badURL)
+    private let fallbackModels = [
+        "gemini-3.8-flash",
+        "gemini-flash-latest",
+        "gemini-3.5-flash"
+    ]
+    
+    private func generateGeminiData(requestBody: [String: Any]) async throws -> Data {
+        let bodyData = try JSONSerialization.data(withJSONObject: requestBody)
+        var lastError: Error? = nil
+        
+        for model in fallbackModels {
+            let urlString = "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent?key=\(AppConfig.geminiAPIKey)"
+            guard let url = URL(string: urlString) else { continue }
+            
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = bodyData
+            
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 {
+                    return data
+                } else {
+                    let errorText = String(data: data, encoding: .utf8) ?? "Unknown Gemini API error"
+                    lastError = NSError(
+                        domain: "GeminiAPI",
+                        code: (response as? HTTPURLResponse)?.statusCode ?? 500,
+                        userInfo: [NSLocalizedDescriptionKey: errorText]
+                    )
+                }
+            } catch {
+                lastError = error
+            }
         }
         
+        throw lastError ?? URLError(.cannotConnectToHost)
+    }
+    
+    private func callGeminiJSON<T: Decodable>(prompt: String, responseType: T.Type) async throws -> T {
         let requestBody: [String: Any] = [
             "contents": [
                 [
@@ -222,23 +256,14 @@ class GeminiVoiceService {
             ]
         ]
         
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            let errorText = String(data: data, encoding: .utf8) ?? "Unknown Gemini API error"
-            throw NSError(domain: "GeminiAPI", code: (response as? HTTPURLResponse)?.statusCode ?? 500, userInfo: [NSLocalizedDescriptionKey: errorText])
-        }
+        let data = try await generateGeminiData(requestBody: requestBody)
         
         let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         guard let candidates = jsonResponse?["candidates"] as? [[String: Any]],
               let firstCandidate = candidates.first,
               let content = firstCandidate["content"] as? [String: Any],
               let parts = content["parts"] as? [[String: Any]],
-              let text = parts.first?["text"] as? String,
+              let text = parts.compactMap({ $0["text"] as? String }).last,
               let cleanData = text.data(using: .utf8) else {
             throw NSError(domain: "GeminiAPI", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to parse Gemini response"])
         }
@@ -271,30 +296,18 @@ class GeminiVoiceService {
             "contents": contents,
             "generationConfig": [
                 "temperature": 0.7,
-                "maxOutputTokens": 300
+                "maxOutputTokens": 2048
             ]
         ]
         
-        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(AppConfig.geminiAPIKey)"
-        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            let errorText = String(data: data, encoding: .utf8) ?? "Unknown Gemini API error"
-            throw NSError(domain: "GeminiAPI", code: (response as? HTTPURLResponse)?.statusCode ?? 500, userInfo: [NSLocalizedDescriptionKey: errorText])
-        }
+        let data = try await generateGeminiData(requestBody: requestBody)
         
         let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         guard let candidates = jsonResponse?["candidates"] as? [[String: Any]],
               let firstCandidate = candidates.first,
               let content = firstCandidate["content"] as? [String: Any],
               let parts = content["parts"] as? [[String: Any]],
-              let text = parts.first?["text"] as? String else {
+              let text = parts.compactMap({ $0["text"] as? String }).last else {
             return "Got it. Let's keep moving forward."
         }
         
@@ -392,30 +405,18 @@ class GeminiVoiceService {
             "contents": contents,
             "generationConfig": [
                 "temperature": 0.5,
-                "maxOutputTokens": 450
+                "maxOutputTokens": 2048
             ]
         ]
         
-        let urlString = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=\(AppConfig.geminiAPIKey)"
-        guard let url = URL(string: urlString) else { throw URLError(.badURL) }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            let errorText = String(data: data, encoding: .utf8) ?? "Unknown Gemini API error"
-            throw NSError(domain: "GeminiAPI", code: (response as? HTTPURLResponse)?.statusCode ?? 500, userInfo: [NSLocalizedDescriptionKey: errorText])
-        }
+        let data = try await generateGeminiData(requestBody: requestBody)
         
         let jsonResponse = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         guard let candidates = jsonResponse?["candidates"] as? [[String: Any]],
               let firstCandidate = candidates.first,
               let content = firstCandidate["content"] as? [String: Any],
               let parts = content["parts"] as? [[String: Any]],
-              let rawText = parts.first?["text"] as? String else {
+              let rawText = parts.compactMap({ $0["text"] as? String }).last else {
             return ChatMessage(role: "model", text: "I'm right here. Pick a target and let's execute.")
         }
         

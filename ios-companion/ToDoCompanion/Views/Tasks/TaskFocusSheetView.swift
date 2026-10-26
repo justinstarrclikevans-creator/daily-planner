@@ -516,7 +516,7 @@ struct TaskFocusSheetView: View {
     // MARK: - Bottom Actions
     private var bottomActionsSection: some View {
         VStack(spacing: 12) {
-            // Save to "Do it again" section button
+            // Save to "Processes" section button
             Button {
                 supabase.saveTaskToDoItAgain(task)
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -526,7 +526,7 @@ struct TaskFocusSheetView: View {
             } label: {
                 HStack {
                     Image(systemName: didSaveToDoItAgain ? "checkmark.circle.fill" : "arrow.triangle.2.circlepath.circle.fill")
-                    Text(didSaveToDoItAgain ? "Saved to 'Do it again'!" : "Save Task & Subtasks to 'Do it again'")
+                    Text(didSaveToDoItAgain ? "Saved to 'Processes'!" : "Save Task & Subtasks to 'Processes'")
                 }
                 .font(.subheadline)
                 .fontWeight(.bold)

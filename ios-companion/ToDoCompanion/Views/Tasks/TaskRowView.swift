@@ -98,12 +98,12 @@ struct TaskRowView: View {
                                 }
                             }
                         }
-                        Section("Do it again") {
+                        Section("Processes") {
                             Button {
                                 supabase.saveTaskToDoItAgain(task)
                                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                             } label: {
-                                Label("Save to 'Do it again'", systemImage: "arrow.triangle.2.circlepath.circle")
+                                Label("Save to 'Processes'", systemImage: "arrow.triangle.2.circlepath.circle")
                             }
                         }
                     } label: {
@@ -138,7 +138,7 @@ struct TaskRowView: View {
                         .cornerRadius(6)
                     }
                     
-                    // Save to "Do it again" quick button
+                    // Save to "Processes" quick button
                     Button {
                         supabase.saveTaskToDoItAgain(task)
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -146,7 +146,7 @@ struct TaskRowView: View {
                         HStack(spacing: 2) {
                             Image(systemName: "arrow.triangle.2.circlepath")
                                 .font(.system(size: 9))
-                            Text("Do Again")
+                            Text("Process")
                                 .font(.system(size: 9, weight: .semibold))
                         }
                         .padding(.horizontal, 5)
@@ -225,7 +225,7 @@ struct TaskRowView: View {
                 supabase.saveTaskToDoItAgain(task)
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             } label: {
-                Label("Save to 'Do it again'", systemImage: "arrow.triangle.2.circlepath.circle")
+                Label("Save to 'Processes'", systemImage: "arrow.triangle.2.circlepath.circle")
             }
         }
     }

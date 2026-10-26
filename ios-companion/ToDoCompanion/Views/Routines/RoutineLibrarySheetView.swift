@@ -43,7 +43,7 @@ struct RoutineLibrarySheetView: View {
                                     .font(.subheadline)
                                     .fontWeight(.bold)
                                     .foregroundColor(.primary)
-                                Text("AI converts notes or audio into a repeatable 'Do it again' task & subtasks.")
+                                Text("AI converts notes or audio into a repeatable Process & subtasks.")
                                     .font(.caption2)
                                     .foregroundColor(.secondary)
                             }
@@ -87,7 +87,7 @@ struct RoutineLibrarySheetView: View {
                 }
                 .padding(.vertical)
             }
-            .navigationTitle("Do it again")
+            .navigationTitle("Processes")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if !isEmbeddedTab {
@@ -108,7 +108,7 @@ struct RoutineLibrarySheetView: View {
                         Button {
                             showCreateSheet = true
                         } label: {
-                            Label("New 'Do it again' Task", systemImage: "plus")
+                            Label("New Process", systemImage: "plus")
                         }
                     } label: {
                         Image(systemName: "plus.circle.fill")
@@ -483,7 +483,7 @@ struct CreateRoutineSheetView: View {
                     TextField("Subtask 4", text: $step4Title)
                 }
             }
-            .navigationTitle("New 'Do it again' Task")
+            .navigationTitle("New Process")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {

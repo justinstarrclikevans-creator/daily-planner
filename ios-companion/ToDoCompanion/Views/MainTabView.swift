@@ -19,7 +19,7 @@ struct MainTabView: View {
             
             RoutineLibrarySheetView(isEmbeddedTab: true)
                 .tabItem {
-                    Label("Do it again", systemImage: "arrow.triangle.2.circlepath.circle.fill")
+                    Label("Processes", systemImage: "arrow.triangle.2.circlepath.circle.fill")
                 }
                 .tag(2)
             

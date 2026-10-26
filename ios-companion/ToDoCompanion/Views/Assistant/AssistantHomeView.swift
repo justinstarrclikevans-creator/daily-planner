@@ -16,7 +16,7 @@ struct AssistantHomeView: View {
     @State private var messages: [ChatMessage] = [
         ChatMessage(
             role: "model",
-            text: "Hey Justin. I'm connected to your Apple Reminders and Calendar. What's on your mind, or what can I help you tackle next?"
+            text: "Hey Justin. I'm connected to your Apple Reminders and Projects. What's on your mind, or what can I help you tackle next?"
         )
     ]
     @State private var isProcessing: Bool = false
@@ -166,40 +166,21 @@ struct AssistantHomeView: View {
     // MARK: - Pulse Banner
     private var pulseBanner: some View {
         HStack(spacing: 14) {
-            // Next event or tasks status
             VStack(alignment: .leading, spacing: 3) {
-                if let next = nextCalendarEvent {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 8, height: 8)
-                        Text("UPCOMING")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.blue)
-                    }
-                    Text(next.title)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .lineLimit(1)
-                    Text(next.timeString)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                } else {
-                    HStack(spacing: 6) {
-                        Circle()
-                            .fill(Color.green)
-                            .frame(width: 8, height: 8)
-                        Text("CALENDAR CLEAR")
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(.green)
-                    }
-                    Text("No upcoming meetings today")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                    Text("\(openTasks.count) open to-dos in Reminders")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Color.indigo)
+                        .frame(width: 8, height: 8)
+                    Text("ACTIVE TO-DOS")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(.indigo)
                 }
+                Text("\(openTasks.count) open to-dos ready to execute")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                Text("Synced with Apple Reminders")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
             }
             
             Spacer()

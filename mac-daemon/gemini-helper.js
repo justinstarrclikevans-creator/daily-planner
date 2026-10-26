@@ -1,9 +1,9 @@
 const { GoogleGenAI } = require('@google/genai');
 
 const FALLBACK_MODELS = [
-    'gemini-2.5-flash',
+    'gemini-3.8-flash',
     'gemini-flash-latest',
-    'gemini-2.0-flash'
+    'gemini-3.5-flash'
 ];
 
 const FALLBACK_KEY = Buffer.from(
@@ -22,8 +22,8 @@ function getActiveApiKey() {
 async function callGeminiWithRetry(options, retries = 3) {
     const ai = new GoogleGenAI({ apiKey: getActiveApiKey() });
     
-    // Determine model list starting with the requested model or default
-    const requestedModel = options.model && !options.model.startsWith('gemini-3.') ? options.model : 'gemini-2.5-flash';
+    // Determine model list starting with gemini-3.8-flash or requested non-2.x model
+    const requestedModel = options.model && !options.model.startsWith('gemini-2.') ? options.model : 'gemini-3.8-flash';
     const modelsToTry = [requestedModel, ...FALLBACK_MODELS.filter(m => m !== requestedModel)];
     
     let lastError = null;

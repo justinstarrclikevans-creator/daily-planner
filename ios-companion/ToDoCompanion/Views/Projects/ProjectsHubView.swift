@@ -112,7 +112,7 @@ struct ProjectsHubView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                                Text("Do it again")
+                                Text("Processes")
                                     .font(.caption)
                                     .fontWeight(.bold)
                             }
@@ -205,7 +205,7 @@ struct ProjectsHubView: View {
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                                Text("Do it again")
+                                Text("Processes")
                             }
                             .font(.caption)
                             .fontWeight(.bold)
@@ -216,7 +216,7 @@ struct ProjectsHubView: View {
                             .cornerRadius(8)
                         }
                     }
-                    Text("No tasks active in your Play Queue right now. Open 'Do it again' above or tap +Queue on any task below to build momentum without calendar pressure.")
+                    Text("No tasks active in your Play Queue right now. Open 'Processes' above or tap +Queue on any task below to build momentum without calendar pressure.")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
