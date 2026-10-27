@@ -1,16 +1,47 @@
 {
-  "lastSlackSync": 1792946769.228569,
+  "lastSlackSync": 1793044840.312109,
   "lastEmailSync": {
-    "token.json": 1792970164000,
-    "token_2.json": 1792962075000,
-    "token_3.json": 1792965745000
+    "token.json": 1793081144000,
+    "token_2.json": 1793101881000,
+    "token_3.json": 1793060435000
   },
   "lastLetterlySync": 1792872969378,
   "lastAppOpenedAt": 1792872969378,
   "lastTaskCompletedAt": 1792872969378,
-  "lastAngryNudgeSentAt": 1792974600134,
+  "lastAngryNudgeSentAt": 1793102422082,
   "alertedMeetings": [
     "1eh9i8kt46l00rojprh8552g9s",
-    "3cgo0s1e90664tau0bebgsri2j_20261025T223000Z"
+    "3cgo0s1e90664tau0bebgsri2j_20261025T223000Z",
+    "2n442hdovjpf4hl3oghsaefank",
+    "6hjdmahk56b9aanig08m7tten7",
+    "5ovvsmnm1oc6qneft6o46v4hq9",
+    "6fqrvudl8m24ef7bqond6hp90v",
+    "30fafdqj85sqqj11og2uu2tg2p",
+    "494k333i3pp07o1jtrjk98snmc",
+    "_8goj8d266gp48b9j6krjgb9k8cskcb9p6t34cb9j70s4cci16kr42g9g6o_20261026T201000Z",
+    "3cgo0s1e90664tau0bebgsri2j_20261026T223000Z"
+  ],
+  "completedTaskTitles": [
+    "start the day",
+    "schedule time for the transfer training with jenn",
+    "set goals for reentry navigation as a mini project under turn 90",
+    "london and reece to help me",
+    "use tiimostyle checklists for program managers to track progress",
+    "test synapse elite build 100 11 on testflight",
+    "practice",
+    "futsal reece and london",
+    "follow up with soccer post support regarding tracking charges and cancellation for order sp380563",
+    "termite inspection",
+    "submit missing human geography work cpf week 7 and cpf week 8",
+    "donor tour",
+    "library workshop for first shift guys",
+    "hakeem alston",
+    "all staff meeting slack",
+    "listen to voicemail from 803 4132357 regarding program services",
+    "daisy and spartanburg enrollment",
+    "write cm template for ai to score off of",
+    "review alexa temples time off request in gusto",
+    "donor visiting with amy",
+    "complete new employment update for william belk in apricot"
   ]
 }

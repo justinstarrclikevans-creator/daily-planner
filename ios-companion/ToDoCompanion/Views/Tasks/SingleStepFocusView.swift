@@ -476,8 +476,7 @@ struct SingleStepFocusView: View {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         
         Task {
-            await supabase.updateTask(task)
-            await supabase.toggleTaskCompletion(task: task)
+            await supabase.markTaskCompleted(task: task)
         }
         
         withAnimation {

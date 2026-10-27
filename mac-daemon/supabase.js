@@ -20,25 +20,35 @@ if (supabaseUrl && supabaseKey) {
 
 let cachedProjects = null;
 let lastProjectsFetch = 0;
+let supabaseDisabled = false;
 
 async function getProjects() {
-    if (!supabase) return [];
+    if (!supabase || supabaseDisabled) return [];
     const now = Date.now();
     if (cachedProjects && (now - lastProjectsFetch < 300000)) {
         return cachedProjects;
     }
-    const { data, error } = await supabase.from('projects').select('*').order('name');
-    if (error) {
-        console.error("Error fetching projects from Supabase:", error.message);
+    try {
+        const { data, error } = await supabase.from('projects').select('*').order('name');
+        if (error) {
+            if (error.message && error.message.includes('Unregistered API key')) {
+                console.log("[Supabase] Unregistered API key in .env. Disabling Supabase background sync.");
+                supabaseDisabled = true;
+                return [];
+            }
+            console.error("Error fetching projects from Supabase:", error.message);
+            return cachedProjects || [];
+        }
+        cachedProjects = data || [];
+        lastProjectsFetch = now;
+        return cachedProjects;
+    } catch (e) {
         return cachedProjects || [];
     }
-    cachedProjects = data || [];
-    lastProjectsFetch = now;
-    return cachedProjects;
 }
 
 async function syncTaskToSupabase(task, appleReminderId = null) {
-    if (!supabase) return null;
+    if (!supabase || supabaseDisabled) return null;
 
     try {
         // Resolve project ID by list name if possible

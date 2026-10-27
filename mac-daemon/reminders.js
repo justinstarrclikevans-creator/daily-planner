@@ -17,7 +17,64 @@ async function getIncompleteReminders() {
                     description: r.body,
                     listName: r.listName,
                     updated: r.updated,
-                    dueDate: r.dueDate
+                    dueDate: r.dueDate,
+                    isCompleted: false
+                }));
+                resolve(data);
+            } catch (e) {
+                resolve([]);
+            }
+        });
+    });
+}
+
+async function getRecentCompletedReminders() {
+    const binPath = path.join(__dirname, 'get_reminders');
+    return new Promise((resolve) => {
+        exec(`"${binPath}" --completed`, (error, stdout, stderr) => {
+            if (error) {
+                console.error("Swift get_reminders --completed error:", stderr);
+                return resolve([]);
+            }
+            try {
+                const rawData = JSON.parse(stdout.trim());
+                const data = rawData.map(r => ({
+                    id: r.id,
+                    title: r.name,
+                    description: r.body,
+                    listName: r.listName,
+                    updated: r.updated,
+                    dueDate: r.dueDate,
+                    isCompleted: true,
+                    completionDate: r.completionDate
+                }));
+                resolve(data);
+            } catch (e) {
+                resolve([]);
+            }
+        });
+    });
+}
+
+async function getAllReminders() {
+    const binPath = path.join(__dirname, 'get_reminders');
+    return new Promise((resolve) => {
+        exec(`"${binPath}" --all`, (error, stdout, stderr) => {
+            if (error) {
+                console.error("Swift get_reminders --all error:", stderr);
+                return resolve([]);
+            }
+            try {
+                const rawData = JSON.parse(stdout.trim());
+                const data = rawData.map(r => ({
+                    id: r.id,
+                    title: r.name,
+                    description: r.body,
+                    listName: r.listName,
+                    updated: r.updated,
+                    dueDate: r.dueDate,
+                    isCompleted: !!r.isCompleted,
+                    completionDate: r.completionDate
                 }));
                 resolve(data);
             } catch (e) {
@@ -105,6 +162,8 @@ async function getActivityStatus() {
 
 module.exports = {
     getIncompleteReminders,
+    getRecentCompletedReminders,
+    getAllReminders,
     completeReminder,
     addReminder,
     moveReminderToSomeday,

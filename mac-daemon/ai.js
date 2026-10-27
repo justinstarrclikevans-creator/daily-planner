@@ -1,7 +1,18 @@
 const { callGeminiWithRetry } = require('./gemini-helper');
 require('dotenv').config();
 
-async function extractTodos(slackMessages = [], emails = [], events = [], existingTodos = [], letterlyNotes = []) {
+async function extractTodos(slackMessages = [], emails = [], existingTodos = [], completedTodos = [], letterlyNotes = []) {
+    // Handle both argument styles (if someone passes object or positional)
+    let opts = {};
+    if (!Array.isArray(slackMessages) && typeof slackMessages === 'object') {
+        opts = slackMessages;
+        slackMessages = opts.slackMessages || [];
+        emails = opts.emails || [];
+        existingTodos = opts.existingTodos || [];
+        completedTodos = opts.completedTodos || [];
+        letterlyNotes = opts.letterlyNotes || [];
+    }
+
     if (!process.env.GEMINI_API_KEY) {
         console.error("No Gemini API key found for extraction.");
         return [];
@@ -14,8 +25,17 @@ async function extractTodos(slackMessages = [], emails = [], events = [], existi
     Review the following inputs:
     1. Slack messages, Huddle transcripts, and Slack Huddle summaries
     2. Unread Emails
-    3. Today's Calendar Events
-    4. Letterly Voice Recordings (fetched via MCP)
+    3. Letterly Voice Recordings (fetched via MCP)
+
+    ABSOLUTE BAN ON CALENDAR EVENT DUPLICATION:
+    - Do NOT extract calendar meetings, appointments, or scheduled calendar events as todos. Those belong on the calendar, not as todo reminders.
+    - If a task title starts with "Meeting with" or refers to attending a scheduled calendar meeting, DO NOT EXTRACT IT.
+
+    CRITICAL DEDUPLICATION RULES (NEVER RE-ADD COMPLETED OR EXISTING TASKS):
+    - Review "Existing Active Todos" AND "Recently Completed Todos".
+    - If a task, reminder, or action item has ALREADY BEEN COMPLETED by Justin, DO NOT EXTRACT IT UNDER ANY CIRCUMSTANCES.
+    - If a task or action item is ALREADY an active todo, DO NOT extract it.
+    - If Justin already took care of an email or Slack request, or finished it previously, DO NOT create a task for it.
 
     CRITICAL EXTRACTION RULES:
     1. SLACK & HUDDLES (Route ALL Slack & Huddle todos to "Turn90"):
@@ -52,15 +72,17 @@ async function extractTodos(slackMessages = [], emails = [], events = [], existi
            {
              "title": "Main task title, concept, or long idea thought",
              "subtasks": ["Subtask or thought 1", "Subtask or thought 2"],
-             "source": "slack" | "email" | "calendar" | "letterly",
+             "source": "slack" | "email" | "letterly",
              "listName": "Turn90" | "843FC" | "Personal" | "Nosa" | "Book (Memoir) and Synapse" | "General",
              "estimatedMinutes": 5
            }
          ]
-       - CRITICAL: Do NOT extract any tasks that are duplicates of "Existing Pending Todos".
 
-    Existing Pending Todos (Do not duplicate):
-    ${JSON.stringify(existingTodos.map(t => ({ title: t.title, listName: t.listName })))}
+    Recently Completed Todos (NEVER re-extract or duplicate any of these):
+    ${JSON.stringify((completedTodos || []).slice(0, 100).map(t => ({ title: t.title || t.name, listName: t.listName })))}
+
+    Existing Active Todos (NEVER duplicate any of these):
+    ${JSON.stringify((existingTodos || []).map(t => ({ title: t.title || t.name, listName: t.listName })))}
 
     Slack Messages & Huddle Summaries/Transcripts:
     ${JSON.stringify(slackMessages)}
@@ -68,16 +90,13 @@ async function extractTodos(slackMessages = [], emails = [], events = [], existi
     Unread Emails:
     ${JSON.stringify(emails)}
 
-    Calendar Events:
-    ${JSON.stringify(events)}
-
     Letterly Recordings (MCP):
     ${JSON.stringify(letterlyNotes)}
     `;
 
     try {
         const response = await callGeminiWithRetry({
-            model: 'gemini-3.5-flash',
+            model: 'gemini-3.8-flash',
             contents: prompt,
             config: {
                 temperature: 0.2
@@ -117,7 +136,7 @@ async function generateDailySummary(events, todos) {
 
     try {
         const response = await callGeminiWithRetry({
-            model: 'gemini-3.5-flash',
+            model: 'gemini-3.8-flash',
             contents: prompt,
             config: { temperature: 0.4 }
         });
@@ -153,7 +172,7 @@ async function getMostImportantTask(tasks) {
 
     try {
         const response = await callGeminiWithRetry({
-            model: 'gemini-3.5-flash',
+            model: 'gemini-3.8-flash',
             contents: prompt,
             config: { temperature: 0.1 }
         });
@@ -186,7 +205,7 @@ async function getMeetingRelatedTasks(event, tasks) {
 
     try {
         const response = await callGeminiWithRetry({
-            model: 'gemini-3.5-flash',
+            model: 'gemini-3.8-flash',
             contents: prompt,
             config: { temperature: 0.1 }
         });

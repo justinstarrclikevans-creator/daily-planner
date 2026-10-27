@@ -781,8 +781,7 @@ struct TaskFocusSheetView: View {
         task.updateMetadata(actualSeconds: elapsed)
         UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
         Task {
-            await supabase.updateTask(task)
-            await supabase.toggleTaskCompletion(task: task)
+            await supabase.markTaskCompleted(task: task)
             dismiss()
         }
     }

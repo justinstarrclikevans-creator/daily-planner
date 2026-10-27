@@ -1,7 +1,7 @@
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
-const { getIncompleteReminders, addReminder } = require('./reminders');
+const { getIncompleteReminders, getRecentCompletedReminders, addReminder } = require('./reminders');
 const { getRecentSlackMessages } = require('./slack');
 const { getRecentEmails, getTodaysCalendarEvents } = require('./google');
 const { getRecentLetterlyNotes } = require('./letterly');
@@ -48,13 +48,23 @@ function normalizeListName(rawName, source) {
     return 'General';
 }
 
+function normalizeTitle(str) {
+    return (str || '')
+        .toLowerCase()
+        .replace(/[^\w\s]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 function loadState() {
     try {
         if (fs.existsSync(STATE_FILE)) {
-            return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+            const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+            data.completedTaskTitles = data.completedTaskTitles || [];
+            return data;
         }
     } catch (e) {}
-    return {};
+    return { completedTaskTitles: [] };
 }
 
 function saveState(state) {
@@ -64,25 +74,84 @@ function saveState(state) {
 async function runHourlySync() {
     console.log(`[${new Date().toLocaleString()}] Starting Hourly Sync (Emails, Slack/Huddles, Calendar, Letterly MCP)...`);
     const state = loadState();
+    state.completedTaskTitles = state.completedTaskTitles || [];
     
     try {
-        const [slack, emails, events, letterlyNotes] = await Promise.all([
+        const [slack, emails, events, letterlyNotes, incompleteTodos, completedTodos] = await Promise.all([
             getRecentSlackMessages(state.lastSlackSync),
             getRecentEmails(state.lastEmailSync),
             getTodaysCalendarEvents(),
-            getRecentLetterlyNotes(state.lastLetterlySync)
+            getRecentLetterlyNotes(state.lastLetterlySync),
+            getIncompleteReminders(),
+            getRecentCompletedReminders()
         ]);
 
+        // Permanently record all completed reminder titles into persistent state
+        for (const comp of completedTodos) {
+            const norm = normalizeTitle(comp.title);
+            if (norm && !state.completedTaskTitles.includes(norm)) {
+                state.completedTaskTitles.push(norm);
+            }
+        }
+        if (state.completedTaskTitles.length > 500) {
+            state.completedTaskTitles = state.completedTaskTitles.slice(-500);
+        }
+        saveState(state);
+
         if (slack.length > 0 || emails.length > 0 || letterlyNotes.length > 0) {
-            console.log(`New inputs found (Slack: ${slack.length}, Emails: ${emails.length}, Letterly: ${letterlyNotes.length}). Checking existing Apple Reminders...`);
-            const existingTodos = await getIncompleteReminders();
+            console.log(`New inputs found (Slack: ${slack.length}, Emails: ${emails.length}, Letterly: ${letterlyNotes.length}). Active Apple Reminders: ${incompleteTodos.length}, Completed: ${completedTodos.length}.`);
             
-            console.log("Extracting todos, ideas & brainstorming via Gemini...");
-            const aiExtractedItems = await extractTodos(slack, emails, events, existingTodos, letterlyNotes);
+            console.log("Extracting todos, ideas & brainstorming via Gemini (with strict completed deduplication)...");
+            const combinedCompleted = [
+                ...completedTodos,
+                ...state.completedTaskTitles.map(t => ({ title: t, listName: '' }))
+            ];
+
+            const aiExtractedItems = await extractTodos({
+                slackMessages: slack,
+                emails: emails,
+                existingTodos: incompleteTodos,
+                completedTodos: combinedCompleted,
+                letterlyNotes: letterlyNotes
+            });
             
             if (aiExtractedItems.length > 0) {
-                console.log(`Extracted ${aiExtractedItems.length} new items. Pushing to Apple Reminders...`);
+                console.log(`AI extracted ${aiExtractedItems.length} candidate items. Validating deduplication before adding...`);
+
+                // Sets for O(1) deduplication matching
+                const activeTitlesSet = new Set(incompleteTodos.map(t => normalizeTitle(t.title)));
+                const completedTitlesSet = new Set([
+                    ...completedTodos.map(t => normalizeTitle(t.title)),
+                    ...state.completedTaskTitles
+                ]);
+                const calendarEventSummaries = new Set(events.map(ev => normalizeTitle(ev.summary)));
+
                 for (const item of aiExtractedItems) {
+                    const normTitle = normalizeTitle(item.title);
+                    if (!normTitle) continue;
+
+                    // 1. Skip if already completed
+                    if (completedTitlesSet.has(normTitle)) {
+                        console.log(`[Deduplication] Task "${item.title}" was already completed previously. Skipping.`);
+                        continue;
+                    }
+
+                    // 2. Skip if already an active reminder
+                    if (activeTitlesSet.has(normTitle)) {
+                        console.log(`[Deduplication] Task "${item.title}" is already an active reminder. Skipping.`);
+                        continue;
+                    }
+
+                    // 3. Skip if this is a calendar meeting/appointment
+                    const lowerTitle = (item.title || '').toLowerCase();
+                    if (lowerTitle.startsWith('meeting with') ||
+                        lowerTitle.startsWith('meeting:') ||
+                        calendarEventSummaries.has(normTitle) ||
+                        events.some(ev => normalizeTitle(ev.summary).includes(normTitle) || normTitle.includes(normalizeTitle(ev.summary)))) {
+                        console.log(`[Deduplication] Item "${item.title}" is a calendar meeting/event. Skipping.`);
+                        continue;
+                    }
+
                     const targetList = normalizeListName(item.listName, item.source);
                     const mins = item.estimatedMinutes || 5;
                     const noteLines = [`[⏱ ${mins}m]`];
@@ -104,6 +173,7 @@ async function runHourlySync() {
                         console.error(`Failed to push reminder to list (${targetList}):`, item.title);
                     } else {
                         console.log(`Added to [${targetList}]: ${item.title} (${(item.subtasks || []).length} subtasks)`);
+                        activeTitlesSet.add(normTitle);
                     }
 
                     item.listName = targetList;

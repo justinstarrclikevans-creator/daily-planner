@@ -131,6 +131,14 @@ class RemindersManager: ObservableObject {
         if let reminder = targetReminder {
             reminder.title = task.title
             reminder.notes = task.description
+            reminder.isCompleted = task.isCompleted
+            if task.isCompleted {
+                if reminder.completionDate == nil {
+                    reminder.completionDate = Date()
+                }
+            } else {
+                reminder.completionDate = nil
+            }
             if let dueDate = task.dueDate {
                 reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: dueDate)
             } else {
@@ -199,6 +207,23 @@ class RemindersManager: ObservableObject {
         }
         
         let predicate = eventStore.predicateForIncompleteReminders(withDueDateStarting: nil, ending: nil, calendars: nil)
+        
+        return await withCheckedContinuation { continuation in
+            eventStore.fetchReminders(matching: predicate) { reminders in
+                let filtered = (reminders ?? []).filter { $0.title != "[App Heartbeat]" }
+                continuation.resume(returning: filtered)
+            }
+        }
+    }
+    
+    func fetchRecentCompletedReminders(days: Int = 30) async -> [EKReminder] {
+        if !isAuthorized {
+            let granted = await requestAccess()
+            guard granted else { return [] }
+        }
+        
+        let startDate = Calendar.current.date(byAdding: .day, value: -days, to: Date()) ?? Date().addingTimeInterval(-30 * 86400)
+        let predicate = eventStore.predicateForCompletedReminders(withCompletionDateStarting: startDate, ending: Date(), calendars: nil)
         
         return await withCheckedContinuation { continuation in
             eventStore.fetchReminders(matching: predicate) { reminders in
@@ -441,6 +466,7 @@ class RemindersManager: ObservableObject {
         await migrateToNewPDFStructureIfNeeded()
         await syncReminderListsToProjects()
         let reminders = await fetchIncompleteReminders()
+        let completedReminders = await fetchRecentCompletedReminders(days: 30)
         let activeReminderIds = Set(reminders.map { $0.calendarItemIdentifier })
         
         // Remove local tasks belonging to deprecated lists
@@ -448,12 +474,42 @@ class RemindersManager: ObservableObject {
             deprecatedListNames.contains(task.listName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
         }
         
+        // 1. Mark tasks as completed in app if completed in Apple Reminders
+        for comp in completedReminders {
+            guard let title = comp.title, !title.isEmpty, title != "[App Heartbeat]" else { continue }
+            let compId = comp.calendarItemIdentifier
+            let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            if let index = SupabaseService.shared.tasks.firstIndex(where: {
+                $0.appleReminderId == compId || ($0.appleReminderId == nil && $0.title.caseInsensitiveCompare(cleanTitle) == .orderedSame)
+            }) {
+                if !SupabaseService.shared.tasks[index].isCompleted {
+                    SupabaseService.shared.tasks[index].isCompleted = true
+                    SupabaseService.shared.tasks[index].appleReminderId = compId
+                }
+            }
+        }
+        
+        // 2. Mark tasks as completed in app if completed/removed in Apple Reminders
+        for (idx, task) in SupabaseService.shared.tasks.enumerated() {
+            if let rId = task.appleReminderId, !activeReminderIds.contains(rId), !task.isCompleted {
+                SupabaseService.shared.tasks[idx].isCompleted = true
+            }
+        }
+        
+        // Build set of all completed task titles to prevent resurrection
+        let completedTitles = Set(
+            SupabaseService.shared.tasks.filter { $0.isCompleted }.map { $0.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            + completedReminders.compactMap { $0.title?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+        )
+        
         for r in reminders {
             guard let title = r.title, !title.isEmpty, title != "[App Heartbeat]" else { continue }
             let listName = r.calendar?.title ?? "General"
             if deprecatedListNames.contains(listName.lowercased()) { continue }
             let reminderId = r.calendarItemIdentifier
             let dueDate = r.dueDateComponents?.date
+            let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let cleanTitleLower = cleanTitle.lowercased()
             
             let matchedProject = SupabaseService.shared.projects.first { p in
                 p.name.caseInsensitiveCompare(listName) == .orderedSame
@@ -462,6 +518,12 @@ class RemindersManager: ObservableObject {
             if let index = SupabaseService.shared.tasks.firstIndex(where: {
                 $0.appleReminderId == reminderId || ($0.appleReminderId == nil && $0.title == title && $0.listName.caseInsensitiveCompare(listName) == .orderedSame)
             }) {
+                // If user already completed this task in the companion app, DO NOT resurrect it as incomplete!
+                if SupabaseService.shared.tasks[index].isCompleted {
+                    _ = await completeReminder(identifier: reminderId)
+                    continue
+                }
+                
                 var current = SupabaseService.shared.tasks[index]
                 current.appleReminderId = reminderId
                 current.title = title
@@ -484,6 +546,12 @@ class RemindersManager: ObservableObject {
                 }
                 SupabaseService.shared.tasks[index] = current
             } else {
+                // If this reminder matches a completed task, complete it in EventKit and DO NOT create a new pending task
+                if completedTitles.contains(cleanTitleLower) {
+                    _ = await completeReminder(identifier: reminderId)
+                    continue
+                }
+                
                 let mins = TaskItem.extractEstimatedMinutes(from: r.notes ?? "") ?? 5
                 let parsedSubtasks = TaskItem.extractSubtasks(from: r.notes ?? "")
                 await SupabaseService.shared.createTask(
@@ -496,13 +564,6 @@ class RemindersManager: ObservableObject {
                     estimatedMinutes: mins,
                     subtasks: parsedSubtasks
                 )
-            }
-        }
-        
-        // Mark tasks as completed in app if completed/removed in Apple Reminders
-        for (idx, task) in SupabaseService.shared.tasks.enumerated() {
-            if let rId = task.appleReminderId, !activeReminderIds.contains(rId), !task.isCompleted {
-                SupabaseService.shared.tasks[idx].isCompleted = true
             }
         }
         

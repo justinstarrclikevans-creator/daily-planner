@@ -376,6 +376,20 @@ class SupabaseService: ObservableObject {
         }
     }
     
+    func markTaskCompleted(task: TaskItem) async {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        tasks[index].isCompleted = true
+        let updated = tasks[index]
+        persistLocalTasks()
+        
+        NotificationService.shared.resetTaskCompletionInactivityTimer()
+        if let reminderId = updated.appleReminderId {
+            _ = await RemindersManager.shared.completeReminder(identifier: reminderId)
+        }
+        
+        await updateTask(updated)
+    }
+    
     func toggleTaskCompletion(task: TaskItem) async {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         tasks[index].isCompleted.toggle()
