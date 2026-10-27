@@ -1,14 +1,14 @@
 {
-  "lastSlackSync": 1793044840.312109,
+  "lastSlackSync": 1793120987.531799,
   "lastEmailSync": {
-    "token.json": 1793081144000,
-    "token_2.json": 1793101881000,
-    "token_3.json": 1793060435000
+    "token.json": 1793120410000,
+    "token_2.json": 1793114259000,
+    "token_3.json": 1793127501000
   },
-  "lastLetterlySync": 1792872969378,
+  "lastLetterlySync": 1793036330926,
   "lastAppOpenedAt": 1792872969378,
   "lastTaskCompletedAt": 1792872969378,
-  "lastAngryNudgeSentAt": 1793102422082,
+  "lastAngryNudgeSentAt": 1793125800277,
   "alertedMeetings": [
     "1eh9i8kt46l00rojprh8552g9s",
     "3cgo0s1e90664tau0bebgsri2j_20261025T223000Z",
@@ -19,7 +19,10 @@
     "30fafdqj85sqqj11og2uu2tg2p",
     "494k333i3pp07o1jtrjk98snmc",
     "_8goj8d266gp48b9j6krjgb9k8cskcb9p6t34cb9j70s4cci16kr42g9g6o_20261026T201000Z",
-    "3cgo0s1e90664tau0bebgsri2j_20261026T223000Z"
+    "3cgo0s1e90664tau0bebgsri2j_20261026T223000Z",
+    "_dlh5guj5f51mchjmcph64oq36h956t21dd5k0j3ldpgm6obc",
+    "_60q30c1g60o30e1i60o4ac1g60rj8gpl88rj2c1h84s34h9g60s30c1g60o30c1g88sj8d1g85342hhh6op48h1g64o30c1g60o30c1g60o30c1g60o32c1g60o30c1g6os38e226d0kagi48ork2c9k60sjigpn70oj0ca2690k4h1o70rg",
+    "_6so48gq664pk4b9j6h244b9k8h0k4ba18op36ba48p23ad9j8op4ac1n6s_20261027T191500Z"
   ],
   "completedTaskTitles": [
     "start the day",
@@ -42,6 +45,15 @@
     "write cm template for ai to score off of",
     "review alexa temples time off request in gusto",
     "donor visiting with amy",
-    "complete new employment update for william belk in apricot"
+    "complete new employment update for william belk in apricot",
+    "order ninja transfers for shirts finish designs first t90 badges as well",
+    "explore development of an androidapple app for direct session recording and upload",
+    "provide a valid tax id for expertpay on stripe",
+    "test todocompanion build 10 202610270823 on testflight",
+    "drop off amazon return at ups store",
+    "meeting with sean mcgowan programs and development",
+    "meeting with daisy boynton and katie bergeron",
+    "check with tammy regarding transfr vr training",
+    "complete new employment update for chance simmons in apricot"
   ]
 }

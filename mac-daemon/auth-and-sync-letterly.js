@@ -7,12 +7,13 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const { getRecentLetterlyNotes } = require('./letterly');
 const { extractTodos } = require('./ai');
-const { getIncompleteReminders, addReminder } = require('./reminders');
+const { getIncompleteReminders, getRecentCompletedReminders, addReminder } = require('./reminders');
 
 const PORT = 3333;
-const CLIENT_ID = 'dea0b3e2-946f-4589-9bc3-6902afdf3c8c';
+const CLIENT_ID = 'f11b1718-c5bb-4ffe-86af-d59605e94931';
 const REDIRECT_URI = `http://localhost:${PORT}/callback`;
 const OAUTH_TOKENS_PATH = '/Users/justinevans/.gemini/antigravity/mcp_oauth_tokens.json';
+const STATE_FILE = path.join(__dirname, 'state.json');
 
 const verifier = crypto.randomBytes(32).toString('base64url');
 const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
@@ -21,21 +22,29 @@ const authUrl = 'https://api.letterly.app/authorize?' + new URLSearchParams({
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
     response_type: 'code',
-    scope: 'notes:read notes:write',
+    scope: 'notes:read notes:write notes:delete notes:rewrite user:read rewrite:read rewrite:write rewrite:delete',
     code_challenge: challenge,
     code_challenge_method: 'S256'
 });
 
+function normalizeTitle(str) {
+    return (str || '')
+        .toLowerCase()
+        .replace(/[^\w\s]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 async function processRecordings() {
     console.log("\n=======================================================");
-    console.log("Fetching Letterly recordings from last week...");
+    console.log("Fetching Letterly recordings from your account...");
     console.log("=======================================================\n");
 
-    // Look back 14 days to capture everything from last week
+    // Fetch notes from the last 14 days
     const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
     const notes = await getRecentLetterlyNotes(fourteenDaysAgo);
 
-    console.log(`Found ${notes.length} Letterly recordings from the last 14 days.`);
+    console.log(`\nFound ${notes.length} Letterly recordings from the last 14 days.`);
     if (notes.length === 0) {
         console.log("No recordings found in the last 14 days.");
         return;
@@ -43,66 +52,101 @@ async function processRecordings() {
 
     notes.forEach((n, idx) => {
         console.log(`[${idx + 1}] "${n.title}" (${new Date(n.timestamp).toLocaleDateString()})`);
-        console.log(`    Content Preview: ${(n.content || '').substring(0, 120)}...`);
+        console.log(`    Content Preview: ${(n.content || '').substring(0, 120).replace(/\n/g, ' ')}...`);
     });
 
-    console.log("\nChecking existing Apple Reminders to avoid duplicates...");
-    const existingTodos = await getIncompleteReminders();
+    console.log("\nFetching existing & completed Apple Reminders to prevent duplicates...");
+    const [incompleteTodos, completedTodos] = await Promise.all([
+        getIncompleteReminders(),
+        getRecentCompletedReminders()
+    ]);
 
+    let state = {};
+    try {
+        if (fs.existsSync(STATE_FILE)) {
+            state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+        }
+    } catch (e) {}
+    state.completedTaskTitles = state.completedTaskTitles || [];
+
+    const activeTitlesSet = new Set(incompleteTodos.map(t => normalizeTitle(t.title)));
+    const completedTitlesSet = new Set([
+        ...completedTodos.map(t => normalizeTitle(t.title)),
+        ...state.completedTaskTitles
+    ]);
+
+    console.log(`Active reminders: ${activeTitlesSet.size}, Known completed tasks: ${completedTitlesSet.size}.`);
     console.log("\nRunning Gemini AI extraction on Letterly recordings...");
-    const extracted = await extractTodos([], [], [], existingTodos, notes);
 
-    console.log(`\nGemini extracted ${extracted.length} tasks/ideas to sync:`);
+    const combinedCompleted = [
+        ...completedTodos,
+        ...state.completedTaskTitles.map(t => ({ title: t, listName: '' }))
+    ];
+
+    const extracted = await extractTodos({
+        slackMessages: [],
+        emails: [],
+        existingTodos: incompleteTodos,
+        completedTodos: combinedCompleted,
+        letterlyNotes: notes
+    });
+
+    console.log(`\nGemini extracted ${extracted.length} candidate items to sync:`);
+    let addedCount = 0;
+
     for (const item of extracted) {
+        const normTitle = normalizeTitle(item.title);
+        if (!normTitle) continue;
+
+        if (completedTitlesSet.has(normTitle)) {
+            console.log(`   ⏭ Skipping "${item.title}" (already completed previously)`);
+            continue;
+        }
+
+        if (activeTitlesSet.has(normTitle)) {
+            console.log(`   ⏭ Skipping "${item.title}" (already exists in active reminders)`);
+            continue;
+        }
+
         console.log(`\n-> [${item.listName}] ${item.title} (⏱ ${item.estimatedMinutes || 5}m)`);
         if (item.subtasks && item.subtasks.length > 0) {
             item.subtasks.forEach(s => console.log(`   - ${s}`));
         }
 
-        // Build description with time estimate and subtasks
-        const subtaskChecklist = (item.subtasks || []).map(s => `- [ ] ${s}`).join('\n');
-        const notesBody = [
-            `[⏱ ${item.estimatedMinutes || 5}m]`,
-            item.description || '',
-            subtaskChecklist
-        ].filter(Boolean).join('\n\n');
+        const noteLines = [`[⏱ ${item.estimatedMinutes || 5}m]`];
+        if (Array.isArray(item.subtasks) && item.subtasks.length > 0) {
+            for (const sub of item.subtasks) {
+                const cleanedSub = String(sub).trim();
+                if (cleanedSub) noteLines.push(`- [ ] ${cleanedSub}`);
+            }
+        } else if (item.description && item.description.trim()) {
+            noteLines.push(item.description.trim());
+        }
 
+        const notesBody = noteLines.join('\n');
         const success = await addReminder(item.listName, item.title, notesBody);
         if (success) {
             console.log(`   ✓ Added to Apple Reminders under '${item.listName}'`);
+            activeTitlesSet.add(normTitle);
+            addedCount++;
         } else {
             console.log(`   ✗ Failed to add to Apple Reminders`);
         }
+    }
 
-        // Also sync to Supabase if configured
-        if (process.env.SUPABASE_URL && process.env.SUPABASE_KEY) {
-            try {
-                await fetch(`${process.env.SUPABASE_URL}/rest/v1/tasks`, {
-                    method: 'POST',
-                    headers: {
-                        'apikey': process.env.SUPABASE_KEY,
-                        'Authorization': `Bearer ${process.env.SUPABASE_KEY}`,
-                        'Content-Type': 'application/json',
-                        'Prefer': 'return=representation'
-                    },
-                    body: JSON.stringify({
-                        title: item.title,
-                        description: notesBody,
-                        list_name: item.listName,
-                        status: 'pending',
-                        source: 'letterly',
-                        created_at: new Date().toISOString()
-                    })
-                });
-            } catch (e) {
-                // Ignore supabase error
-            }
-        }
+    if (notes.length > 0) {
+        state.lastLetterlySync = Math.max(...notes.map(n => n.timestamp));
+        fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
     }
 
     console.log("\n=======================================================");
-    console.log("✓ All Letterly recordings processed and synced!");
+    console.log(`✓ Processed ${notes.length} Letterly notes. Added ${addedCount} new tasks/ideas.`);
     console.log("=======================================================\n");
+
+    // Restart daily-planner-sync in PM2 to adopt new Letterly credentials
+    exec('npx pm2 restart daily-planner-sync', (err) => {
+        if (!err) console.log("✓ Restarted daily-planner-sync daemon in PM2.");
+    });
 }
 
 const server = http.createServer(async (req, res) => {
@@ -140,7 +184,7 @@ const server = http.createServer(async (req, res) => {
             const tokenData = await tokenResp.json();
             console.log("[OAuth Callback] Successfully acquired OAuth token!");
 
-            // Save token to mcp_oauth_tokens.json
+            // 1. Save token to mcp_oauth_tokens.json
             let allTokens = {};
             if (fs.existsSync(OAUTH_TOKENS_PATH)) {
                 try {
@@ -161,6 +205,17 @@ const server = http.createServer(async (req, res) => {
             fs.writeFileSync(OAUTH_TOKENS_PATH, JSON.stringify(allTokens, null, 2));
             console.log(`[OAuth Callback] Saved token to ${OAUTH_TOKENS_PATH}`);
 
+            // 2. Also append/update LETTERLY_ACCESS_TOKEN in mac-daemon/.env
+            const envPath = path.join(__dirname, '.env');
+            let envContent = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
+            if (envContent.includes('LETTERLY_ACCESS_TOKEN=')) {
+                envContent = envContent.replace(/LETTERLY_ACCESS_TOKEN=.*/, `LETTERLY_ACCESS_TOKEN="${tokenData.access_token}"`);
+            } else {
+                envContent += `\nLETTERLY_ACCESS_TOKEN="${tokenData.access_token}"\n`;
+            }
+            fs.writeFileSync(envPath, envContent);
+            console.log(`[OAuth Callback] Saved LETTERLY_ACCESS_TOKEN to .env`);
+
             res.writeHead(200, { 'Content-Type': 'text/html' });
             res.end(`
                 <html>
@@ -168,7 +223,7 @@ const server = http.createServer(async (req, res) => {
                     <div style="text-align: center; max-width: 480px; padding: 40px; background: #1e293b; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
                         <div style="font-size: 54px; margin-bottom: 16px;">🎙️</div>
                         <h2 style="margin: 0 0 10px 0;">Letterly Connected!</h2>
-                        <p style="color: #94a3b8; font-size: 15px; line-height: 1.5;">Your account is authorized. We are now processing your voice recordings from last week and syncing tasks directly to Apple Reminders.</p>
+                        <p style="color: #94a3b8; font-size: 15px; line-height: 1.5;">Your account is authorized. We are now processing your voice recordings and syncing tasks directly to Apple Reminders.</p>
                         <p style="color: #64748b; font-size: 13px; margin-top: 24px;">You can safely close this browser window.</p>
                     </div>
                 </body>

@@ -12,7 +12,9 @@ async function downloadSlackCanvasText(url) {
         });
         if (!resp.ok) return '';
         const html = await resp.text();
-        return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        const cleaned = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        // Cap canvas text to avoid exceeding token limits
+        return cleaned.length > 25000 ? cleaned.substring(0, 25000) + '... [truncated]' : cleaned;
     } catch (e) {
         return '';
     }
