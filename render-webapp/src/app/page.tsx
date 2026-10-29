@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   supabase,
   Task,
   Project,
   DEFAULT_PROJECTS,
-  extractSubtasks,
+  matchTaskToProject,
   serializeSubtasksIntoDescription,
   isTaskScheduledForFuture,
 } from '@/lib/supabase';
@@ -24,19 +24,24 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize2,
-  CheckCircle2,
   RefreshCw,
-  Folder,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 
 export default function DeskPage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>(DEFAULT_PROJECTS);
-  const [openProjectIds, setOpenProjectIds] = useState<Set<string>>(new Set());
+  
+  // By default, spread out all project decks so the user sees all cards right away
+  const [openProjectIds, setOpenProjectIds] = useState<Set<string>>(
+    () => new Set(DEFAULT_PROJECTS.map((p) => p.id))
+  );
+
   const [cardPositions, setCardPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [stackPositions, setStackPositions] = useState<Record<string, { x: number; y: number }>>({});
   const [focusBlotterPosition, setFocusBlotterPosition] = useState({
-    x: 420,
+    x: 480,
     y: 380,
     width: 760,
     height: 440,
@@ -48,60 +53,87 @@ export default function DeskPage() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [activeFilterProject, setActiveFilterProject] = useState<string | null>(null);
 
-  // Load Initial Data from Supabase
+  // Load Data via Server-Side /api/desk with fallbacks
   const loadData = useCallback(async () => {
     setSyncStatus('syncing');
     try {
-      // 1. Fetch Projects
-      const { data: projData, error: projErr } = await supabase
-        .from('projects')
-        .select('*')
-        .order('name');
-      if (!projErr && projData && projData.length > 0) {
-        setProjects(projData);
-      } else {
-        setProjects(DEFAULT_PROJECTS);
-      }
+      const res = await fetch('/api/desk', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
 
-      // 2. Fetch Tasks
-      const { data: taskData, error: taskErr } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
+      const currentProjects =
+        json.projects && json.projects.length > 0 ? json.projects : DEFAULT_PROJECTS;
+      setProjects(currentProjects);
 
-      if (!taskErr && taskData) {
-        const parsedTasks: Task[] = taskData.map((row: any) => {
-          let subs = row.subtasks;
-          if (!subs || !Array.isArray(subs) || subs.length === 0) {
-            subs = extractSubtasks(row.description);
+      if (json.tasks && Array.isArray(json.tasks)) {
+        // Ensure every task is matched to a project
+        const mapped = json.tasks
+          .filter((t: Task) => !isTaskScheduledForFuture(t.dueDate))
+          .map((t: Task) => {
+            const matchedProj = matchTaskToProject(t, currentProjects);
+            return {
+              ...t,
+              projectId: t.projectId || matchedProj.id,
+              listName: t.listName || matchedProj.name,
+            };
+          });
+        setTasks(mapped);
+
+        // Ensure openProjectIds includes all active project IDs
+        setOpenProjectIds((prev) => {
+          if (prev.size === 0) {
+            return new Set(currentProjects.map((p: Project) => p.id));
           }
-          return {
-            id: row.id,
-            projectId: row.project_id,
-            title: row.title,
-            description: row.description,
-            listName: row.list_name || 'Personal',
-            status: row.status || 'pending',
-            dueDate: row.due_date,
-            source: row.source,
-            appleReminderId: row.apple_reminder_id,
-            estimatedMinutes: row.estimated_minutes || 5,
-            inPlayQueue: row.in_play_queue || false,
-            firstFiveMinutes: row.first_five_minutes,
-            subtasks: subs,
-            createdAt: row.created_at,
-          };
+          return prev;
         });
-
-        // Filter out future/deferred tasks from the active desk
-        const activeToday = parsedTasks.filter((t) => !isTaskScheduledForFuture(t.dueDate));
-        setTasks(activeToday);
       }
+
       setSyncStatus('connected');
     } catch (err) {
-      console.error('Error fetching desk data:', err);
-      setSyncStatus('offline');
+      console.warn('API fetch failed, falling back to client Supabase:', err);
+      // Fallback: Direct Client-Side Supabase
+      try {
+        const { data: projData } = await supabase.from('projects').select('*').order('name');
+        const projs = projData && projData.length > 0 ? projData : DEFAULT_PROJECTS;
+        setProjects(projs);
+
+        const { data: taskData } = await supabase
+          .from('tasks')
+          .select('*')
+          .neq('status', 'completed')
+          .order('created_at', { ascending: false });
+
+        if (taskData) {
+          const parsed = taskData
+            .filter((t: any) => !isTaskScheduledForFuture(t.due_date))
+            .map((row: any) => {
+              const baseTask: Task = {
+                id: row.id,
+                projectId: row.project_id,
+                title: row.title,
+                description: row.description,
+                listName: row.list_name || 'Personal',
+                status: row.status || 'pending',
+                dueDate: row.due_date,
+                source: row.source,
+                appleReminderId: row.apple_reminder_id,
+                estimatedMinutes: row.estimated_minutes || 5,
+                inPlayQueue: row.in_play_queue || false,
+                firstFiveMinutes: row.first_five_minutes,
+                subtasks: row.subtasks || [],
+                createdAt: row.created_at,
+              };
+              const matched = matchTaskToProject(baseTask, projs);
+              return { ...baseTask, projectId: baseTask.projectId || matched.id };
+            });
+          setTasks(parsed);
+          setOpenProjectIds(new Set(projs.map((p: Project) => p.id)));
+        }
+        setSyncStatus('connected');
+      } catch (clientErr) {
+        console.error('All data loading failed:', clientErr);
+        setSyncStatus('offline');
+      }
     }
   }, []);
 
@@ -109,7 +141,6 @@ export default function DeskPage() {
   useEffect(() => {
     loadData();
 
-    // Load saved positions
     try {
       const savedCardPos = localStorage.getItem('desk_card_positions');
       if (savedCardPos) setCardPositions(JSON.parse(savedCardPos));
@@ -118,19 +149,20 @@ export default function DeskPage() {
       if (savedStackPos) setStackPositions(JSON.parse(savedStackPos));
 
       const savedOpenProjects = localStorage.getItem('desk_open_projects');
-      if (savedOpenProjects) setOpenProjectIds(new Set(JSON.parse(savedOpenProjects)));
+      if (savedOpenProjects) {
+        const parsed = JSON.parse(savedOpenProjects);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setOpenProjectIds(new Set(parsed));
+        }
+      }
     } catch {}
 
-    // Subscribe to real-time changes on tasks
+    // Real-time Supabase subscription
     const channel = supabase
       .channel('desk-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
-        () => {
-          loadData();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
+        loadData();
+      })
       .subscribe();
 
     return () => {
@@ -138,7 +170,7 @@ export default function DeskPage() {
     };
   }, [loadData]);
 
-  // Save positions to localStorage when updated
+  // Save positions to localStorage
   const updateCardPosition = (taskId: string, x: number, y: number) => {
     setCardPositions((prev) => {
       const updated = { ...prev, [taskId]: { x, y } };
@@ -159,7 +191,7 @@ export default function DeskPage() {
     });
   };
 
-  // Toggle spreading out or gathering in a project stack
+  // Toggle single stack
   const toggleProjectOpen = (projectId: string) => {
     setOpenProjectIds((prev) => {
       const next = new Set(prev);
@@ -167,16 +199,6 @@ export default function DeskPage() {
         next.delete(projectId);
       } else {
         next.add(projectId);
-        // Position cards for this project neatly near the stack if unpositioned
-        const stackPos = stackPositions[projectId] || getInitialStackPosition(projectId);
-        const projectTasks = tasks.filter((t) => isTaskInProject(t, projectId));
-        projectTasks.forEach((task, idx) => {
-          if (!cardPositions[task.id]) {
-            const cardX = stackPos.x + 320 + (idx % 3) * 360;
-            const cardY = stackPos.y + Math.floor(idx / 3) * 320;
-            updateCardPosition(task.id, cardX, cardY);
-          }
-        });
       }
       try {
         localStorage.setItem('desk_open_projects', JSON.stringify(Array.from(next)));
@@ -185,11 +207,26 @@ export default function DeskPage() {
     });
   };
 
-  // Helper: check if task belongs to a project
+  // Spread All / Gather All
+  const handleSpreadAll = () => {
+    const all = new Set(projects.map((p) => p.id));
+    setOpenProjectIds(all);
+    try {
+      localStorage.setItem('desk_open_projects', JSON.stringify(Array.from(all)));
+    } catch {}
+  };
+
+  const handleGatherAll = () => {
+    setOpenProjectIds(new Set());
+    try {
+      localStorage.setItem('desk_open_projects', JSON.stringify([]));
+    } catch {}
+  };
+
+  // Check if task belongs to a project
   const isTaskInProject = (task: Task, projectId: string) => {
-    if (task.projectId === projectId) return true;
-    const proj = projects.find((p) => p.id === projectId);
-    return proj ? task.listName.toLowerCase() === proj.name.toLowerCase() : false;
+    const matched = matchTaskToProject(task, projects);
+    return matched.id === projectId;
   };
 
   // Default coordinate helpers
@@ -197,7 +234,7 @@ export default function DeskPage() {
     const idx = projects.findIndex((p) => p.id === projectId);
     const validIdx = idx >= 0 ? idx : 0;
     return {
-      x: 40 + validIdx * 320,
+      x: 40 + validIdx * 340,
       y: 90,
     };
   };
@@ -206,8 +243,8 @@ export default function DeskPage() {
     if (cardPositions[taskId]) return cardPositions[taskId];
     const stackPos = stackPositions[projectId] || getInitialStackPosition(projectId);
     return {
-      x: stackPos.x + 10 + (idx % 2) * 360,
-      y: stackPos.y + 260 + Math.floor(idx / 2) * 340,
+      x: stackPos.x + (idx % 2) * 360,
+      y: stackPos.y + 260 + Math.floor(idx / 2) * 320,
     };
   };
 
@@ -217,7 +254,7 @@ export default function DeskPage() {
     const newStackPos: Record<string, { x: number; y: number }> = {};
 
     projects.forEach((proj, pIdx) => {
-      const sX = 40 + pIdx * 330;
+      const sX = 40 + pIdx * 350;
       const sY = 90;
       newStackPos[proj.id] = { x: sX, y: sY };
 
@@ -225,7 +262,7 @@ export default function DeskPage() {
       pTasks.forEach((task, tIdx) => {
         newCardPos[task.id] = {
           x: sX,
-          y: sY + 260 + tIdx * 340,
+          y: sY + 260 + tIdx * 320,
         };
       });
     });
@@ -260,16 +297,18 @@ export default function DeskPage() {
     nextTasks[taskIndex] = updatedTask;
     setTasks(nextTasks);
 
-    // Sync to Supabase
+    // Sync via /api/desk PATCH
     try {
-      await supabase
-        .from('tasks')
-        .update({
+      await fetch('/api/desk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: taskId,
           subtasks: updatedSubtasks,
           description: updatedDesc,
           updated_at: new Date().toISOString(),
-        })
-        .eq('id', taskId);
+        }),
+      });
     } catch (e) {
       console.error('Failed to sync subtask:', e);
     }
@@ -281,13 +320,15 @@ export default function DeskPage() {
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
 
     try {
-      await supabase
-        .from('tasks')
-        .update({
+      await fetch('/api/desk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: taskId,
           status: 'completed',
           updated_at: new Date().toISOString(),
-        })
-        .eq('id', taskId);
+        }),
+      });
     } catch (e) {
       console.error('Failed to mark task complete:', e);
     }
@@ -295,7 +336,6 @@ export default function DeskPage() {
 
   // Defer Task to Later (Tomorrow)
   const handleLaterTask = async (taskId: string) => {
-    // Optimistic removal from today's desk
     setTasks((prev) => prev.filter((t) => t.id !== taskId));
 
     const tomorrow = new Date();
@@ -303,13 +343,15 @@ export default function DeskPage() {
     tomorrow.setHours(9, 0, 0, 0);
 
     try {
-      await supabase
-        .from('tasks')
-        .update({
+      await fetch('/api/desk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: taskId,
           due_date: tomorrow.toISOString(),
           updated_at: new Date().toISOString(),
-        })
-        .eq('id', taskId);
+        }),
+      });
     } catch (e) {
       console.error('Failed to defer task to later:', e);
     }
@@ -342,41 +384,40 @@ export default function DeskPage() {
     };
 
     setTasks((prev) => [newTask, ...prev]);
-
-    // Position new card in visible view near center
     updateCardPosition(newId, 450, 220);
 
-    // Make sure project stack is open so card is visible
     if (taskData.projectId) {
       setOpenProjectIds((prev) => new Set([...prev, taskData.projectId!]));
     }
 
     try {
-      await supabase.from('tasks').insert({
-        id: newId,
-        project_id: taskData.projectId,
-        title: taskData.title,
-        description: rawDesc,
-        list_name: taskData.listName,
-        status: 'pending',
-        estimated_minutes: taskData.estimatedMinutes,
-        first_five_minutes: taskData.firstFiveMinutes,
-        subtasks: newTask.subtasks,
-        source: 'webapp-desk',
-        created_at: new Date().toISOString(),
+      await fetch('/api/desk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: newId,
+          project_id: taskData.projectId,
+          title: taskData.title,
+          description: rawDesc,
+          list_name: taskData.listName,
+          status: 'pending',
+          estimated_minutes: taskData.estimatedMinutes,
+          first_five_minutes: taskData.firstFiveMinutes,
+          subtasks: newTask.subtasks,
+          source: 'webapp-desk',
+          created_at: new Date().toISOString(),
+        }),
       });
     } catch (e) {
-      console.error('Failed to insert new card into Supabase:', e);
+      console.error('Failed to insert new card:', e);
     }
   };
 
-  // Determine active cards to render
-  const visibleCards = tasks.filter((t) => {
-    if (activeFilterProject && t.projectId !== activeFilterProject) return false;
-    // Check if its project stack is currently open or if card has explicit position
-    const proj = projects.find((p) => isTaskInProject(t, p.id));
-    if (proj && openProjectIds.has(proj.id)) return true;
-    return false;
+  // Active cards to render on desk
+  const visibleCards = tasks.filter((task) => {
+    if (activeFilterProject && task.projectId !== activeFilterProject) return false;
+    const proj = matchTaskToProject(task, projects);
+    return openProjectIds.has(proj.id);
   });
 
   // Calculate active focus cards inside blotter
@@ -428,9 +469,9 @@ export default function DeskPage() {
           </div>
 
           <div className="hidden lg:flex items-center gap-2 pl-2 text-xs font-medium text-slate-400 border-l border-white/10">
-            <span>{tasks.length} Active Cards</span>
+            <span>{tasks.length} Total Cards</span>
             <span>•</span>
-            <span>{openProjectIds.size} Stacks Open</span>
+            <span>{visibleCards.length} Visible on Desk</span>
           </div>
         </div>
 
@@ -475,6 +516,19 @@ export default function DeskPage() {
 
         {/* Desk Controls & New Card Button */}
         <div className="flex items-center gap-2.5">
+          {/* Spread / Gather All Toggle */}
+          <button
+            type="button"
+            onClick={openProjectIds.size > 0 ? handleGatherAll : handleSpreadAll}
+            title={openProjectIds.size > 0 ? 'Gather all cards into stacks' : 'Spread all cards across desk'}
+            className="flex items-center gap-1.5 rounded-lg bg-slate-900 border border-white/10 px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-slate-800 transition-colors shadow-sm"
+          >
+            <Layers className="h-3.5 w-3.5 text-indigo-400" />
+            <span className="hidden sm:inline">
+              {openProjectIds.size > 0 ? 'Gather All' : 'Spread All'}
+            </span>
+          </button>
+
           {/* Tidy Desk Button */}
           <button
             type="button"
@@ -532,9 +586,9 @@ export default function DeskPage() {
             transform: `scale(${zoomLevel})`,
             transformOrigin: 'top left',
             width: '2800px',
-            height: '2000px',
+            height: '2200px',
           }}
-          className="relative min-w-[2800px] min-h-[2000px]"
+          className="relative min-w-[2800px] min-h-[2200px]"
         >
           {/* Today's Focus Desk Blotter Pad (Center Mat) */}
           {showFocusBlotter && (
@@ -565,8 +619,8 @@ export default function DeskPage() {
 
           {/* Draggable 3x5 Physical Index Cards Spread Out Across Desk */}
           {visibleCards.map((task, idx) => {
-            const proj = projects.find((p) => isTaskInProject(task, p.id));
-            const pos = getCardPosition(task.id, proj?.id || '', idx);
+            const proj = matchTaskToProject(task, projects);
+            const pos = getCardPosition(task.id, proj.id, idx);
 
             return (
               <DraggableCard
@@ -582,6 +636,24 @@ export default function DeskPage() {
               />
             );
           })}
+
+          {/* Empty State Banner if all stacks gathered */}
+          {visibleCards.length === 0 && tasks.length > 0 && (
+            <div className="absolute top-[280px] left-[520px] rounded-2xl bg-slate-900/90 border border-white/10 p-8 text-center max-w-md shadow-2xl backdrop-blur-md">
+              <Layers className="h-10 w-10 text-indigo-400 mx-auto mb-3" />
+              <h3 className="text-lg font-bold text-white">All Decks Are Gathered</h3>
+              <p className="text-xs text-slate-400 mt-1 mb-5">
+                Your cards are neatly packed inside the project stacks above. Click below to spread them all out on your desk.
+              </p>
+              <button
+                type="button"
+                onClick={handleSpreadAll}
+                className="rounded-xl bg-indigo-600 px-6 py-2.5 text-xs font-bold text-white hover:bg-indigo-500 transition-colors shadow-lg shadow-indigo-600/30"
+              >
+                Spread Out All Cards Across Desk
+              </button>
+            </div>
+          )}
         </div>
       </main>
 

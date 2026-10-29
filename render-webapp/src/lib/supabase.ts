@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import fallbackRaw from './fallback-todos.json';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://huwattmqwiqhcfhtqely.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_secret_21i-I_QCc5xA_dPeVQPKsg_iV7ZzjQm';
@@ -74,8 +75,56 @@ export function isTaskScheduledForFuture(dueDate?: string | null): boolean {
   if (!dueDate) return false;
   const due = new Date(dueDate);
   const now = new Date();
-  // Check if due date is strictly tomorrow or later
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const startOfDueDate = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
   return startOfDueDate > startOfToday;
+}
+
+export function matchTaskToProject(task: Task, projects: Project[]): Project {
+  if (task.projectId) {
+    const byId = projects.find((p) => p.id === task.projectId);
+    if (byId) return byId;
+  }
+
+  const listName = (task.listName || '').toLowerCase().trim();
+  for (const p of projects) {
+    const pName = p.name.toLowerCase();
+    const pSlug = p.slug.toLowerCase();
+    if (
+      listName === pName ||
+      listName === pSlug ||
+      listName.includes(pName) ||
+      pName.includes(listName) ||
+      (pSlug === '843fc' && listName.includes('843')) ||
+      (pSlug === 'turn90' && (listName.includes('turn') || listName.includes('reentry'))) ||
+      (pSlug === 'book-memoir-and-synapse' &&
+        (listName.includes('book') || listName.includes('memoir') || listName.includes('synapse')))
+    ) {
+      return p;
+    }
+  }
+
+  const general = projects.find((p) => p.slug === 'general' || p.name.toLowerCase() === 'general');
+  return general || projects[0] || DEFAULT_PROJECTS[0];
+}
+
+export function getFallbackTasks(projects: Project[]): Task[] {
+  return (fallbackRaw as any[]).map((item, idx) => {
+    const id = `fallback-${idx}`;
+    const subtasks = extractSubtasks(item.notes);
+    const task: Task = {
+      id,
+      title: item.title,
+      description: item.notes,
+      listName: item.listName || 'Personal',
+      status: 'pending',
+      estimatedMinutes: 15,
+      inPlayQueue: false,
+      subtasks,
+      createdAt: new Date().toISOString(),
+    };
+    const matched = matchTaskToProject(task, projects);
+    task.projectId = matched.id;
+    return task;
+  });
 }
