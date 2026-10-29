@@ -1,398 +1,609 @@
 'use client';
-import { useEffect, useState, useRef } from 'react';
-import { CheckCircle2, Circle, Mic, Plus, Calendar, Mail, MessageSquare, Trash2, Edit2 } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
 
-type Todo = {
-  rowNumber: number;
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-};
+import React, { useEffect, useState, useRef, useCallback } from 'react';
+import {
+  supabase,
+  Task,
+  Project,
+  DEFAULT_PROJECTS,
+  extractSubtasks,
+  serializeSubtasksIntoDescription,
+  isTaskScheduledForFuture,
+} from '@/lib/supabase';
+import DraggableCard from '@/components/DraggableCard';
+import ProjectStackWidget from '@/components/ProjectStackWidget';
+import FocusBlotter from '@/components/FocusBlotter';
+import SprintTimerModal from '@/components/SprintTimerModal';
+import NewCardModal from '@/components/NewCardModal';
+import {
+  Plus,
+  Grid,
+  RotateCcw,
+  Sparkles,
+  Layers,
+  ZoomIn,
+  ZoomOut,
+  Maximize2,
+  CheckCircle2,
+  RefreshCw,
+  Folder,
+} from 'lucide-react';
 
-type LetterlyNote = {
-  rowNumber: number;
-  id: string;
-  timestamp: string;
-  original: string;
-  summary: string;
-};
-
-type ProjectNames = {
-  proj1: string;
-  proj2: string;
-  proj3: string;
-};
-
-const COLUMN_KEYS = ['To Do', 'In Progress', 'Done', 'proj1', 'proj2', 'proj3'];
-
-export default function Home() {
-  const [data, setData] = useState<{
-    reminders: Todo[], 
-    letterly: LetterlyNote[],
-    dailySummary: { date: string, summary: string } | null,
-    projectNames: ProjectNames
-  }>({
-    reminders: [],
-    letterly: [],
-    dailySummary: null,
-    projectNames: { proj1: 'Project 1', proj2: 'Project 2', proj3: 'Project 3' }
+export default function DeskPage() {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [projects, setProjects] = useState<Project[]>(DEFAULT_PROJECTS);
+  const [openProjectIds, setOpenProjectIds] = useState<Set<string>>(new Set());
+  const [cardPositions, setCardPositions] = useState<Record<string, { x: number; y: number }>>({});
+  const [stackPositions, setStackPositions] = useState<Record<string, { x: number; y: number }>>({});
+  const [focusBlotterPosition, setFocusBlotterPosition] = useState({
+    x: 420,
+    y: 380,
+    width: 760,
+    height: 440,
   });
+  const [showFocusBlotter, setShowFocusBlotter] = useState(true);
+  const [activeSprintTask, setActiveSprintTask] = useState<Task | null>(null);
+  const [isNewCardModalOpen, setIsNewCardModalOpen] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'offline'>('connected');
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [activeFilterProject, setActiveFilterProject] = useState<string | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [newTitle, setNewTitle] = useState("");
-  const [activeTab, setActiveTab] = useState<'board' | 'daily' | 'letterly'>('board');
-  const [editingColumn, setEditingColumn] = useState<string | null>(null);
-  const [editingName, setEditingName] = useState("");
-
-  // Drag and drop state
-  const draggedTodoRef = useRef<Todo | null>(null);
-
-  const fetchData = async () => {
+  // Load Initial Data from Supabase
+  const loadData = useCallback(async () => {
+    setSyncStatus('syncing');
     try {
-      const res = await fetch('/api/todos');
-      const json = await res.json();
-      if (json.projectNames) {
-         setData(json);
+      // 1. Fetch Projects
+      const { data: projData, error: projErr } = await supabase
+        .from('projects')
+        .select('*')
+        .order('name');
+      if (!projErr && projData && projData.length > 0) {
+        setProjects(projData);
       } else {
-         setData({ ...json, projectNames: { proj1: 'Project 1', proj2: 'Project 2', proj3: 'Project 3' } });
+        setProjects(DEFAULT_PROJECTS);
       }
-    } catch (e) {
-      console.error(e);
-    }
-    setLoading(false);
-  };
 
-  useEffect(() => {
-    fetchData();
+      // 2. Fetch Tasks
+      const { data: taskData, error: taskErr } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (!taskErr && taskData) {
+        const parsedTasks: Task[] = taskData.map((row: any) => {
+          let subs = row.subtasks;
+          if (!subs || !Array.isArray(subs) || subs.length === 0) {
+            subs = extractSubtasks(row.description);
+          }
+          return {
+            id: row.id,
+            projectId: row.project_id,
+            title: row.title,
+            description: row.description,
+            listName: row.list_name || 'Personal',
+            status: row.status || 'pending',
+            dueDate: row.due_date,
+            source: row.source,
+            appleReminderId: row.apple_reminder_id,
+            estimatedMinutes: row.estimated_minutes || 5,
+            inPlayQueue: row.in_play_queue || false,
+            firstFiveMinutes: row.first_five_minutes,
+            subtasks: subs,
+            createdAt: row.created_at,
+          };
+        });
+
+        // Filter out future/deferred tasks from the active desk
+        const activeToday = parsedTasks.filter((t) => !isTaskScheduledForFuture(t.dueDate));
+        setTasks(activeToday);
+      }
+      setSyncStatus('connected');
+    } catch (err) {
+      console.error('Error fetching desk data:', err);
+      setSyncStatus('offline');
+    }
   }, []);
 
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle.trim()) return;
+  // Initialize and load saved positions from localStorage
+  useEffect(() => {
+    loadData();
 
-    // Optimistic UI
-    const tempTodo: Todo = {
-      rowNumber: -1,
-      id: 'temp_' + Date.now(),
-      title: newTitle,
-      description: '',
-      status: 'To Do'
+    // Load saved positions
+    try {
+      const savedCardPos = localStorage.getItem('desk_card_positions');
+      if (savedCardPos) setCardPositions(JSON.parse(savedCardPos));
+
+      const savedStackPos = localStorage.getItem('desk_stack_positions');
+      if (savedStackPos) setStackPositions(JSON.parse(savedStackPos));
+
+      const savedOpenProjects = localStorage.getItem('desk_open_projects');
+      if (savedOpenProjects) setOpenProjectIds(new Set(JSON.parse(savedOpenProjects)));
+    } catch {}
+
+    // Subscribe to real-time changes on tasks
+    const channel = supabase
+      .channel('desk-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tasks' },
+        () => {
+          loadData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
-    
-    setData(prev => ({
-      ...prev,
-      reminders: [...prev.reminders, tempTodo]
-    }));
-    setNewTitle("");
+  }, [loadData]);
 
-    await fetch('/api/todos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create_todo', title: tempTodo.title })
-    });
-    fetchData();
-  };
-
-  const handleDelete = async (rowNumber: number) => {
-    setData(prev => ({
-      ...prev,
-      reminders: prev.reminders.filter(t => t.rowNumber !== rowNumber)
-    }));
-    await fetch('/api/todos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'delete_todo', rowNumber })
+  // Save positions to localStorage when updated
+  const updateCardPosition = (taskId: string, x: number, y: number) => {
+    setCardPositions((prev) => {
+      const updated = { ...prev, [taskId]: { x, y } };
+      try {
+        localStorage.setItem('desk_card_positions', JSON.stringify(updated));
+      } catch {}
+      return updated;
     });
   };
 
-  const handleDeleteLetterly = async (rowNumber: number) => {
-    setData(prev => ({
-      ...prev,
-      letterly: prev.letterly.filter(t => t.rowNumber !== rowNumber)
-    }));
-    await fetch('/api/todos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'delete_letterly', rowNumber })
+  const updateStackPosition = (projectId: string, x: number, y: number) => {
+    setStackPositions((prev) => {
+      const updated = { ...prev, [projectId]: { x, y } };
+      try {
+        localStorage.setItem('desk_stack_positions', JSON.stringify(updated));
+      } catch {}
+      return updated;
     });
   };
 
-  // --- Drag and Drop Handlers ---
-  const handleDragStart = (e: React.DragEvent<HTMLDivElement>, todo: Todo) => {
-    draggedTodoRef.current = todo;
-    // For firefox compatibility
-    e.dataTransfer.setData('text/plain', todo.id);
-    e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault(); // Necessary to allow dropping
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>, targetStatus: string) => {
-    e.preventDefault();
-    const todo = draggedTodoRef.current;
-    if (!todo) return;
-    if (todo.status === targetStatus) return;
-    
-    // Normalizing legacy 'Pending' -> 'To Do' in comparison
-    const sourceStatus = todo.status === 'Pending' ? 'To Do' : todo.status;
-    if (sourceStatus === targetStatus) return;
-
-    // Optimistic UI Update
-    setData(prev => ({
-      ...prev,
-      reminders: prev.reminders.map(t => t.id === todo.id ? { ...t, status: targetStatus } : t)
-    }));
-
-    // API Call
-    await fetch('/api/todos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update_todo_status', rowNumber: todo.rowNumber, newStatus: targetStatus })
+  // Toggle spreading out or gathering in a project stack
+  const toggleProjectOpen = (projectId: string) => {
+    setOpenProjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+        // Position cards for this project neatly near the stack if unpositioned
+        const stackPos = stackPositions[projectId] || getInitialStackPosition(projectId);
+        const projectTasks = tasks.filter((t) => isTaskInProject(t, projectId));
+        projectTasks.forEach((task, idx) => {
+          if (!cardPositions[task.id]) {
+            const cardX = stackPos.x + 320 + (idx % 3) * 360;
+            const cardY = stackPos.y + Math.floor(idx / 3) * 320;
+            updateCardPosition(task.id, cardX, cardY);
+          }
+        });
+      }
+      try {
+        localStorage.setItem('desk_open_projects', JSON.stringify(Array.from(next)));
+      } catch {}
+      return next;
     });
-    draggedTodoRef.current = null;
   };
 
-  // --- Column Renaming Handlers ---
-  const handleEditColumnStart = (colKey: string, currentName: string) => {
-    if (!['proj1', 'proj2', 'proj3'].includes(colKey)) return;
-    setEditingColumn(colKey);
-    setEditingName(currentName);
+  // Helper: check if task belongs to a project
+  const isTaskInProject = (task: Task, projectId: string) => {
+    if (task.projectId === projectId) return true;
+    const proj = projects.find((p) => p.id === projectId);
+    return proj ? task.listName.toLowerCase() === proj.name.toLowerCase() : false;
   };
 
-  const handleEditColumnSave = async (colKey: string) => {
-    if (!editingName.trim()) return;
-    
+  // Default coordinate helpers
+  const getInitialStackPosition = (projectId: string) => {
+    const idx = projects.findIndex((p) => p.id === projectId);
+    const validIdx = idx >= 0 ? idx : 0;
+    return {
+      x: 40 + validIdx * 320,
+      y: 90,
+    };
+  };
+
+  const getCardPosition = (taskId: string, projectId: string, idx: number) => {
+    if (cardPositions[taskId]) return cardPositions[taskId];
+    const stackPos = stackPositions[projectId] || getInitialStackPosition(projectId);
+    return {
+      x: stackPos.x + 10 + (idx % 2) * 360,
+      y: stackPos.y + 260 + Math.floor(idx / 2) * 340,
+    };
+  };
+
+  // Tidy Desk Action: Auto-arranges all open cards in clean columns under their stacks
+  const tidyDesk = () => {
+    const newCardPos: Record<string, { x: number; y: number }> = {};
+    const newStackPos: Record<string, { x: number; y: number }> = {};
+
+    projects.forEach((proj, pIdx) => {
+      const sX = 40 + pIdx * 330;
+      const sY = 90;
+      newStackPos[proj.id] = { x: sX, y: sY };
+
+      const pTasks = tasks.filter((t) => isTaskInProject(t, proj.id));
+      pTasks.forEach((task, tIdx) => {
+        newCardPos[task.id] = {
+          x: sX,
+          y: sY + 260 + tIdx * 340,
+        };
+      });
+    });
+
+    setStackPositions(newStackPos);
+    setCardPositions(newCardPos);
+    try {
+      localStorage.setItem('desk_stack_positions', JSON.stringify(newStackPos));
+      localStorage.setItem('desk_card_positions', JSON.stringify(newCardPos));
+    } catch {}
+  };
+
+  // Toggle Subtask
+  const handleToggleSubtask = async (taskId: string, subtaskId: string) => {
+    const taskIndex = tasks.findIndex((t) => t.id === taskId);
+    if (taskIndex === -1) return;
+
+    const task = tasks[taskIndex];
+    const updatedSubtasks = task.subtasks.map((s) =>
+      s.id === subtaskId ? { ...s, isCompleted: !s.isCompleted } : s
+    );
+
+    const updatedDesc = serializeSubtasksIntoDescription(task.description, updatedSubtasks);
+
     // Optimistic UI
-    setData(prev => ({
-      ...prev,
-      projectNames: { ...prev.projectNames, [colKey]: editingName.trim() }
-    }));
-    setEditingColumn(null);
+    const updatedTask = {
+      ...task,
+      subtasks: updatedSubtasks,
+      description: updatedDesc,
+    };
+    const nextTasks = [...tasks];
+    nextTasks[taskIndex] = updatedTask;
+    setTasks(nextTasks);
 
-    await fetch('/api/todos', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'update_project_name', key: `${colKey}_name`, value: editingName.trim() })
-    });
+    // Sync to Supabase
+    try {
+      await supabase
+        .from('tasks')
+        .update({
+          subtasks: updatedSubtasks,
+          description: updatedDesc,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', taskId);
+    } catch (e) {
+      console.error('Failed to sync subtask:', e);
+    }
   };
 
-  const getColumnName = (colKey: string) => {
-    if (colKey === 'proj1') return data.projectNames.proj1;
-    if (colKey === 'proj2') return data.projectNames.proj2;
-    if (colKey === 'proj3') return data.projectNames.proj3;
-    return colKey;
+  // Mark Task Completed
+  const handleCompleteTask = async (taskId: string) => {
+    // Optimistic removal from desk
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+
+    try {
+      await supabase
+        .from('tasks')
+        .update({
+          status: 'completed',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', taskId);
+    } catch (e) {
+      console.error('Failed to mark task complete:', e);
+    }
   };
 
-  if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-white">Loading...</div>;
+  // Defer Task to Later (Tomorrow)
+  const handleLaterTask = async (taskId: string) => {
+    // Optimistic removal from today's desk
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(9, 0, 0, 0);
+
+    try {
+      await supabase
+        .from('tasks')
+        .update({
+          due_date: tomorrow.toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', taskId);
+    } catch (e) {
+      console.error('Failed to defer task to later:', e);
+    }
+  };
+
+  // Create New Card
+  const handleCreateCard = async (taskData: {
+    title: string;
+    projectId?: string;
+    listName: string;
+    estimatedMinutes: number;
+    firstFiveMinutes?: string;
+    subtasks: { title: string; isCompleted: boolean }[];
+  }) => {
+    const rawDesc = taskData.subtasks.map((s) => `- [ ] ${s.title}`).join('\n');
+    const newId = crypto.randomUUID();
+
+    const newTask: Task = {
+      id: newId,
+      projectId: taskData.projectId,
+      title: taskData.title,
+      description: rawDesc,
+      listName: taskData.listName,
+      status: 'pending',
+      estimatedMinutes: taskData.estimatedMinutes,
+      inPlayQueue: false,
+      firstFiveMinutes: taskData.firstFiveMinutes,
+      subtasks: taskData.subtasks.map((s) => ({ ...s, id: crypto.randomUUID() })),
+      createdAt: new Date().toISOString(),
+    };
+
+    setTasks((prev) => [newTask, ...prev]);
+
+    // Position new card in visible view near center
+    updateCardPosition(newId, 450, 220);
+
+    // Make sure project stack is open so card is visible
+    if (taskData.projectId) {
+      setOpenProjectIds((prev) => new Set([...prev, taskData.projectId!]));
+    }
+
+    try {
+      await supabase.from('tasks').insert({
+        id: newId,
+        project_id: taskData.projectId,
+        title: taskData.title,
+        description: rawDesc,
+        list_name: taskData.listName,
+        status: 'pending',
+        estimated_minutes: taskData.estimatedMinutes,
+        first_five_minutes: taskData.firstFiveMinutes,
+        subtasks: newTask.subtasks,
+        source: 'webapp-desk',
+        created_at: new Date().toISOString(),
+      });
+    } catch (e) {
+      console.error('Failed to insert new card into Supabase:', e);
+    }
+  };
+
+  // Determine active cards to render
+  const visibleCards = tasks.filter((t) => {
+    if (activeFilterProject && t.projectId !== activeFilterProject) return false;
+    // Check if its project stack is currently open or if card has explicit position
+    const proj = projects.find((p) => isTaskInProject(t, p.id));
+    if (proj && openProjectIds.has(proj.id)) return true;
+    return false;
+  });
+
+  // Calculate active focus cards inside blotter
+  const blotterCardsCount = visibleCards.filter((t) => {
+    const pos = cardPositions[t.id];
+    if (!pos) return false;
+    return (
+      pos.x >= focusBlotterPosition.x &&
+      pos.x <= focusBlotterPosition.x + focusBlotterPosition.width - 200 &&
+      pos.y >= focusBlotterPosition.y &&
+      pos.y <= focusBlotterPosition.y + focusBlotterPosition.height - 200
+    );
+  }).length;
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans p-8 flex flex-col">
-      <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col">
-        
-        {/* Header & Tabs */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent flex items-center gap-3">
-            <CheckCircle2 className="text-blue-400" size={32} />
-            Command Center
-          </h1>
-          <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 gap-1">
-            <button 
-              onClick={() => setActiveTab('board')}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${activeTab === 'board' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-            >
-              Kanban Board
-            </button>
-            <button 
-              onClick={() => setActiveTab('daily')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${activeTab === 'daily' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-            >
-              <Calendar size={16} /> Daily Plan
-            </button>
-            <button 
-              onClick={() => setActiveTab('letterly')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${activeTab === 'letterly' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-            >
-              <Mic size={16} /> Letterly Notes
-            </button>
+    <div className="relative h-screen w-screen overflow-hidden desk-surface text-slate-100 flex flex-col">
+      {/* =========================================================================
+          Top Desk Sticky Command Bar
+          ========================================================================= */}
+      <header className="z-40 flex h-14 shrink-0 items-center justify-between border-b border-white/10 bg-slate-950/80 px-6 backdrop-blur-md">
+        {/* Brand & Live Sync Pill */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-base font-black shadow-md shadow-indigo-600/30">
+              🗂️
+            </span>
+            <span className="font-black text-base tracking-tight text-white">
+              Card Stacks Desk
+            </span>
           </div>
-        </header>
 
-        {/* Content Area */}
-        <main className="flex-1 flex flex-col min-h-0">
-          
-          {/* KANBAN BOARD */}
-          {activeTab === 'board' && (
-            <div className="flex-1 flex gap-6 overflow-x-auto pb-4 snap-x">
-              {COLUMN_KEYS.map(colKey => {
-                const colName = getColumnName(colKey);
-                // Filter items that belong in this column (mapping legacy 'Pending' -> 'To Do')
-                const colTodos = data.reminders.filter(t => {
-                  const s = t.status === 'Pending' ? 'To Do' : t.status;
-                  return s === colKey;
-                });
-                const isCustom = colKey.startsWith('proj');
+          <div className="flex items-center gap-1.5 rounded-full bg-slate-900 border border-white/10 px-2.5 py-0.5 text-[11px] font-semibold">
+            <span
+              className={`h-2 w-2 rounded-full ${
+                syncStatus === 'connected'
+                  ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]'
+                  : syncStatus === 'syncing'
+                  ? 'bg-amber-400 animate-pulse'
+                  : 'bg-red-500'
+              }`}
+            />
+            <span className="text-slate-300">
+              {syncStatus === 'connected'
+                ? 'Live Sync'
+                : syncStatus === 'syncing'
+                ? 'Syncing...'
+                : 'Offline'}
+            </span>
+          </div>
 
-                return (
-                  <div 
-                    key={colKey}
-                    className="flex-shrink-0 w-80 bg-slate-900/40 border border-slate-800/80 rounded-2xl flex flex-col snap-center h-full max-h-full"
-                    onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, colKey)}
-                  >
-                    {/* Column Header */}
-                    <div className="p-4 border-b border-slate-800/50 flex items-center justify-between group">
-                      {editingColumn === colKey ? (
-                        <input 
-                          type="text" 
-                          value={editingName} 
-                          onChange={(e) => setEditingName(e.target.value)}
-                          onBlur={() => handleEditColumnSave(colKey)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleEditColumnSave(colKey)}
-                          autoFocus
-                          className="bg-slate-800 text-white px-2 py-1 rounded text-lg font-semibold w-full outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      ) : (
-                        <h2 
-                          className="text-lg font-semibold text-slate-100 flex items-center gap-2 cursor-pointer w-full"
-                          onClick={() => handleEditColumnStart(colKey, colName)}
-                        >
-                          {colName}
-                          <span className="text-sm font-normal text-slate-500 bg-slate-800 px-2 py-0.5 rounded-full ml-auto">
-                            {colTodos.length}
-                          </span>
-                        </h2>
-                      )}
-                    </div>
+          <div className="hidden lg:flex items-center gap-2 pl-2 text-xs font-medium text-slate-400 border-l border-white/10">
+            <span>{tasks.length} Active Cards</span>
+            <span>•</span>
+            <span>{openProjectIds.size} Stacks Open</span>
+          </div>
+        </div>
 
-                    {/* Quick Add (Only for To Do column) */}
-                    {colKey === 'To Do' && (
-                      <div className="p-4 pb-0">
-                        <form onSubmit={handleAdd} className="flex gap-2">
-                          <input
-                            type="text"
-                            value={newTitle}
-                            onChange={e => setNewTitle(e.target.value)}
-                            placeholder="Add a new task..."
-                            className="flex-1 bg-slate-800/50 text-white border border-slate-700/50 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-blue-500 transition-colors"
-                          />
-                          <button type="submit" className="bg-blue-600 hover:bg-blue-500 text-white p-2 rounded-xl transition-colors">
-                            <Plus size={20} />
-                          </button>
-                        </form>
-                      </div>
-                    )}
+        {/* Project Quick-Filter Chips */}
+        <div className="hidden md:flex items-center gap-1.5 overflow-x-auto py-1">
+          <button
+            type="button"
+            onClick={() => setActiveFilterProject(null)}
+            className={`rounded-lg px-2.5 py-1 text-xs font-bold transition-colors ${
+              activeFilterProject === null
+                ? 'bg-white/15 text-white'
+                : 'text-slate-400 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            All Decks
+          </button>
+          {projects.map((p) => {
+            const count = tasks.filter((t) => isTaskInProject(t, p.id)).length;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() =>
+                  setActiveFilterProject(activeFilterProject === p.id ? null : p.id)
+                }
+                className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-bold transition-colors ${
+                  activeFilterProject === p.id
+                    ? 'bg-white/20 text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                }`}
+              >
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: p.color }}
+                />
+                <span>{p.name}</span>
+                <span className="text-[10px] opacity-60 font-mono">({count})</span>
+              </button>
+            );
+          })}
+        </div>
 
-                    {/* Column Items */}
-                    <div className="p-4 flex-1 overflow-y-auto space-y-3">
-                      {colTodos.map((todo) => (
-                        <div 
-                          key={todo.id} 
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, todo)}
-                          className="group bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-sm hover:border-slate-500 transition-all cursor-grab active:cursor-grabbing flex flex-col gap-2 relative"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="text-slate-200 font-medium leading-snug">{todo.title}</p>
-                            <button 
-                              onClick={() => handleDelete(todo.rowNumber)} 
-                              className="text-slate-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 flex-shrink-0"
-                              title="Delete task"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                          {todo.description && (
-                            <p className="text-slate-400 text-xs line-clamp-2">{todo.description}</p>
-                          )}
-                          {/* Source badges if it came from AI */}
-                          {todo.id.startsWith('slack_') && (
-                            <span className="self-start text-[10px] font-bold tracking-wider uppercase bg-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded flex items-center gap-1 mt-1">
-                              <MessageSquare size={10} /> Slack
-                            </span>
-                          )}
-                          {todo.id.startsWith('email_') && (
-                            <span className="self-start text-[10px] font-bold tracking-wider uppercase bg-red-500/20 text-red-400 px-2 py-0.5 rounded flex items-center gap-1 mt-1">
-                              <Mail size={10} /> Gmail
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                      {colTodos.length === 0 && (
-                        <div className="h-full flex items-center justify-center text-slate-600 text-sm italic py-8 border-2 border-dashed border-slate-800/50 rounded-xl">
-                          Drop tasks here
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+        {/* Desk Controls & New Card Button */}
+        <div className="flex items-center gap-2.5">
+          {/* Tidy Desk Button */}
+          <button
+            type="button"
+            onClick={tidyDesk}
+            title="Auto-organize open cards into clean columns"
+            className="flex items-center gap-1.5 rounded-lg bg-slate-900 border border-white/10 px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-slate-800 transition-colors shadow-sm"
+          >
+            <Grid className="h-3.5 w-3.5 text-indigo-400" />
+            <span className="hidden sm:inline">Tidy Desk</span>
+          </button>
+
+          {/* Focus Blotter Toggle */}
+          <button
+            type="button"
+            onClick={() => setShowFocusBlotter(!showFocusBlotter)}
+            title="Toggle Focus Blotter mat in center of desk"
+            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-colors shadow-sm ${
+              showFocusBlotter
+                ? 'bg-indigo-950/60 border-indigo-500/40 text-indigo-200'
+                : 'bg-slate-900 border-white/10 text-slate-400 hover:text-white'
+            }`}
+          >
+            <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+            <span className="hidden sm:inline">Focus Blotter</span>
+          </button>
+
+          {/* Refresh Data */}
+          <button
+            type="button"
+            onClick={loadData}
+            title="Refresh from Apple Reminders / Supabase"
+            className="rounded-lg bg-slate-900 border border-white/10 p-1.5 text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+
+          {/* New Card Modal Button */}
+          <button
+            type="button"
+            onClick={() => setIsNewCardModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white hover:bg-indigo-500 transition-colors shadow-md shadow-indigo-600/30"
+          >
+            <Plus className="h-4 w-4 stroke-[2.5]" />
+            <span>New Card</span>
+          </button>
+        </div>
+      </header>
+
+      {/* =========================================================================
+          Freeform Desk Surface (Scrollable / Panning 2D Workspace)
+          ========================================================================= */}
+      <main className="relative flex-1 overflow-auto">
+        <div
+          style={{
+            transform: `scale(${zoomLevel})`,
+            transformOrigin: 'top left',
+            width: '2800px',
+            height: '2000px',
+          }}
+          className="relative min-w-[2800px] min-h-[2000px]"
+        >
+          {/* Today's Focus Desk Blotter Pad (Center Mat) */}
+          {showFocusBlotter && (
+            <FocusBlotter
+              position={focusBlotterPosition}
+              activeFocusCount={blotterCardsCount}
+            />
           )}
 
-          {/* DAILY PLAN */}
-          {activeTab === 'daily' && (
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-xl max-w-4xl mx-auto w-full">
-              {data.dailySummary ? (
-                <>
-                  <div className="flex items-center gap-3 mb-6 pb-6 border-b border-slate-800">
-                    <Calendar className="text-emerald-400" size={28} />
-                    <h2 className="text-2xl font-bold text-white">Daily Plan <span className="text-slate-500 font-normal text-lg ml-2">{data.dailySummary.date}</span></h2>
-                  </div>
-                  <div className="prose prose-invert prose-emerald max-w-none">
-                    <ReactMarkdown>{data.dailySummary.summary}</ReactMarkdown>
-                  </div>
-                </>
-              ) : (
-                <div className="text-center text-slate-500 py-12 flex flex-col items-center gap-4">
-                  <Calendar size={48} className="opacity-20" />
-                  <p>No daily summary found. The sync daemon runs at 6:00 AM.</p>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Project Stack Widgets Sitting on Desk */}
+          {projects.map((project) => {
+            const projectTasks = tasks.filter((t) => isTaskInProject(t, project.id));
+            const pos = stackPositions[project.id] || getInitialStackPosition(project.id);
+            const isOpen = openProjectIds.has(project.id);
 
-          {/* LETTERLY NOTES */}
-          {activeTab === 'letterly' && (
-            <div className="space-y-6 max-w-4xl mx-auto w-full">
-              {data.letterly.map((note, i) => (
-                <div key={i} className="group bg-slate-900 border border-slate-800 p-6 rounded-2xl relative overflow-hidden flex justify-between items-start">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-purple-500"></div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-4">
-                      <Mic className="text-purple-400" size={20} />
-                      <span className="text-sm font-medium text-purple-400">{note.timestamp}</span>
-                    </div>
-                    <div className="mb-6">
-                      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">Original Audio</h3>
-                      <p className="text-slate-300 italic">"{note.original}"</p>
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2">AI Summary</h3>
-                      <div className="prose prose-invert prose-purple max-w-none prose-sm">
-                        <ReactMarkdown>{note.summary}</ReactMarkdown>
-                      </div>
-                    </div>
-                  </div>
-                  <button onClick={() => handleDeleteLetterly(note.rowNumber)} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity ml-4 p-2">
-                    <Trash2 size={20} />
-                  </button>
-                </div>
-              ))}
-              {data.letterly.length === 0 && (
-                <div className="text-center text-slate-500 py-12 flex flex-col items-center gap-4 bg-slate-900 rounded-2xl border border-slate-800">
-                  <Mic size={48} className="opacity-20" />
-                  <p>No letterly notes synced yet.</p>
-                </div>
-              )}
-            </div>
-          )}
-        </main>
-      </div>
+            return (
+              <ProjectStackWidget
+                key={project.id}
+                project={project}
+                tasks={projectTasks}
+                isOpen={isOpen}
+                position={pos}
+                onToggleOpen={toggleProjectOpen}
+                onMove={updateStackPosition}
+              />
+            );
+          })}
+
+          {/* Draggable 3x5 Physical Index Cards Spread Out Across Desk */}
+          {visibleCards.map((task, idx) => {
+            const proj = projects.find((p) => isTaskInProject(task, p.id));
+            const pos = getCardPosition(task.id, proj?.id || '', idx);
+
+            return (
+              <DraggableCard
+                key={task.id}
+                task={task}
+                project={proj}
+                position={pos}
+                onMove={updateCardPosition}
+                onToggleSubtask={handleToggleSubtask}
+                onComplete={handleCompleteTask}
+                onLater={handleLaterTask}
+                onStartSprint={(t) => setActiveSprintTask(t)}
+              />
+            );
+          })}
+        </div>
+      </main>
+
+      {/* =========================================================================
+          Modals: 5m Sprint Timer & New Card Creator
+          ========================================================================= */}
+      {activeSprintTask && (
+        <SprintTimerModal
+          task={activeSprintTask}
+          onClose={() => setActiveSprintTask(null)}
+          onComplete={handleCompleteTask}
+        />
+      )}
+
+      {isNewCardModalOpen && (
+        <NewCardModal
+          projects={projects}
+          defaultProjectId={activeFilterProject || undefined}
+          onClose={() => setIsNewCardModalOpen(false)}
+          onCreate={handleCreateCard}
+        />
+      )}
     </div>
   );
 }

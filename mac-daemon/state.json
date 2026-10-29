@@ -1,9 +1,9 @@
 {
-  "lastSlackSync": 1793288018.287889,
+  "lastSlackSync": 1793293305,
   "lastEmailSync": {
-    "token.json": 1793289187000,
-    "token_2.json": 1793282083000,
-    "token_3.json": 1793283127000
+    "token.json": 1793295787000,
+    "token_2.json": 1793295194000,
+    "token_3.json": 1793295999000
   },
   "lastLetterlySync": 1793036330926,
   "lastAppOpenedAt": 1792872969378,
@@ -91,6 +91,12 @@
     "review stephanie lees time off request in gusto",
     "listen to voicemail from 843 4252426 regarding program services",
     "listen to voicemail from 843 8528237 regarding program services",
-    "purchase appreciation gifts for program staff"
+    "purchase appreciation gifts for program staff",
+    "test todocompanion build 10 202610291134 on testflight",
+    "move forward with brandons vr training",
+    "coordinate on center director screening criteria and tour scheduling process",
+    "clarify hubspot employer partner pipeline stages and apricot transition trigger",
+    "share ask a banker virtual session with participants",
+    "review sean mcgowans proposed employer partner pipeline definitions on claude"
   ]
 }

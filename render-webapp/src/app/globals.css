@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0f172a;
+  --background: #0d1117;
   --foreground: #f8fafc;
 }
 
@@ -15,63 +15,46 @@ body {
   color: var(--foreground);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   min-height: 100vh;
-}
-
-/* ==========================================================================
-   Modern Web Guidance: Progress Ring Implementation
-   ========================================================================== */
-@property --value {
-  syntax: '<number>';
-  inherits: true;
-  initial-value: 0;
-}
-
-.progress-ring {
-  --thickness: 14px;
-  --fill-color: #f97316;
-  --track-color: rgba(255, 255, 255, 0.12);
-  inline-size: 200px;
-  block-size: 200px;
-  border-radius: 50%;
-  appearance: none;
-  -webkit-appearance: none;
-  background: conic-gradient(var(--fill-color) calc(var(--value) * 1%), var(--track-color) 0);
-  /* MANDATORY: Clip the background to the border-area. */
-  background-clip: border-area;
-  border: var(--thickness) solid transparent;
-  background-origin: border-box;
-  transition: --value 0.3s ease-out;
-}
-
-@supports not (background-clip: border-area) {
-  .progress-ring {
-    mask-image: radial-gradient(circle, transparent calc(100% - var(--thickness)), black calc(100% - var(--thickness)));
-    -webkit-mask-image: radial-gradient(circle, transparent calc(100% - var(--thickness)), black calc(100% - var(--thickness)));
-  }
-}
-
-.progress-ring::-webkit-progress-bar,
-.progress-ring::-webkit-progress-value {
-  display: none;
-}
-
-/* ==========================================================================
-   Modern Web Guidance: Native Dialog & Light-Dismiss
-   ========================================================================== */
-dialog.focus-dialog {
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 24px;
-  background: #1e293b;
-  color: #f8fafc;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-  max-width: 580px;
-  width: 90vw;
-  max-height: 90vh;
-  padding: 0;
   overflow: hidden;
 }
 
-dialog.focus-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
+/* ==========================================================================
+   Physical 3x5 Index Card Lined Paper Effect
+   ========================================================================== */
+.index-card-pattern {
+  background-color: #fefcf6;
+  background-image: 
+    linear-gradient(90deg, transparent 36px, rgba(239, 68, 68, 0.22) 36px, rgba(239, 68, 68, 0.22) 38px, transparent 38px),
+    linear-gradient(rgba(59, 130, 246, 0.09) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 24px;
+  background-position: 0 0, 0 36px;
+}
+
+/* Desk Surface Background */
+.desk-surface {
+  background-color: #0f172a;
+  background-image: 
+    radial-gradient(circle at 50% 30%, rgba(99, 102, 241, 0.12) 0%, transparent 65%),
+    radial-gradient(rgba(255, 255, 255, 0.05) 1.5px, transparent 1.5px);
+  background-size: 100% 100%, 32px 32px;
+}
+
+/* Desk Leather Blotter Pad */
+.desk-blotter {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.85) 0%, rgba(15, 23, 42, 0.95) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.6), 0 12px 30px -8px rgba(0, 0, 0, 0.7);
+}
+
+/* Modern Web Guidance Drag Handles */
+.drag-handle {
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.drag-handle:active,
+.drag-handle.dragging {
+  cursor: grabbing;
 }

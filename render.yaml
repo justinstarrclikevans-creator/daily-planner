@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: todo-companion-desk
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: render-webapp
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        value: https://huwattmqwiqhcfhtqely.supabase.co
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        value: sb_secret_21i-I_QCc5xA_dPeVQPKsg_iV7ZzjQm
+      - key: NODE_VERSION
+        value: 20.18.0
