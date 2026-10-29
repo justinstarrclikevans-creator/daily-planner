@@ -1,0 +1,8 @@
+{
+  "name": "daily-planner-root",
+  "private": true,
+  "scripts": {
+    "build": "cd render-webapp && npm install && npm run build",
+    "start": "cd render-webapp && npm start"
+  }
+}
