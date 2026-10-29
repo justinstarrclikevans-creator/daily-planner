@@ -229,13 +229,13 @@ struct TactileIndexCardView: View {
             }
             .opacity(min(1.0, Double(-dragOffset.height) / Double(actionThreshold)))
         } else if dragOffset.width < -40 {
-            // Swiping Left: Defer to Tomorrow
+            // Swiping Left: Defer to Later
             HStack {
                 Spacer()
                 VStack(spacing: 6) {
-                    Image(systemName: "moon.fill")
+                    Image(systemName: "clock.arrow.circlepath")
                         .font(.title2)
-                    Text("TOMORROW")
+                    Text("LATER")
                         .font(.caption)
                         .fontWeight(.black)
                 }

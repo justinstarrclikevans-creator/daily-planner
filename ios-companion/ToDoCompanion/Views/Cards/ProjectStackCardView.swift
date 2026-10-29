@@ -42,7 +42,7 @@ struct ProjectStackCardView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     // Top Color Accent Bar
                     Rectangle()
-                        .fill(project.swiftUIColor)
+                        .fill(project.safeAccentColor)
                         .frame(height: 5)
                     
                     VStack(alignment: .leading, spacing: 12) {
@@ -50,12 +50,12 @@ struct ProjectStackCardView: View {
                         HStack(alignment: .center, spacing: 10) {
                             ZStack {
                                 Circle()
-                                    .fill(project.swiftUIColor.opacity(0.15))
+                                    .fill(project.safeAccentColor.opacity(0.15))
                                     .frame(width: 38, height: 38)
                                 
                                 Image(systemName: project.icon)
                                     .font(.system(size: 16, weight: .bold))
-                                    .foregroundColor(project.swiftUIColor)
+                                    .foregroundColor(project.safeAccentColor)
                             }
                             
                             VStack(alignment: .leading, spacing: 2) {
@@ -76,7 +76,7 @@ struct ProjectStackCardView: View {
                             VStack(alignment: .trailing, spacing: 2) {
                                 Text("\(activeTasks.count)")
                                     .font(.system(size: 20, weight: .black, design: .rounded))
-                                    .foregroundColor(activeTasks.isEmpty ? .secondary : project.swiftUIColor)
+                                    .foregroundColor(activeTasks.isEmpty ? .secondary : project.safeAccentColor)
                                 Text(activeTasks.count == 1 ? "CARD" : "CARDS")
                                     .font(.system(size: 9, weight: .black))
                                     .tracking(0.5)
@@ -97,7 +97,7 @@ struct ProjectStackCardView: View {
                                 HStack {
                                     Text("TOP CARD")
                                         .font(.system(size: 9, weight: .heavy))
-                                        .foregroundColor(project.swiftUIColor)
+                                        .foregroundColor(project.safeAccentColor)
                                         .tracking(0.5)
                                     
                                     Spacer()

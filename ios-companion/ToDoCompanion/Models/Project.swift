@@ -131,6 +131,24 @@ struct Project: Identifiable, Codable, Hashable {
         Color(hex: color)
     }
     
+    var safeAccentColor: Color {
+        let hexClean = color.trimmingCharacters(in: CharacterSet.alphanumerics.inverted).lowercased()
+        if hexClean == "ffffff" || hexClean == "fff" || hexClean.isEmpty {
+            return Color.indigo
+        }
+        var int: UInt64 = 0
+        if Scanner(string: hexClean).scanHexInt64(&int), hexClean.count == 6 {
+            let r = Double((int >> 16) & 0xFF) / 255.0
+            let g = Double((int >> 8) & 0xFF) / 255.0
+            let b = Double(int & 0xFF) / 255.0
+            let luminance = 0.299 * r + 0.587 * g + 0.114 * b
+            if luminance > 0.85 {
+                return Color.indigo
+            }
+        }
+        return swiftUIColor
+    }
+    
     var effectiveInstructions: String {
         if let saved = UserDefaults.standard.string(forKey: "project_instructions_\(id.uuidString)"), !saved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return saved

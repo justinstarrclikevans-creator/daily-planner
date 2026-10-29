@@ -472,13 +472,18 @@ class SupabaseService: ObservableObject {
         await updateTask(copy)
     }
     
-    func bumpTaskToTomorrow(task: TaskItem) async {
+    func deferTaskToLater(task: TaskItem) async {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         var copy = tasks[index]
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())
-        copy.dueDate = tomorrow
-        // Keep in play queue or softly defer based on user routine
+        let calendar = Calendar.current
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: Date())) ?? Date().addingTimeInterval(86400)
+        let tomorrowNineAM = calendar.date(bySettingHour: 9, minute: 0, second: 0, of: tomorrow) ?? tomorrow
+        copy.dueDate = tomorrowNineAM
         await updateTask(copy)
+    }
+    
+    func bumpTaskToTomorrow(task: TaskItem) async {
+        await deferTaskToLater(task: task)
     }
     
     // MARK: - "Do it again" (Repeatable Tasks & Subtasks)

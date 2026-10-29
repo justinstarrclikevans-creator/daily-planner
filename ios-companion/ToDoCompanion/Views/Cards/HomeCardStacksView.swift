@@ -25,6 +25,8 @@ struct HomeCardStacksView: View {
     
     private func tasksForProject(_ project: Project) -> [TaskItem] {
         supabase.tasks.filter { task in
+            guard !task.isCompleted else { return false }
+            guard !task.isScheduledForFuture else { return false }
             if let pid = task.projectId {
                 return pid == project.id
             }
@@ -34,7 +36,7 @@ struct HomeCardStacksView: View {
     
     private var totalActiveCardsToday: Int {
         visibleProjects.reduce(0) { total, proj in
-            total + tasksForProject(proj).filter { !$0.isCompleted }.count
+            total + tasksForProject(proj).count
         }
     }
     
@@ -59,18 +61,9 @@ struct HomeCardStacksView: View {
                 .padding(.vertical, 12)
             }
             .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle("Card Stacks")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "square.stack.3d.up.fill")
-                            .foregroundColor(.indigo)
-                        Text("Card Stacks")
-                            .font(.headline)
-                            .fontWeight(.black)
-                    }
-                }
-                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 12) {
                         Button {

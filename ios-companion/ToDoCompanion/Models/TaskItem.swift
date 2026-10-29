@@ -82,6 +82,14 @@ struct TaskItem: Identifiable, Codable, Hashable {
         set { status = newValue ? "completed" : "pending" }
     }
     
+    var isScheduledForFuture: Bool {
+        guard let due = dueDate else { return false }
+        let calendar = Calendar.current
+        let startOfToday = calendar.startOfDay(for: Date())
+        let startOfDueDate = calendar.startOfDay(for: due)
+        return startOfDueDate > startOfToday
+    }
+    
     enum CodingKeys: String, CodingKey {
         case id
         case projectId = "project_id"

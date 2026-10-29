@@ -10,10 +10,15 @@ struct ProjectDeckView: View {
     @State private var isAnimatingAction: Bool = false
     @State private var activeFocusTask: TaskItem? = nil
     @State private var showCelebration: Bool = false
+    @State private var deferredTaskIds: Set<UUID> = []
+    @State private var completedTaskIds: Set<UUID> = []
     
     private var tasks: [TaskItem] {
         supabase.tasks.filter { task in
             guard !task.isCompleted else { return false }
+            guard !completedTaskIds.contains(task.id) else { return false }
+            guard !deferredTaskIds.contains(task.id) else { return false }
+            guard !task.isScheduledForFuture else { return false }
             if let pid = task.projectId {
                 return pid == project.id
             }
@@ -42,14 +47,16 @@ struct ProjectDeckView: View {
                     // Card Area
                     if let task = currentTask {
                         cardStack(task: task)
+                        
+                        Spacer(minLength: 8)
+                        
+                        // Bottom Navigation & Actions Bar (only when active cards exist)
+                        bottomActionBar
                     } else {
                         emptyDeckView
+                        
+                        Spacer(minLength: 16)
                     }
-                    
-                    Spacer(minLength: 8)
-                    
-                    // Bottom Navigation & Actions Bar
-                    bottomActionBar
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 12)
@@ -71,7 +78,7 @@ struct ProjectDeckView: View {
                 ToolbarItem(placement: .principal) {
                     HStack(spacing: 8) {
                         Circle()
-                            .fill(project.swiftUIColor)
+                            .fill(project.safeAccentColor)
                             .frame(width: 10, height: 10)
                         Text(project.name)
                             .font(.headline)
@@ -116,7 +123,7 @@ struct ProjectDeckView: View {
                 HStack(spacing: 4) {
                     ForEach(0..<min(8, tasks.count), id: \.self) { idx in
                         Circle()
-                            .fill(idx == currentIndex ? project.swiftUIColor : Color.secondary.opacity(0.3))
+                            .fill(idx == currentIndex ? project.safeAccentColor : Color.secondary.opacity(0.3))
                             .frame(width: idx == currentIndex ? 7 : 5, height: idx == currentIndex ? 7 : 5)
                     }
                 }
@@ -152,7 +159,7 @@ struct ProjectDeckView: View {
             // Top Interactive Card
             TactileIndexCardView(
                 task: task,
-                projectColor: project.swiftUIColor,
+                projectColor: project.safeAccentColor,
                 cardIndex: currentIndex,
                 totalCards: tasks.count,
                 dragOffset: dragOffset,
@@ -189,8 +196,8 @@ struct ProjectDeckView: View {
             // SWIPE UP: COMPLETE
             executeComplete()
         } else if w < -80 {
-            // SWIPE LEFT: DEFER TO TOMORROW
-            executeDeferTomorrow()
+            // SWIPE LEFT: DEFER TO LATER
+            executeDeferLater()
         } else if w > 80 {
             // SWIPE RIGHT: SPRINT
             executeStartSprint()
@@ -206,36 +213,44 @@ struct ProjectDeckView: View {
         guard let task = currentTask else { return }
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         
-        withAnimation(.easeOut(duration: 0.25)) {
+        withAnimation(.easeOut(duration: 0.22)) {
             self.dragOffset = CGSize(width: 0, height: -600)
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                self.completedTaskIds.insert(task.id)
+                self.dragOffset = .zero
+                let remainingCount = self.tasks.count - 1
+                if self.currentIndex >= remainingCount {
+                    self.currentIndex = max(0, remainingCount - 1)
+                }
+            }
             Task {
                 await supabase.markTaskCompleted(task: task)
-                self.dragOffset = .zero
-                if self.currentIndex >= self.tasks.count {
-                    self.currentIndex = max(0, self.tasks.count - 1)
-                }
             }
         }
     }
     
-    private func executeDeferTomorrow() {
+    private func executeDeferLater() {
         guard let task = currentTask else { return }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         
-        withAnimation(.easeOut(duration: 0.25)) {
+        withAnimation(.easeOut(duration: 0.22)) {
             self.dragOffset = CGSize(width: -600, height: 0)
         }
         
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            Task {
-                await supabase.bumpTaskToTomorrow(task: task)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                self.deferredTaskIds.insert(task.id)
                 self.dragOffset = .zero
-                if self.currentIndex >= self.tasks.count {
-                    self.currentIndex = max(0, self.tasks.count - 1)
+                let remainingCount = self.tasks.count - 1
+                if self.currentIndex >= remainingCount {
+                    self.currentIndex = max(0, remainingCount - 1)
                 }
+            }
+            Task {
+                await supabase.deferTaskToLater(task: task)
             }
         }
     }
@@ -260,14 +275,14 @@ struct ProjectDeckView: View {
     private var bottomActionBar: some View {
         VStack(spacing: 12) {
             HStack(spacing: 16) {
-                // Defer to Tomorrow Button (Swipe Left equivalent)
+                // Later Button (Swipe Left equivalent)
                 Button {
-                    executeDeferTomorrow()
+                    executeDeferLater()
                 } label: {
                     VStack(spacing: 4) {
-                        Image(systemName: "moon.fill")
-                            .font(.system(size: 16))
-                        Text("Tomorrow")
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 16, weight: .semibold))
+                        Text("Later")
                             .font(.system(size: 10, weight: .bold))
                     }
                     .frame(maxWidth: .infinity)
@@ -277,8 +292,9 @@ struct ProjectDeckView: View {
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 4, y: 2)
                 }
+                .buttonStyle(.plain)
                 
-                // Complete Button (Swipe Up equivalent)
+                // Done Button (Swipe Up equivalent)
                 Button {
                     executeComplete()
                 } label: {
@@ -295,6 +311,7 @@ struct ProjectDeckView: View {
                     .cornerRadius(12)
                     .shadow(color: Color.green.opacity(0.25), radius: 6, y: 3)
                 }
+                .buttonStyle(.plain)
                 
                 // Focus Sprint Button (Swipe Right equivalent)
                 Button {
@@ -309,10 +326,11 @@ struct ProjectDeckView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                     .background(Color(.secondarySystemGroupedBackground))
-                    .foregroundColor(project.swiftUIColor)
+                    .foregroundColor(project.safeAccentColor)
                     .cornerRadius(12)
                     .shadow(color: Color.black.opacity(0.04), radius: 4, y: 2)
                 }
+                .buttonStyle(.plain)
             }
             
             // Previous & Next navigation controls
@@ -358,46 +376,59 @@ struct ProjectDeckView: View {
     
     // MARK: - Empty Deck View
     private var emptyDeckView: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 20) {
             ZStack {
                 Circle()
-                    .fill(project.swiftUIColor.opacity(0.12))
-                    .frame(width: 80, height: 80)
+                    .fill(project.safeAccentColor.opacity(0.12))
+                    .frame(width: 88, height: 88)
                 
                 Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 40))
-                    .foregroundColor(project.swiftUIColor)
+                    .font(.system(size: 46))
+                    .foregroundColor(project.safeAccentColor)
             }
+            .padding(.top, 12)
             
-            Text("Deck Cleared!")
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            Text("You've finished all active cards in \(project.name). Tap below to head back to your stacks.")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 24)
+            VStack(spacing: 6) {
+                Text("Deck Cleared!")
+                    .font(.title2)
+                    .fontWeight(.black)
+                    .foregroundColor(.primary)
+                
+                Text("You've finished or deferred all active cards in \(project.name).")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+            }
             
             Button {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 dismiss()
             } label: {
-                Text("Back to Stacks")
-                    .font(.headline)
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
-                    .background(project.swiftUIColor)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
+                HStack(spacing: 8) {
+                    Image(systemName: "square.stack.3d.up.fill")
+                        .font(.subheadline)
+                    Text("Back to Card Stacks")
+                        .font(.headline)
+                        .fontWeight(.bold)
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(project.safeAccentColor)
+                )
+                .shadow(color: project.safeAccentColor.opacity(0.3), radius: 8, x: 0, y: 4)
             }
-            .padding(.top, 8)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
         }
-        .frame(minHeight: 340)
         .frame(maxWidth: .infinity)
-        .padding(24)
+        .padding(28)
         .background(Color(UIColor.secondarySystemGroupedBackground))
-        .cornerRadius(16)
-        .shadow(color: Color.black.opacity(0.04), radius: 8, y: 4)
+        .cornerRadius(20)
+        .shadow(color: Color.black.opacity(0.04), radius: 10, y: 4)
     }
 }
