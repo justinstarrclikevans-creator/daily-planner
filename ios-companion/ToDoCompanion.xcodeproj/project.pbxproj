@@ -36,6 +36,10 @@
 		22220000000000000000001A /* Views/Projects/CreateProjectSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000001A /* Views/Projects/CreateProjectSheetView.swift */; };
 		22220000000000000000001B /* Views/Tasks/SingleStepFocusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000001B /* Views/Tasks/SingleStepFocusView.swift */; };
 		22220000000000000000001C /* Views/Routines/CreateWorkflowFromAudioSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000001C /* Views/Routines/CreateWorkflowFromAudioSheetView.swift */; };
+		22220000000000000000001D /* Views/Cards/TactileIndexCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000001D /* Views/Cards/TactileIndexCardView.swift */; };
+		22220000000000000000001E /* Views/Cards/ProjectDeckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000001E /* Views/Cards/ProjectDeckView.swift */; };
+		22220000000000000000001F /* Views/Cards/ProjectStackCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000001F /* Views/Cards/ProjectStackCardView.swift */; };
+		222200000000000000000020 /* Views/Cards/HomeCardStacksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000020 /* Views/Cards/HomeCardStacksView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -68,6 +72,10 @@
 		11110000000000000000001A /* Views/Projects/CreateProjectSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Projects/CreateProjectSheetView.swift; sourceTree = "<group>"; };
 		11110000000000000000001B /* Views/Tasks/SingleStepFocusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/SingleStepFocusView.swift; sourceTree = "<group>"; };
 		11110000000000000000001C /* Views/Routines/CreateWorkflowFromAudioSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Routines/CreateWorkflowFromAudioSheetView.swift; sourceTree = "<group>"; };
+		11110000000000000000001D /* Views/Cards/TactileIndexCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Cards/TactileIndexCardView.swift; sourceTree = "<group>"; };
+		11110000000000000000001E /* Views/Cards/ProjectDeckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Cards/ProjectDeckView.swift; sourceTree = "<group>"; };
+		11110000000000000000001F /* Views/Cards/ProjectStackCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Cards/ProjectStackCardView.swift; sourceTree = "<group>"; };
+		111100000000000000000020 /* Views/Cards/HomeCardStacksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Cards/HomeCardStacksView.swift; sourceTree = "<group>"; };
 		1111000000000000000003E7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		333300000000000000000001 /* ToDoCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ToDoCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -124,6 +132,10 @@
 				11110000000000000000001A /* Views/Projects/CreateProjectSheetView.swift */,
 				11110000000000000000001B /* Views/Tasks/SingleStepFocusView.swift */,
 				11110000000000000000001C /* Views/Routines/CreateWorkflowFromAudioSheetView.swift */,
+				11110000000000000000001D /* Views/Cards/TactileIndexCardView.swift */,
+				11110000000000000000001E /* Views/Cards/ProjectDeckView.swift */,
+				11110000000000000000001F /* Views/Cards/ProjectStackCardView.swift */,
+				111100000000000000000020 /* Views/Cards/HomeCardStacksView.swift */,
 			);
 			path = ToDoCompanion;
 			sourceTree = "<group>";
@@ -233,6 +245,10 @@
 				22220000000000000000001A /* Views/Projects/CreateProjectSheetView.swift in Sources */,
 				22220000000000000000001B /* Views/Tasks/SingleStepFocusView.swift in Sources */,
 				22220000000000000000001C /* Views/Routines/CreateWorkflowFromAudioSheetView.swift in Sources */,
+				22220000000000000000001D /* Views/Cards/TactileIndexCardView.swift in Sources */,
+				22220000000000000000001E /* Views/Cards/ProjectDeckView.swift in Sources */,
+				22220000000000000000001F /* Views/Cards/ProjectStackCardView.swift in Sources */,
+				222200000000000000000020 /* Views/Cards/HomeCardStacksView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

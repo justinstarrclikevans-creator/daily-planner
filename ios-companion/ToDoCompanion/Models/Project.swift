@@ -3,7 +3,8 @@ import SwiftUI
 
 enum ProjectScheduleRule: String, Codable, CaseIterable, Identifiable {
     case always = "Always Visible"
-    case customHours = "Custom Hours"
+    case customDays = "Specific Days"
+    case customHours = "Custom Days & Hours"
     case workHours = "Work Hours (Mon–Fri 8am–5pm)"
     case offHours = "Off Hours (Evenings & Weekends)"
     case weekendsOnly = "Weekends Only"
@@ -14,6 +15,7 @@ enum ProjectScheduleRule: String, Codable, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .always: return "clock"
+        case .customDays: return "calendar.badge.clock"
         case .customHours: return "clock.badge.checkmark.fill"
         case .workHours: return "briefcase.fill"
         case .offHours: return "moon.stars.fill"
@@ -40,6 +42,8 @@ enum ProjectScheduleRule: String, Codable, CaseIterable, Identifiable {
         switch rule {
         case .always:
             return true
+        case .customDays:
+            return activeDays.contains(weekday)
         case .customHours:
             guard activeDays.contains(weekday) else { return false }
             if startMinutes == endMinutes {
@@ -179,6 +183,9 @@ struct Project: Identifiable, Codable, Hashable {
         switch effectiveScheduleRule {
         case .always:
             return "Always Visible"
+        case .customDays:
+            let daysStr = Self.formatDays(effectiveCustomActiveDays)
+            return "\(daysStr) (All Day)"
         case .customHours:
             let startStr = Self.formatMinutes(effectiveCustomStartMinutes)
             let endStr = Self.formatMinutes(effectiveCustomEndMinutes)
@@ -193,6 +200,10 @@ struct Project: Identifiable, Codable, Hashable {
         case .weekdaysOnly:
             return "Weekdays Only"
         }
+    }
+    
+    func setCustomActiveDays(_ days: Set<Int>) {
+        UserDefaults.standard.set(Array(days), forKey: "project_custom_days_\(id.uuidString)")
     }
     
     static func formatMinutes(_ minutesFromMidnight: Int) -> String {

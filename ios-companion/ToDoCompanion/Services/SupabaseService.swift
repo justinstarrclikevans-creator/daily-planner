@@ -390,6 +390,25 @@ class SupabaseService: ObservableObject {
         await updateTask(updated)
     }
     
+    func toggleSubtask(task: TaskItem, subtaskId: UUID) async {
+        guard let taskIndex = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var current = tasks[taskIndex]
+        guard let subIndex = current.subtasks.firstIndex(where: { $0.id == subtaskId }) else { return }
+        current.subtasks[subIndex].isCompleted.toggle()
+        
+        let newDesc = TaskItem.buildDescription(
+            cleanNotes: current.cleanDescription,
+            estimatedMinutes: current.estimatedMinutes,
+            inPlayQueue: current.inPlayQueue,
+            firstFiveMinutes: current.firstFiveMinutesPrompt,
+            subtasks: current.subtasks
+        )
+        current.description = newDesc
+        tasks[taskIndex] = current
+        persistLocalTasks()
+        await updateTask(current)
+    }
+    
     func toggleTaskCompletion(task: TaskItem) async {
         guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
         tasks[index].isCompleted.toggle()

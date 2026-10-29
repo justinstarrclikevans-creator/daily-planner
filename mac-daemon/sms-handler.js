@@ -32,7 +32,11 @@ function isWithinAllowedTextWindow() {
     return hour >= 8 && hour < 21;
 }
 
+// Outbound text messages paused per user request ("I also need the text messages and push notifications to stop for now at least.")
+const SMS_NOTIFICATIONS_ENABLED = process.env.ENABLE_SMS_NOTIFICATIONS === 'true';
+
 async function checkUpcomingMeetings() {
+    if (!SMS_NOTIFICATIONS_ENABLED) return;
     if (!isWithinAllowedTextWindow()) return;
     const state = loadState();
     state.alertedMeetings = state.alertedMeetings || [];
@@ -72,6 +76,7 @@ async function checkUpcomingMeetings() {
 }
 
 async function triggerStalePurgeOffer() {
+    if (!SMS_NOTIFICATIONS_ENABLED) return;
     if (!isWithinAllowedTextWindow()) return;
     console.log("[Stale Purge] Evaluating tasks for stale purge...");
     try {
@@ -112,6 +117,7 @@ const ANGRY_NO_COMPLETION_QUOTES = [
 ];
 
 async function checkAggressiveMotivationNudges() {
+    if (!SMS_NOTIFICATIONS_ENABLED) return;
     const state = loadState();
     const myPhone = process.env.MY_PHONE_NUMBER;
     if (!myPhone) return;

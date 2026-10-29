@@ -6,6 +6,16 @@ class NotificationService: NSObject, ObservableObject {
     
     @Published var isAuthorized: Bool = false
     
+    // Notifications paused per user request ("I also need the text messages and push notifications to stop for now at least.")
+    @Published var notificationsEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(notificationsEnabled, forKey: "notifications_enabled")
+            if !notificationsEnabled {
+                cancelAllNotifications()
+            }
+        }
+    }
+    
     private let halfwayId = "focus_timer_halfway"
     private let completeId = "focus_timer_complete"
     private let appInactive1HrId = "angry_app_inactive_1hr"
@@ -13,8 +23,17 @@ class NotificationService: NSObject, ObservableObject {
     private let taskInactive1HrId = "angry_task_inactive_1hr"
     
     private override init() {
+        self.notificationsEnabled = UserDefaults.standard.bool(forKey: "notifications_enabled")
         super.init()
         checkAuthorization()
+        if !notificationsEnabled {
+            cancelAllNotifications()
+        }
+    }
+    
+    func cancelAllNotifications() {
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
+        UNUserNotificationCenter.current().removeAllDeliveredNotifications()
     }
     
     func checkAuthorization() {
@@ -39,7 +58,7 @@ class NotificationService: NSObject, ObservableObject {
     /// Schedules Tiimo-style multi-stage notifications: Halfway alert + Completion alert
     func scheduleFocusTimerNotifications(taskTitle: String, totalSeconds: Int) {
         cancelFocusNotifications()
-        
+        guard notificationsEnabled else { return }
         guard totalSeconds >= 60 else { return }
         
         let center = UNUserNotificationCenter.current()
@@ -90,6 +109,7 @@ class NotificationService: NSObject, ObservableObject {
     func scheduleOneHourAppInactivityAngryNotification() {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [appInactive1HrId, appInactive2HrId])
+        guard notificationsEnabled else { return }
         
         let fireDate1 = Date().addingTimeInterval(3600)
         if isWithinAllowedAlertHours(at: fireDate1) {
@@ -120,6 +140,7 @@ class NotificationService: NSObject, ObservableObject {
     func resetTaskCompletionInactivityTimer() {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [taskInactive1HrId])
+        guard notificationsEnabled else { return }
         
         let fireDate = Date().addingTimeInterval(3600)
         guard isWithinAllowedAlertHours(at: fireDate) else { return }

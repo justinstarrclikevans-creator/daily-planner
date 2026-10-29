@@ -207,9 +207,9 @@ async function runHourlySync() {
         // Sync open Apple Reminders to cloud if configured
         await syncAllRemindersToCloud();
 
-        // Check meeting context & motivation criteria
-        await checkUpcomingMeetings();
-        await checkAggressiveMotivationNudges();
+        // Check meeting context & motivation criteria (paused per user request)
+        // await checkUpcomingMeetings();
+        // await checkAggressiveMotivationNudges();
 
         console.log(`[${new Date().toLocaleString()}] Hourly Sync cycle completed.`);
     } catch (e) {
@@ -231,15 +231,13 @@ async function syncAllRemindersToCloud() {
 // Check everything once an hour at the top of every hour
 cron.schedule('0 * * * *', () => runHourlySync());
 
-// Also check motivation criteria (1-hour app unopened / no tasks completed) every 15 minutes
-cron.schedule('*/15 * * * *', () => checkAggressiveMotivationNudges());
-
-// Friday 4:00 PM Stale Task notification
-cron.schedule('0 16 * * 5', triggerStalePurgeOffer);
+// Nudges and stale purge offer paused per user request
+// cron.schedule('*/15 * * * *', () => checkAggressiveMotivationNudges());
+// cron.schedule('0 16 * * 5', triggerStalePurgeOffer);
 
 console.log("Sync daemon started (v2 Hourly Architecture).");
 console.log("- Checking Emails (fallback: General), Slack & Huddle Summaries (target: Turn90), and Letterly MCP once an hour");
-console.log("- Inbound iMessage checking disabled; outbound angry motivation messages enabled (1h unopened / no completions)");
+console.log("- Inbound and outbound iMessage texts paused per user request");
 
 module.exports = {
     runHourlySync

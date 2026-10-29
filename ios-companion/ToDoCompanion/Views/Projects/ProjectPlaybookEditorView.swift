@@ -48,7 +48,7 @@ struct ProjectPlaybookEditorView: View {
                 
                 Section(
                     header: Text("Visibility Schedule"),
-                    footer: Text("Hide this project and its related tasks outside its scheduled hours (e.g. set custom hours for Turn90, 843FC, Nosa, or Book work).")
+                    footer: Text("Hide this project and its related cards on days or hours when you don't want to see them (e.g. only active Mon–Wed, or during work hours).")
                 ) {
                     Picker("Active Hours", selection: $selectedSchedule) {
                         ForEach(ProjectScheduleRule.allCases) { rule in
@@ -56,18 +56,20 @@ struct ProjectPlaybookEditorView: View {
                         }
                     }
                     
-                    if selectedSchedule == .customHours {
-                        DatePicker(
-                            "Start Time",
-                            selection: $customStartTime,
-                            displayedComponents: .hourAndMinute
-                        )
-                        
-                        DatePicker(
-                            "End Time",
-                            selection: $customEndTime,
-                            displayedComponents: .hourAndMinute
-                        )
+                    if selectedSchedule == .customDays || selectedSchedule == .customHours {
+                        if selectedSchedule == .customHours {
+                            DatePicker(
+                                "Start Time",
+                                selection: $customStartTime,
+                                displayedComponents: .hourAndMinute
+                            )
+                            
+                            DatePicker(
+                                "End Time",
+                                selection: $customEndTime,
+                                displayedComponents: .hourAndMinute
+                            )
+                        }
                         
                         VStack(alignment: .leading, spacing: 10) {
                             HStack {
