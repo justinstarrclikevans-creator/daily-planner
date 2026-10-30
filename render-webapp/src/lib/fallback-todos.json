@@ -510,5 +510,13 @@
     "priority": "high",
     "dueDate": null,
     "appleReminderId": "D2439BC6-BF76-4F85-8C1E-C5CCD59BDAD1"
+  },
+  {
+    "title": "Pull job placement percentage data comparing all three centers for future analysis",
+    "notes": "[⏱ 20m]",
+    "listName": "Turn90",
+    "priority": "medium",
+    "dueDate": null,
+    "appleReminderId": "EF20767E-6BFC-4A47-86C7-76AA4FF8BD71"
   }
 ]

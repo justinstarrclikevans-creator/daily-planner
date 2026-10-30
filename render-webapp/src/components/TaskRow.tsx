@@ -43,8 +43,20 @@ export const TaskRow: React.FC<TaskRowProps> = ({
   const [showSubtasks, setShowSubtasks] = useState(false);
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   const [showDurationMenu, setShowDurationMenu] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   const durationPresets = [5, 10, 15, 25, 30, 45, 60, 90];
+
+  const handleComplete = () => {
+    if (isCompleting) return;
+    setIsCompleting(true);
+    // Slow down for 550ms so user experiences the satisfying completion feedback
+    setTimeout(() => {
+      onToggleComplete(task.id);
+    }, 550);
+  };
+
+  const isVisuallyDone = isCompleting || task.status === 'completed';
 
   const completedSubs = task.subtasks ? task.subtasks.filter((s) => s.isCompleted).length : 0;
   const totalSubs = task.subtasks ? task.subtasks.length : 0;
@@ -68,21 +80,41 @@ export const TaskRow: React.FC<TaskRowProps> = ({
   }[task.priority || 'medium'];
 
   return (
-    <div className="group bg-slate-900/80 hover:bg-slate-900 border border-slate-800/80 hover:border-slate-700/80 rounded-2xl p-3.5 transition-all shadow-sm">
+    <div
+      className={`group border rounded-2xl p-3.5 transition-all duration-300 shadow-sm ${
+        isCompleting
+          ? 'bg-emerald-950/20 border-emerald-500/40 opacity-70 scale-[0.99] translate-x-1'
+          : 'bg-slate-900/80 hover:bg-slate-900 border-slate-800/80 hover:border-slate-700/80'
+      }`}
+    >
       <div className="flex items-center gap-3">
-        {/* Completion Checkbox */}
+        {/* Completion Checkbox with animation */}
         <button
           type="button"
-          onClick={() => onToggleComplete(task.id)}
-          className="h-5 w-5 rounded-lg border border-slate-600 hover:border-indigo-400 flex items-center justify-center text-transparent hover:text-slate-400 transition-colors shrink-0"
+          onClick={handleComplete}
+          disabled={isCompleting}
+          aria-label={isVisuallyDone ? 'Mark task incomplete' : 'Mark task complete'}
+          className={`h-5 w-5 rounded-lg border flex items-center justify-center transition-all duration-300 shrink-0 ${
+            isVisuallyDone
+              ? 'bg-emerald-500 border-emerald-400 text-white scale-110 shadow-sm shadow-emerald-500/50'
+              : 'border-slate-600 hover:border-emerald-400 text-transparent hover:text-slate-400'
+          }`}
         >
-          <Check className="h-3.5 w-3.5" />
+          <Check className={`h-3.5 w-3.5 transition-transform duration-200 ${isCompleting ? 'scale-110 stroke-[3]' : ''}`} />
         </button>
 
         {/* Task Title & Project Tag */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 transition-opacity duration-300">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-slate-100 truncate">{task.title}</span>
+            <span
+              className={`text-xs font-semibold truncate transition-all duration-300 ${
+                isVisuallyDone
+                  ? 'line-through text-slate-500 opacity-60'
+                  : 'text-slate-100'
+              }`}
+            >
+              {task.title}
+            </span>
             {showProjectBadge && project && (
               <span
                 className="text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0"

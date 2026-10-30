@@ -7,13 +7,30 @@ struct TaskRowView: View {
     
     @ObservedObject private var supabase = SupabaseService.shared
     
+    @State private var isCompleting: Bool = false
+    @State private var checkmarkScale: CGFloat = 1.0
+    
+    private var isVisuallyDone: Bool {
+        task.isCompleted || isCompleting
+    }
+    
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            // Checkbox
-            Button(action: onToggle) {
-                Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundColor(task.isCompleted ? .green : .secondary)
+            // Checkbox with satisfying animated completion
+            Button(action: handleToggle) {
+                ZStack {
+                    Image(systemName: isVisuallyDone ? "checkmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundColor(isVisuallyDone ? .green : .secondary)
+                        .scaleEffect(checkmarkScale)
+                    
+                    if isCompleting {
+                        Circle()
+                            .stroke(Color.green.opacity(0.35), lineWidth: 2)
+                            .frame(width: 26, height: 26)
+                            .scaleEffect(checkmarkScale * 1.15)
+                    }
+                }
             }
             .buttonStyle(.borderless)
             .padding(.top, 2)
@@ -25,8 +42,9 @@ struct TaskRowView: View {
                     Text(task.title)
                         .font(.subheadline)
                         .fontWeight(.medium)
-                        .strikethrough(task.isCompleted)
-                        .foregroundColor(task.isCompleted ? .secondary : .primary)
+                        .strikethrough(isVisuallyDone)
+                        .foregroundColor(isVisuallyDone ? .secondary : .primary)
+                        .animation(.easeInOut(duration: 0.2), value: isVisuallyDone)
                     
                     Spacer()
                     
@@ -208,6 +226,37 @@ struct TaskRowView: View {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             } label: {
                 Label("Save to 'Processes'", systemImage: "arrow.triangle.2.circlepath.circle")
+            }
+        }
+        .padding(.vertical, 2)
+        .background(isCompleting ? Color.green.opacity(0.1) : Color.clear)
+        .opacity(isCompleting ? 0.75 : 1.0)
+        .animation(.easeInOut(duration: 0.25), value: isCompleting)
+    }
+    
+    private func handleToggle() {
+        if task.isCompleted {
+            onToggle()
+            return
+        }
+        guard !isCompleting else { return }
+        
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+            isCompleting = true
+            checkmarkScale = 1.35
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
+                checkmarkScale = 1.0
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                onToggle()
             }
         }
     }

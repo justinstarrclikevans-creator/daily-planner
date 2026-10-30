@@ -8,21 +8,33 @@ struct TaskItemRowView: View {
     var onStartSprint: () -> Void
     
     @State private var isExpanded: Bool = false
+    @State private var isCompleting: Bool = false
+    @State private var checkmarkScale: CGFloat = 1.0
+    
+    private var isVisuallyDone: Bool {
+        task.isCompleted || isCompleting
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center, spacing: 12) {
-                // Checkbox
+                // Checkbox with satisfying animated completion
                 Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        Task {
-                            await supabase.toggleTaskCompletion(task: task)
+                    handleTapCheckbox()
+                } label: {
+                    ZStack {
+                        Image(systemName: isVisuallyDone ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundColor(isVisuallyDone ? .green : .secondary)
+                            .scaleEffect(checkmarkScale)
+                        
+                        if isCompleting {
+                            Circle()
+                                .stroke(Color.green.opacity(0.35), lineWidth: 2)
+                                .frame(width: 26, height: 26)
+                                .scaleEffect(checkmarkScale * 1.15)
                         }
                     }
-                } label: {
-                    Image(systemName: task.isCompleted ? "checkmark.circle.fill" : "circle")
-                        .font(.title3)
-                        .foregroundColor(task.isCompleted ? .green : .secondary)
                 }
                 .buttonStyle(.plain)
                 
@@ -30,9 +42,10 @@ struct TaskItemRowView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(task.title)
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(task.isCompleted ? .secondary : .primary)
-                        .strikethrough(task.isCompleted)
+                        .foregroundColor(isVisuallyDone ? .secondary : .primary)
+                        .strikethrough(isVisuallyDone)
                         .lineLimit(2)
+                        .animation(.easeInOut(duration: 0.2), value: isVisuallyDone)
                     
                     HStack(spacing: 6) {
                         Text(task.listName)
@@ -154,11 +167,17 @@ struct TaskItemRowView: View {
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 14)
-        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .background(
+            isCompleting
+                ? Color.green.opacity(0.12)
+                : Color(UIColor.secondarySystemGroupedBackground)
+        )
+        .opacity(isCompleting ? 0.75 : 1.0)
         .cornerRadius(14)
+        .animation(.easeInOut(duration: 0.25), value: isCompleting)
         .swipeActions(edge: .leading) {
             Button {
-                Task { await supabase.toggleTaskCompletion(task: task) }
+                handleTapCheckbox()
             } label: {
                 Label("Done", systemImage: "checkmark")
             }
@@ -189,6 +208,45 @@ struct TaskItemRowView: View {
                 Task { await supabase.deferTaskToLater(task: task) }
             } label: {
                 Label("Defer to Tomorrow", systemImage: "clock")
+            }
+        }
+    }
+    
+    private func handleTapCheckbox() {
+        if task.isCompleted {
+            Task {
+                await supabase.toggleTaskCompletion(task: task)
+            }
+        } else {
+            handleComplete()
+        }
+    }
+    
+    private func handleComplete() {
+        guard !isCompleting else { return }
+        
+        // 1. Haptic feedback
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        
+        // 2. Animate checkmark with spring bounce
+        withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
+            isCompleting = true
+            checkmarkScale = 1.35
+        }
+        
+        // 3. Spring scale back
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(.spring(response: 0.2, dampingFraction: 0.7)) {
+                checkmarkScale = 1.0
+            }
+        }
+        
+        // 4. Slow down! Hold completed visual state for 550ms so user sees the checkmark
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.55) {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                Task {
+                    await supabase.toggleTaskCompletion(task: task)
+                }
             }
         }
     }
