@@ -4,20 +4,20 @@ struct ProjectsHubView: View {
     @ObservedObject private var supabase = SupabaseService.shared
     @State private var showVoiceSheet: Bool = false
     @State private var showSettings: Bool = false
-    @State private var showRoutineLibrary: Bool = false
+    @State private var showBuildMyDay: Bool = false
     @State private var showCreateProject: Bool = false
     @State private var suggestedProjectName: String? = nil
     @State private var showAllProjectsOverride: Bool = false
-    @State private var playDeckIndex: Int = 0
     @State private var selectedFilter: TaskFilter = .all
     @State private var activeFocusTask: TaskItem? = nil
     @State private var editingPlaybookProject: Project? = nil
+    @State private var taskForProjectConversion: TaskItem? = nil
     
     enum TaskFilter: String, CaseIterable, Identifiable {
         case all = "All"
-        case queue = "▶️ Play Queue"
-        case quickWins = "⚡ Quick Wins (≤10m)"
-        case deepFocus = "🎯 15–30m"
+        case high = "🔥 High Priority"
+        case quickWins = "⚡ Quick Hits (≤15m)"
+        case deepFocus = "🎯 Deep Work (>15m)"
         
         var id: String { rawValue }
     }
@@ -44,21 +44,17 @@ struct ProjectsHubView: View {
         supabase.projects.filter { !$0.isVisibleNow }.count
     }
     
-    private var queuedTasks: [TaskItem] {
-        supabase.tasks.filter { $0.inPlayQueue && !$0.isCompleted && isTaskVisibleNow($0) }
-    }
-    
     private var filteredTasks: [TaskItem] {
-        let pool = supabase.tasks.filter { isTaskVisibleNow($0) }
+        let pool = supabase.tasks.filter { isTaskVisibleNow($0) && !$0.isCompleted }
         switch selectedFilter {
         case .all:
-            return Array(pool.prefix(12))
-        case .queue:
-            return queuedTasks
+            return pool
+        case .high:
+            return pool.filter { $0.isHighPriority }
         case .quickWins:
-            return pool.filter { !$0.isCompleted && $0.estimatedMinutes <= 10 }
+            return pool.filter { $0.estimatedMinutes <= 15 }
         case .deepFocus:
-            return pool.filter { !$0.isCompleted && $0.estimatedMinutes >= 15 && $0.estimatedMinutes <= 30 }
+            return pool.filter { $0.estimatedMinutes > 15 }
         }
     }
     
@@ -66,17 +62,14 @@ struct ProjectsHubView: View {
         NavigationStack {
             ZStack(alignment: .bottomTrailing) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        // Header
+                    VStack(alignment: .leading, spacing: 22) {
+                        // Header with Greeting & Build My Day Hero
                         headerSection
-                        
-                        // Today's Play Queue Spotlight / Play Deck (Tiimo-Style)
-                        playQueueSpotlightSection
                         
                         // Active Projects Grid
                         projectsSection
                         
-                        // Filter Pills & Action Items
+                        // Action Items & Filters
                         recentTasksSection
                     }
                     .padding()
@@ -94,9 +87,28 @@ struct ProjectsHubView: View {
                 // Floating Voice Mic Button
                 floatingMicButton
             }
-            .navigationTitle("Projects Hub")
+            .navigationTitle("Projects")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        showBuildMyDay = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "bolt.fill")
+                                .foregroundColor(.yellow)
+                            Text("Build Day")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.indigo)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 14) {
                         Button {
@@ -105,22 +117,6 @@ struct ProjectsHubView: View {
                         } label: {
                             Image(systemName: "plus")
                                 .foregroundColor(.indigo)
-                        }
-                        
-                        Button {
-                            showRoutineLibrary = true
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                                Text("Processes")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                            }
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.indigo.opacity(0.12))
-                            .foregroundColor(.indigo)
-                            .cornerRadius(8)
                         }
                         
                         Button {
@@ -142,14 +138,14 @@ struct ProjectsHubView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showBuildMyDay) {
+                BuildMyDaySheet()
+            }
             .sheet(isPresented: $showVoiceSheet) {
                 VoiceSheetView()
             }
             .sheet(isPresented: $showSettings) {
                 SettingsView()
-            }
-            .sheet(isPresented: $showRoutineLibrary) {
-                RoutineLibrarySheetView()
             }
             .sheet(isPresented: $showCreateProject) {
                 CreateProjectSheetView(prefillName: suggestedProjectName ?? "")
@@ -160,25 +156,73 @@ struct ProjectsHubView: View {
             .sheet(item: $editingPlaybookProject) { project in
                 ProjectPlaybookEditorView(project: project)
             }
+            .sheet(item: $taskForProjectConversion) { task in
+                ConvertTaskToProjectSheet(task: task)
+            }
         }
     }
     
     // MARK: - Header
     private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(greetingText)
-                .font(.title2)
-                .fontWeight(.bold)
-            
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(AppConfig.isSupabaseConfigured ? Color.green : Color.orange)
-                    .frame(width: 8, height: 8)
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(greetingText)
+                    .font(.title2)
+                    .fontWeight(.bold)
                 
-                Text(AppConfig.isSupabaseConfigured ? "Live Sync Active" : "Local Mode (Add Supabase keys in Settings)")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(AppConfig.isSupabaseConfigured ? Color.green : Color.orange)
+                        .frame(width: 8, height: 8)
+                    
+                    Text(AppConfig.isSupabaseConfigured ? "Live Sync Active" : "Local Mode")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
+            
+            // Build My Day Hero Banner
+            Button {
+                showBuildMyDay = true
+            } label: {
+                HStack(spacing: 14) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.white.opacity(0.2))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "bolt.fill")
+                            .font(.title3)
+                            .foregroundColor(.yellow)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Build My Day")
+                            .font(.headline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                        Text("Auto-fit top priority tasks into your available time budget")
+                            .font(.caption2)
+                            .foregroundColor(.white.opacity(0.85))
+                    }
+                    
+                    Spacer()
+                    
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.bold))
+                        .foregroundColor(.white.opacity(0.75))
+                }
+                .padding(14)
+                .background(
+                    LinearGradient(
+                        colors: [Color.indigo, Color.purple],
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .cornerRadius(16)
+                .shadow(color: Color.indigo.opacity(0.3), radius: 8, x: 0, y: 4)
+            }
+            .buttonStyle(.plain)
         }
         .padding(.top, 4)
     }
@@ -189,180 +233,12 @@ struct ProjectsHubView: View {
         if hour < 17 { return "Good afternoon, Justin" }
         return "Good evening, Justin"
     }
-    
-    // MARK: - Today's Play Queue Deck (Tiimo-Style Anytime Flow)
-    private var playQueueSpotlightSection: some View {
-        Group {
-            if queuedTasks.isEmpty {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Label("Play Queue (Anytime Deck)", systemImage: "play.circle.fill")
-                            .font(.headline)
-                            .foregroundColor(.indigo)
-                        Spacer()
-                        Button {
-                            showRoutineLibrary = true
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrow.triangle.2.circlepath.circle.fill")
-                                Text("Processes")
-                            }
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Color.indigo.opacity(0.12))
-                            .foregroundColor(.indigo)
-                            .cornerRadius(8)
-                        }
-                    }
-                    Text("No tasks active in your Play Queue right now. Open 'Processes' above or tap +Queue on any task below to build momentum without calendar pressure.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(16)
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(16)
-            } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Label("Play Queue Deck", systemImage: "play.circle.fill")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        Spacer()
-                        
-                        let totalMins = queuedTasks.reduce(0) { $0 + $1.estimatedMinutes }
-                        Text("\(queuedTasks.count) items • \(totalMins)m total")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white.opacity(0.85))
-                    }
-                    
-                    let safeIndex = min(max(0, playDeckIndex), queuedTasks.count - 1)
-                    let current = queuedTasks[safeIndex]
-                    
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text("CARD \(safeIndex + 1) OF \(queuedTasks.count)")
-                                .font(.system(size: 10, weight: .black))
-                                .tracking(1)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.white.opacity(0.2))
-                                .foregroundColor(.white)
-                                .cornerRadius(4)
-                            
-                            Text(current.listName)
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white.opacity(0.8))
-                            
-                            Spacer()
-                            
-                            Text("⏱ \(current.estimatedMinutes)m estimated")
-                                .font(.caption2)
-                                .fontWeight(.bold)
-                                .foregroundColor(.white.opacity(0.9))
-                        }
-                        
-                        Text(current.title)
-                            .font(.title3)
-                            .fontWeight(.bold)
-                            .foregroundColor(.white)
-                        
-                        // Action Bar: Focus Sprint, Tomorrow deferral, Next, Done
-                        HStack(spacing: 8) {
-                            Button {
-                                activeFocusTask = current
-                            } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: "play.fill")
-                                    Text("Start 5m Sprint")
-                                }
-                                .font(.footnote)
-                                .fontWeight(.bold)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 9)
-                                .background(Color.white)
-                                .foregroundColor(.indigo)
-                                .cornerRadius(10)
-                            }
-                            
-                            Button {
-                                Task {
-                                    await supabase.bumpTaskToTomorrow(task: current)
-                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                }
-                            } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "moon.fill")
-                                    Text("Tomorrow")
-                                }
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 9)
-                                .background(Color.white.opacity(0.18))
-                                .foregroundColor(.white)
-                                .cornerRadius(10)
-                            }
-                            
-                            Spacer()
-                            
-                            if queuedTasks.count > 1 {
-                                Button {
-                                    withAnimation(.easeInOut(duration: 0.2)) {
-                                        playDeckIndex = (playDeckIndex + 1) % queuedTasks.count
-                                    }
-                                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                                } label: {
-                                    Image(systemName: "forward.fill")
-                                        .font(.caption)
-                                        .padding(9)
-                                        .background(Color.white.opacity(0.18))
-                                        .foregroundColor(.white)
-                                        .clipShape(Circle())
-                                }
-                            }
-                            
-                            Button {
-                                Task {
-                                    await supabase.toggleTaskCompletion(task: current)
-                                    UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                                }
-                            } label: {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.title2)
-                                    .foregroundColor(.white)
-                            }
-                        }
-                        .padding(.top, 4)
-                    }
-                    .padding(16)
-                    .background(Color.white.opacity(0.12))
-                    .cornerRadius(14)
-                }
-                .padding(16)
-                .background(
-                    LinearGradient(
-                        colors: [Color.indigo, Color.purple.opacity(0.85)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .cornerRadius(16)
-                .shadow(color: Color.indigo.opacity(0.25), radius: 8, x: 0, y: 4)
-            }
-        }
-    }
 
     // MARK: - Projects Section
     private var projectsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Active Focus Areas")
+                Text("Projects")
                     .font(.headline)
                     .foregroundColor(.primary)
                 
@@ -426,7 +302,7 @@ struct ProjectsHubView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
             } else {
-                LazyVStack(spacing: 14) {
+                LazyVStack(spacing: 12) {
                     ForEach(visibleProjects) { project in
                         NavigationLink(destination: ProjectDetailView(project: project)) {
                             ProjectCardView(
@@ -457,14 +333,14 @@ struct ProjectsHubView: View {
         }
     }
     
-    // MARK: - Recent Tasks Section
+    // MARK: - Action Items Section
     private var recentTasksSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("Action Items")
                     .font(.headline)
                 Spacer()
-                Text("\(supabase.tasks.filter { !$0.isCompleted }.count) open")
+                Text("\(filteredTasks.count) open")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
@@ -501,25 +377,19 @@ struct ProjectsHubView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 24)
             } else {
-                VStack(spacing: 8) {
+                LazyVStack(spacing: 10) {
                     ForEach(filteredTasks) { task in
-                        TaskRowView(
+                        TaskItemRowView(
                             task: task,
-                            onToggle: {
-                                Task {
-                                    await supabase.toggleTaskCompletion(task: task)
-                                }
+                            onConvertToProject: {
+                                taskForProjectConversion = task
                             },
-                            onFocus: {
-                                self.activeFocusTask = task
+                            onStartSprint: {
+                                activeFocusTask = task
                             }
                         )
-                        Divider()
                     }
                 }
-                .padding()
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(16)
             }
         }
     }

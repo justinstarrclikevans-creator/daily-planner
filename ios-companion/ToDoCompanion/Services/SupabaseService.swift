@@ -593,6 +593,40 @@ class SupabaseService: ObservableObject {
         persistLocalRoutines()
     }
     
+    func toggleRoutineStep(routineId: UUID, stepId: UUID) {
+        guard let rIdx = routines.firstIndex(where: { $0.id == routineId }) else { return }
+        if let sIdx = routines[rIdx].items.firstIndex(where: { $0.id == stepId }) {
+            routines[rIdx].items[sIdx].isCompleted.toggle()
+            let allDone = !routines[rIdx].items.isEmpty && routines[rIdx].items.allSatisfy { $0.isCompleted }
+            routines[rIdx].isCompleted = allDone
+            persistLocalRoutines()
+        }
+    }
+    
+    func resetRoutineSteps(routineId: UUID) {
+        guard let rIdx = routines.firstIndex(where: { $0.id == routineId }) else { return }
+        for i in 0..<routines[rIdx].items.count {
+            routines[rIdx].items[i].isCompleted = false
+        }
+        routines[rIdx].isCompleted = false
+        persistLocalRoutines()
+    }
+    
+    func toggleRoutineCompleted(routineId: UUID) {
+        guard let rIdx = routines.firstIndex(where: { $0.id == routineId }) else { return }
+        routines[rIdx].isCompleted.toggle()
+        if !routines[rIdx].isCompleted {
+            for i in 0..<routines[rIdx].items.count {
+                routines[rIdx].items[i].isCompleted = false
+            }
+        } else {
+            for i in 0..<routines[rIdx].items.count {
+                routines[rIdx].items[i].isCompleted = true
+            }
+        }
+        persistLocalRoutines()
+    }
+    
     func addDoItAgainToReminders(routine: Routine, projectName: String, scheduledDate: Date? = nil) async {
         let matchedProject = projects.first { p in
             p.name.caseInsensitiveCompare(projectName) == .orderedSame

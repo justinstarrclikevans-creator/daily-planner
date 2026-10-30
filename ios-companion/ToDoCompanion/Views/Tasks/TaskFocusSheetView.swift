@@ -117,17 +117,7 @@ struct TaskFocusSheetView: View {
                         dismiss()
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        togglePlayQueue()
-                    } label: {
-                        Label(
-                            task.inPlayQueue ? "In Queue" : "Add to Queue",
-                            systemImage: task.inPlayQueue ? "play.circle.fill" : "plus.circle"
-                        )
-                        .foregroundColor(task.inPlayQueue ? .indigo : .secondary)
-                    }
-                }
+
             }
             .onAppear {
                 setupInitialTimer()

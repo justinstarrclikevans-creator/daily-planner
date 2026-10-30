@@ -5,35 +5,17 @@ struct MainTabView: View {
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            ProjectWorkspaceView()
-                .tabItem {
-                    Label("Workspace", systemImage: "rectangle.grid.1x2.fill")
-                }
-                .tag(0)
-            
-            AssistantHomeView()
-                .tabItem {
-                    Label("Assistant", systemImage: "sparkles")
-                }
-                .tag(1)
-            
             ProjectsHubView()
                 .tabItem {
                     Label("Projects", systemImage: "folder.fill")
                 }
-                .tag(2)
+                .tag(0)
             
-            RoutineLibrarySheetView(isEmbeddedTab: true)
+            ProcessesView(isEmbeddedTab: true)
                 .tabItem {
                     Label("Processes", systemImage: "arrow.triangle.2.circlepath.circle.fill")
                 }
-                .tag(3)
-            
-            RemindersListView()
-                .tabItem {
-                    Label("Reminders", systemImage: "checklist")
-                }
-                .tag(4)
+                .tag(1)
         }
         .tint(.indigo)
     }

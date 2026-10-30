@@ -157,25 +157,7 @@ struct TaskRowView: View {
                     }
                     .buttonStyle(.borderless)
                     
-                    // Queue Pill / Toggle
-                    Button {
-                        Task {
-                            await supabase.togglePlayQueue(for: task)
-                        }
-                    } label: {
-                        HStack(spacing: 3) {
-                            Image(systemName: task.inPlayQueue ? "play.circle.fill" : "plus")
-                                .font(.system(size: 9))
-                            Text(task.inPlayQueue ? "Queue" : "+Queue")
-                                .font(.system(size: 10, weight: .semibold))
-                        }
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(task.inPlayQueue ? Color.indigo.opacity(0.18) : Color.secondary.opacity(0.08))
-                        .foregroundColor(task.inPlayQueue ? .indigo : .secondary)
-                        .cornerRadius(6)
-                    }
-                    .buttonStyle(.borderless)
+
                     
                     if let source = task.source as String?, source != "ios" {
                         Label(source.capitalized, systemImage: sourceIcon(for: source))

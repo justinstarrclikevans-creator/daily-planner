@@ -6,18 +6,21 @@ struct RoutineItemStep: Identifiable, Codable, Hashable {
     var title: String
     var estimatedMinutes: Int = 10
     var firstFiveMinutes: String?
+    var isCompleted: Bool = false
     
     enum CodingKeys: String, CodingKey {
         case id, title
         case estimatedMinutes = "estimated_minutes"
         case firstFiveMinutes = "first_five_minutes"
+        case isCompleted = "is_completed"
     }
     
-    init(id: UUID = UUID(), title: String, estimatedMinutes: Int = 10, firstFiveMinutes: String? = nil) {
+    init(id: UUID = UUID(), title: String, estimatedMinutes: Int = 10, firstFiveMinutes: String? = nil, isCompleted: Bool = false) {
         self.id = id
         self.title = title
         self.estimatedMinutes = estimatedMinutes
         self.firstFiveMinutes = firstFiveMinutes
+        self.isCompleted = isCompleted
     }
     
     init(from decoder: Decoder) throws {
@@ -26,6 +29,7 @@ struct RoutineItemStep: Identifiable, Codable, Hashable {
         self.title = try container.decode(String.self, forKey: .title)
         self.estimatedMinutes = try container.decodeIfPresent(Int.self, forKey: .estimatedMinutes) ?? 10
         self.firstFiveMinutes = try container.decodeIfPresent(String.self, forKey: .firstFiveMinutes)
+        self.isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
     }
 }
 
@@ -38,12 +42,14 @@ struct Routine: Identifiable, Codable, Hashable {
     var color: String
     var icon: String
     var items: [RoutineItemStep]
+    var isCompleted: Bool = false
     var createdAt: Date?
     
     enum CodingKeys: String, CodingKey {
         case id, title, description, color, icon, items
         case projectId = "project_id"
         case defaultListName = "default_list_name"
+        case isCompleted = "is_completed"
         case createdAt = "created_at"
     }
     
@@ -56,6 +62,7 @@ struct Routine: Identifiable, Codable, Hashable {
         color: String = "#6366F1",
         icon: String = "arrow.triangle.2.circlepath.circle.fill",
         items: [RoutineItemStep] = [],
+        isCompleted: Bool = false,
         createdAt: Date? = Date()
     ) {
         self.id = id
@@ -66,6 +73,7 @@ struct Routine: Identifiable, Codable, Hashable {
         self.color = color
         self.icon = icon
         self.items = items
+        self.isCompleted = isCompleted
         self.createdAt = createdAt
     }
     
@@ -79,7 +87,17 @@ struct Routine: Identifiable, Codable, Hashable {
         self.color = try container.decodeIfPresent(String.self, forKey: .color) ?? "#6366F1"
         self.icon = try container.decodeIfPresent(String.self, forKey: .icon) ?? "arrow.triangle.2.circlepath.circle.fill"
         self.items = try container.decodeIfPresent([RoutineItemStep].self, forKey: .items) ?? []
+        self.isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
         self.createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+    }
+    
+    var completedStepsCount: Int {
+        items.filter { $0.isCompleted }.count
+    }
+    
+    var progressFraction: Double {
+        guard !items.isEmpty else { return isCompleted ? 1.0 : 0.0 }
+        return Double(completedStepsCount) / Double(items.count)
     }
     
     var swiftUIColor: Color {
