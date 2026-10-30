@@ -110,15 +110,24 @@ export function matchTaskToProject(task: Task, projects: Project[]): Project {
 
 export function getFallbackTasks(projects: Project[]): Task[] {
   return (fallbackRaw as any[]).map((item, idx) => {
-    const id = `fallback-${idx}`;
+    const id = item.appleReminderId || `fallback-${idx}`;
     const subtasks = extractSubtasks(item.notes);
+
+    let estimatedMinutes = 5;
+    const durMatch = (item.notes || '').match(/\[⏱\s*(\d+)m\]/);
+    if (durMatch && durMatch[1]) {
+      estimatedMinutes = parseInt(durMatch[1], 10);
+    }
+
     const task: Task = {
       id,
       title: item.title,
-      description: item.notes,
+      description: item.notes || '',
       listName: item.listName || 'Personal',
       status: 'pending',
-      estimatedMinutes: 15,
+      dueDate: item.dueDate || null,
+      appleReminderId: item.appleReminderId || id,
+      estimatedMinutes,
       inPlayQueue: false,
       subtasks,
       createdAt: new Date().toISOString(),

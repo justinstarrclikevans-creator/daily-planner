@@ -98,6 +98,21 @@ async function runHourlySync() {
         }
         saveState(state);
 
+        // Keep webapp fallback dataset fresh with current active incomplete reminders
+        try {
+            const fallbackPath = path.join(__dirname, '../render-webapp/src/lib/fallback-todos.json');
+            const fallbackPayload = incompleteTodos.map(r => ({
+                title: r.title,
+                notes: r.description || '',
+                listName: r.listName || 'Personal',
+                dueDate: r.dueDate || null,
+                appleReminderId: r.id
+            }));
+            fs.writeFileSync(fallbackPath, JSON.stringify(fallbackPayload, null, 2));
+        } catch (e) {
+            // non-fatal
+        }
+
         if (slack.length > 0 || emails.length > 0 || letterlyNotes.length > 0) {
             console.log(`New inputs found (Slack: ${slack.length}, Emails: ${emails.length}, Letterly: ${letterlyNotes.length}). Active Apple Reminders: ${incompleteTodos.length}, Completed: ${completedTodos.length}.`);
             

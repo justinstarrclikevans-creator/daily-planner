@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DEFAULT_PROJECTS, getFallbackTasks, extractSubtasks } from '@/lib/supabase';
+import { DEFAULT_PROJECTS, getFallbackTasks, extractSubtasks, matchTaskToProject } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://huwattmqwiqhcfhtqely.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_secret_21i-I_QCc5xA_dPeVQPKsg_iV7ZzjQm';
+
+let inMemoryTasks: any[] | null = null;
 
 async function supabaseFetch(path: string, options: RequestInit = {}) {
   const url = `${SUPABASE_URL}/rest/v1${path}`;
@@ -14,7 +16,16 @@ async function supabaseFetch(path: string, options: RequestInit = {}) {
     'Content-Type': 'application/json',
     ...(options.headers || {}),
   };
-  return fetch(url, { ...options, headers });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 2500);
+  try {
+    const res = await fetch(url, { ...options, headers, signal: controller.signal });
+    clearTimeout(timeoutId);
+    return res;
+  } catch (e) {
+    clearTimeout(timeoutId);
+    return null;
+  }
 }
 
 export async function GET() {
@@ -25,7 +36,7 @@ export async function GET() {
     ]);
 
     let projects = DEFAULT_PROJECTS;
-    if (projRes.ok) {
+    if (projRes && projRes.ok) {
       const data = await projRes.json();
       if (Array.isArray(data) && data.length > 0) {
         projects = data;
@@ -33,7 +44,7 @@ export async function GET() {
     }
 
     let tasks: any[] = [];
-    if (taskRes.ok) {
+    if (taskRes && taskRes.ok) {
       const data = await taskRes.json();
       if (Array.isArray(data) && data.length > 0) {
         tasks = data
@@ -63,19 +74,25 @@ export async function GET() {
       }
     }
 
-    // If Supabase returned zero tasks, use the fallback tasks
+    // Fallback if Supabase is offline or empty
     if (tasks.length === 0) {
-      tasks = getFallbackTasks(projects);
-      return NextResponse.json({ projects, tasks, source: 'fallback' });
+      if (!inMemoryTasks) {
+        inMemoryTasks = getFallbackTasks(projects);
+      }
+      const activeOnly = inMemoryTasks.filter((t: any) => t.status !== 'completed');
+      return NextResponse.json({ projects, tasks: activeOnly, source: 'fallback' });
     }
 
     return NextResponse.json({ projects, tasks, source: 'supabase' });
   } catch (error: any) {
     console.error('Error in /api/desk GET:', error);
-    const fallbackTasks = getFallbackTasks(DEFAULT_PROJECTS);
+    if (!inMemoryTasks) {
+      inMemoryTasks = getFallbackTasks(DEFAULT_PROJECTS);
+    }
+    const activeOnly = inMemoryTasks.filter((t: any) => t.status !== 'completed');
     return NextResponse.json({
       projects: DEFAULT_PROJECTS,
-      tasks: fallbackTasks,
+      tasks: activeOnly,
       source: 'fallback_error',
       error: error.message,
     });
@@ -90,14 +107,24 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Missing task id' }, { status: 400 });
     }
 
-    const res = await supabaseFetch(`/tasks?id=eq.${id}`, {
+    // Attempt Supabase update in background
+    supabaseFetch(`/tasks?id=eq.${id}`, {
       method: 'PATCH',
       body: JSON.stringify(updates),
-    });
+    }).catch(() => null);
 
-    if (!res.ok) {
-      const errText = await res.text();
-      return NextResponse.json({ error: errText }, { status: res.status });
+    // Update in-memory tasks so completions/deferrals take effect immediately
+    if (!inMemoryTasks) {
+      inMemoryTasks = getFallbackTasks(DEFAULT_PROJECTS);
+    }
+    const idx = inMemoryTasks.findIndex((t: any) => t.id === id);
+    if (idx !== -1) {
+      inMemoryTasks[idx] = {
+        ...inMemoryTasks[idx],
+        ...updates,
+        status: updates.status || inMemoryTasks[idx].status,
+        dueDate: updates.due_date !== undefined ? updates.due_date : inMemoryTasks[idx].dueDate,
+      };
     }
 
     return NextResponse.json({ success: true });
@@ -109,17 +136,35 @@ export async function PATCH(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const res = await supabaseFetch('/tasks', {
+
+    // Attempt Supabase insert in background
+    supabaseFetch('/tasks', {
       method: 'POST',
       body: JSON.stringify(body),
-    });
+    }).catch(() => null);
 
-    if (!res.ok) {
-      const errText = await res.text();
-      return NextResponse.json({ error: errText }, { status: res.status });
+    if (!inMemoryTasks) {
+      inMemoryTasks = getFallbackTasks(DEFAULT_PROJECTS);
     }
 
-    return NextResponse.json({ success: true, task: body });
+    const newTask = {
+      id: body.id || crypto.randomUUID(),
+      title: body.title,
+      description: body.description || '',
+      listName: body.list_name || 'Personal',
+      status: body.status || 'pending',
+      dueDate: body.due_date || null,
+      estimatedMinutes: body.estimated_minutes || 5,
+      inPlayQueue: false,
+      firstFiveMinutes: body.first_five_minutes || null,
+      subtasks: body.subtasks || extractSubtasks(body.description),
+      createdAt: new Date().toISOString(),
+    };
+    const matched = matchTaskToProject(newTask, DEFAULT_PROJECTS);
+    (newTask as any).projectId = body.project_id || matched.id;
+    inMemoryTasks.unshift(newTask);
+
+    return NextResponse.json({ success: true, task: newTask });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }

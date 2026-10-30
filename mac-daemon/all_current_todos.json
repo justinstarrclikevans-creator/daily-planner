@@ -1,357 +1,394 @@
 [
   {
-    "title": "Implementation plans for everything, use ai to write. And skill cat",
+    "title": "Invites for the synapse app.",
+    "notes": "[⏱ 5m]",
+    "listName": "843FC",
+    "dueDate": null,
+    "appleReminderId": "1304A112-129C-4FE2-AF8D-601636AC9CDD"
+  },
+  {
+    "title": "Christmas Initiative",
+    "notes": "[⏱ 5m]\n- [ ] Plan out the structure\n- [ ] Look for products and costs\n- [ ] Write a one pager\n- [ ] Deliver to team and potential partners",
+    "listName": "843FC",
+    "dueDate": null,
+    "appleReminderId": "FFC770DF-A760-41DC-938B-D86C9DC6BD46"
+  },
+  {
+    "title": "One Pager for holiday event",
+    "notes": "[⏱ 5m]\n- [ ] Identify full list of potential partners\n- [ ] Go to Lloyd’s\n- [ ] Kasi\n- [ ] restaurants\n- [ ] Pat\n- [ ] Awaken church",
+    "listName": "843FC",
+    "dueDate": null,
+    "appleReminderId": "DC4B563C-F811-46C0-B8A2-2DB5D6EA622E"
+  },
+  {
+    "title": "Ask antigravity to read richard rohr emails and text those instead of common prayer",
+    "notes": "[⏱ 5m]",
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "16D21766-F7C3-4A5D-A06D-017C04314C00"
+  },
+  {
+    "title": "Set aside dedicated time to work on the book.",
+    "notes": "[⏱ 5m]",
+    "listName": "Book (Memoir) and Synapse",
+    "dueDate": null,
+    "appleReminderId": "0FB445C0-673A-4E18-BFDB-85FB8E7F5450"
+  },
+  {
+    "title": "Switch away from fourth wall",
+    "notes": "[⏱ 5m]\n- [ ] Change the links on 843fc.org to crowded",
+    "listName": "843FC",
+    "dueDate": null,
+    "appleReminderId": "5A42B94A-9DE2-417F-93E6-3B889C74092D"
+  },
+  {
+    "title": "Set up recurring donations",
+    "notes": "[⏱ 5m]",
+    "listName": "843FC",
+    "dueDate": null,
+    "appleReminderId": "B441FFCF-1B8F-4DBA-80EB-FE023778543C"
+  },
+  {
+    "title": "Ask Amy about moving stuff out of the drive",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "47BE0701-05E5-4ACF-A4A9-7DE29DD33CFB"
+  },
+  {
+    "title": "Launch a campaign (including app) on November 1st; 10 days remaining for preparation.",
+    "notes": "[⏱ 5m]\n- [ ] App may not be fully ready but campaign will proceed.",
+    "listName": "843FC",
+    "dueDate": null,
+    "appleReminderId": "117E37A2-1514-4F33-9104-67681E33794F"
+  },
+  {
+    "title": "Administer flea treatments to cats.",
+    "notes": "[⏱ 5m]",
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "DDEEE8A5-7281-4937-8A30-9047C60E86BE"
+  },
+  {
+    "title": "Use Google to recreate \"best version\" videos from existing transcripts.",
+    "notes": "[⏱ 5m]",
+    "listName": "843FC",
+    "dueDate": null,
+    "appleReminderId": "44534F15-8618-44BC-888C-255C21A7A4A0"
+  },
+  {
+    "title": "Make an apricot report that tells me how many points everyone's earned to determine dollar amount",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "6499D634-DA63-41C2-8337-DD8E2AEAF275"
+  },
+  {
+    "title": "Remember the book is a side income source with potential for further opportunities.",
+    "notes": "[⏱ 5m]",
+    "listName": "Book (Memoir) and Synapse",
+    "dueDate": null,
+    "appleReminderId": "6853AE8C-EB4E-4C9B-8D75-A3426D1A57C2"
+  },
+  {
+    "title": "Email outreach to Casey Sexton, lawyers (including Brooke), and realtors:",
+    "notes": "[⏱ 5m]\n- [ ] Pitch nonprofit advertising benefits.",
+    "listName": "843FC",
+    "dueDate": null,
+    "appleReminderId": "9F67CA8D-3273-4B82-8349-75A190BE40AE"
+  },
+  {
+    "title": "Columbia jobs",
+    "notes": "[⏱ 25m]\n- [ ] Use the ai app to look for leads\n- [ ] Email and call to set appointments\n- [ ] Ask AI to cross check for indeed postings",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "F3D98886-E316-4061-A7CE-15AA4152E881"
+  },
+  {
+    "title": "Focus on campaign timing to capitalize on seasonal giving.",
+    "notes": "[⏱ 5m]",
+    "listName": "843FC",
+    "dueDate": null,
+    "appleReminderId": "A840C542-4517-4760-928D-293329059A1E"
+  },
+  {
+    "title": "Develop an app component for passive training income/certification:",
+    "notes": "[⏱ 5m]\n- [ ] Include CBT skills, interview skills, sales training (Sandler method), and Synapse content.\n- [ ] Determine if this will be part of the Free and Forward app or a separate project.",
+    "listName": "Book (Memoir) and Synapse",
+    "dueDate": null,
+    "appleReminderId": "45A56CEB-FEB1-4354-A5DB-DAFF84C33177"
+  },
+  {
+    "title": "Meet with Coach Kevin to discuss:",
+    "notes": "[⏱ 5m]\n- [ ] App development for him.\n- [ ] EFC Christmas shopping list.\n- [ ] General catch-up and collaboration.",
+    "listName": "843FC",
+    "dueDate": null,
+    "appleReminderId": "7391F9FF-BD9B-48EF-B5CE-21EDBB4B617A"
+  },
+  {
+    "title": "Reach out lashawn about VR funding and Anthony",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "57AF8694-6E88-4779-8B07-73FFBF786D51"
+  },
+  {
+    "title": "Identify assessments, tracks, and job placement opportunities for SkillCat tracks.",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "5D444140-67A9-42F6-B1FE-0351E05DD1BF"
+  },
+  {
+    "title": "Create viral videos for Synapse using analogies (e.g., grocery store, driving your own car). Add grocery store and driving into app",
+    "notes": "[⏱ 5m]",
+    "listName": "Book (Memoir) and Synapse",
+    "dueDate": null,
+    "appleReminderId": "F459A006-54C7-4BCF-9CD2-BC113C61EC91"
+  },
+  {
+    "title": "Plan to deliver mini sermons (inspired by Rob Bell) on topics like Albertine.",
+    "notes": "[⏱ 5m]",
+    "listName": "843FC",
+    "dueDate": null,
+    "appleReminderId": "BC84A16E-C5D2-43CF-89F8-224C7ECEAA83"
+  },
+  {
+    "title": "Submit Walmart job applications for Arthur and Al.",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "6BE61BB3-FFEA-46AC-ADEB-68DD6DEED7C4"
+  },
+  {
+    "title": "Focus on developing the Synapse AI engine as a standalone, coachable app.",
+    "notes": "[⏱ 5m]",
+    "listName": "Book (Memoir) and Synapse",
+    "dueDate": null,
+    "appleReminderId": "F66F83CF-D3D0-4444-B35F-6152E11439A8"
+  },
+  {
+    "title": "Provide Greg Miller (potential headhunter) with requested information.",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "F36B78F2-A01B-44D3-83CD-902CB49D7A4D"
+  },
+  {
+    "title": "Switch 4th wall to crowded. Use 4wall for swag crowded for 5k registration",
+    "notes": "[⏱ 5m]",
+    "listName": "843FC",
+    "dueDate": null,
+    "appleReminderId": "78729CA6-C307-4600-BA31-A15F03C92B9E"
+  },
+  {
+    "title": "Incorporate cardio, yoga, meditation, and medication into a daily routine (using an app like Tiimo or one being developed).",
+    "notes": "[⏱ 5m]",
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "CC62C50E-9D85-44FF-BF6E-A5704ABF9B8D"
+  },
+  {
+    "title": "Create a workflow for the end of the day",
+    "notes": "[⏱ 5m]",
+    "listName": "General",
+    "dueDate": null,
+    "appleReminderId": "25A00B21-0AEE-4832-BFC2-F046FF64C0A7"
+  },
+  {
+    "title": "Adult ed for spb. In person",
     "notes": "",
-    "listName": "My Tasks"
+    "listName": "Program Improvements",
+    "dueDate": null,
+    "appleReminderId": "50FA96E0-D339-45B9-A900-52237EBC413D"
   },
   {
-    "title": "Redo TCU-custom assessment",
+    "title": "Run last year’s case notes through AI to extract insights and evaluate program effectiveness.",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "8DAD18FB-393F-41B6-91E4-9E0E9AC3769D"
+  },
+  {
+    "title": "Add a failure of nerve to some of the ai engines",
+    "notes": "[⏱ 5m]",
+    "listName": "General",
+    "dueDate": "2026-10-30T17:05:00Z",
+    "appleReminderId": "7E103012-5664-4D44-BC12-92F578D35229"
+  },
+  {
+    "title": "Make a training app for the boys to enable them to charge for soccer training.",
+    "notes": "[⏱ 5m]",
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "A163697E-D550-482C-85D5-A1ADD1113604"
+  },
+  {
+    "title": "More in depth emotion regulation",
     "notes": "",
-    "listName": "My Tasks"
+    "listName": "Program Improvements",
+    "dueDate": null,
+    "appleReminderId": "BC944C9C-5E0C-4E30-A49C-27D449A2ECF5"
   },
   {
-    "title": "Reach out to Mikey and La Barra",
-    "notes": "[List: Personal]",
-    "listName": "Nosa"
-  },
-  {
-    "title": "Box mid",
-    "notes": "[List: 843]",
-    "listName": "Nosa"
-  },
-  {
-    "title": "Italian rondos",
-    "notes": "[List: 843]",
-    "listName": "Nosa"
-  },
-  {
-    "title": "Design some drills that are quick reactions like quick middle in your throat to the middle without looking like goalkeepers do",
-    "notes": "[List: Nosa]",
-    "listName": "Nosa"
-  },
-  {
-    "title": "Best player moves and plays facing goal to pick out passes. Who’s the qb/cdm?",
-    "notes": "[List: Nosa]",
-    "listName": "Nosa"
-  },
-  {
-    "title": "Learn Spanish",
-    "notes": "[List: 843]",
-    "listName": "Nosa"
-  },
-  {
-    "title": "Talk to Kate about printing shirts for rec",
-    "notes": "[List: 843]",
-    "listName": "843"
-  },
-  {
-    "title": "AI who advertising the most?",
-    "notes": "[List: 843]",
-    "listName": "843"
-  },
-  {
-    "title": "I can sell advertising on the podcast as well",
-    "notes": "[List: 843]",
-    "listName": "843"
-  },
-  {
-    "title": "Realtors",
-    "notes": "[List: 843]",
-    "listName": "843"
-  },
-  {
-    "title": "Restaurants",
-    "notes": "[List: 843]",
-    "listName": "843"
-  },
-  {
-    "title": "I can add a bunch of stuff in a quote from Gupta and then have the podcast filled out from there",
-    "notes": "[List: 843]",
-    "listName": "843"
-  },
-  {
-    "title": "Get the pitch together for 8:43 I talk about wanting to try one of the current players but need to get Royvi covered and also build out the app",
-    "notes": "[List: 843]",
-    "listName": "843"
-  },
-  {
-    "title": "Create a behavior manual system in a dashboard that we can see everyone's progress on 843",
-    "notes": "[List: 843]",
-    "listName": "843"
-  },
-  {
-    "title": "Reach out to all of the realtors and stuff like that",
-    "notes": "[List: 843]",
-    "listName": "843"
-  },
-  {
-    "title": "Follow up with the laundromat",
-    "notes": "[List: 843]",
-    "listName": "843"
-  },
-  {
-    "title": "Send out some updates on social media with stories like the Royvi story",
-    "notes": "[List: Posts]",
-    "listName": "843"
-  },
-  {
-    "title": "Do a post about the tire Tyler Childers song",
+    "title": "Add job placement agreement to the gate for briefcase",
     "notes": "",
-    "listName": "Posts"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "AFF89566-4737-48F1-BEFB-7E2D9F931DA0"
   },
   {
-    "title": "Use the dartboard analogy in a post",
-    "notes": "[List: Personal]",
-    "listName": "Posts"
-  },
-  {
-    "title": "Turn the quote into a post, with blowing up pay to play",
-    "notes": "[List: Posts]",
-    "listName": "Posts"
-  },
-  {
-    "title": "You make your own reality.",
-    "notes": "[List: Posts]",
-    "listName": "Posts"
-  },
-  {
-    "title": "Albertine",
-    "notes": "[List: 843]",
-    "listName": "Posts"
-  },
-  {
-    "title": "Way out is not more consumption",
-    "notes": "[List: Posts]",
-    "listName": "Posts"
-  },
-  {
-    "title": "Sell consulting and coaching services. Sell the app and synapse coaching",
-    "notes": "[List: Posts]",
-    "listName": "Posts"
-  },
-  {
-    "title": "Mini sermons-rob bell type shit",
-    "notes": "[List: Posts]",
-    "listName": "Posts"
-  },
-  {
-    "title": "We will all come to account for our lives. Whatever each of us believes, we will all answer for our time here. I’m hard on myself. Maybe too hard.",
-    "notes": "[List: Posts]",
-    "listName": "Posts"
-  },
-  {
-    "title": "Follow up with Tracy Clifford regarding Personal Finance textbooks",
-    "notes": "Tracy Clifford is circling back on Personal Finance textbooks for Turn Ninety students.",
-    "listName": "Reentry Nav"
-  },
-  {
-    "title": "Resolve Google Meet notes issue for Reentry Intake between Justin Evans and Antoine Turner",
-    "notes": "Google Meet reported a problem producing the notes for the meeting on Sep 4, 2026.",
-    "listName": "Reentry Nav"
-  },
-  {
-    "title": "Respond to voicemail from (803) 320-5901",
-    "notes": "Voicemail received on Grasshopper (Extension 1 - Program Services).",
-    "listName": "Reentry Nav"
-  },
-  {
-    "title": "Confirm 10:40 meeting time with Melissa Tunstall",
-    "notes": "Melissa Tunstall from CCPL asked if 10:40 works best for the meeting.",
-    "listName": "Reentry Nav"
-  },
-  {
-    "title": "Pilot SkillCat's Essentials Tier",
-    "notes": "Evaluate SkillCat's platform for Turn Ninety's reentry training program by piloting the Essentials Tier ($20/seat/mo) with 4-5 participants.",
-    "listName": "Reentry Nav"
-  },
-  {
-    "title": "Fill out New Employment Update for Semaj Hart",
-    "notes": "Received Apricot notification to complete a New Employment Update for Semaj Hart.",
-    "listName": "Reentry Nav"
-  },
-  {
-    "title": "Reply to Melissa Tunstall about CCPL books",
-    "notes": "Respond to Melissa Tunstall at Charleston County Public Library regarding the 15 books they have available to give.",
-    "listName": "Reentry Nav"
-  },
-  {
-    "title": "Review Daisy Boynton's time off request for October 16, 2026",
-    "notes": "Review the 8.0-hour time off request submitted via Gusto.",
-    "listName": "Reentry Nav"
-  },
-  {
-    "title": "Coordinate Turn 90 class visit for Phillip Griggs",
-    "notes": "Phillip Griggs from Cristo Rey Charleston expressed interest in attending a Turn 90 class in the near future.",
-    "listName": "Reentry Nav"
-  },
-  {
-    "title": "Share Dorchester County Career Fair flyer with network",
-    "notes": "SC Works and Dorchester County Economic Development are hosting a Career Fair on September 17, 2026.",
-    "listName": "Reentry Nav"
-  },
-  {
-    "title": "Fix failed deploy for audio-interview-lscmi on Render",
-    "notes": "Investigate and resolve the deployment failure on Render for commit 'Unify First'.",
-    "listName": "Briefcase"
-  },
-  {
-    "title": "Get started with Google Antigravity",
-    "notes": "Explore the new Google Antigravity platform built for agentic development.",
-    "listName": "Briefcase"
-  },
-  {
-    "title": "Integrate google meet",
+    "title": "Fill out checklist in the app for each person day one checklist",
     "notes": "",
-    "listName": "Briefcase"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "24857826-D144-4048-931B-4230CC37C931"
   },
   {
-    "title": "Briefcase with job hunting AI",
+    "title": "Start back at the beginning of the playbook and be doing checklist and everything from there walking through every apricot form and also in the T90 app",
     "notes": "",
-    "listName": "Briefcase"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "243B3ED0-0E63-4944-8736-6EB9F7FDC97A"
   },
   {
-    "title": "Review Airbnb account for unauthorized payment method and login activity",
-    "notes": "Airbnb sent notifications about a new payment method and a new login from Safari on macOS.",
-    "listName": "Personal"
-  },
-  {
-    "title": "Go through all the todos and map it out. Program plan. Svp. Dan ask mere. Chris",
+    "title": "Register for Futsal",
     "notes": "",
-    "listName": "Personal"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "4D901C49-135A-4083-9FD2-3F6CB70DB63C"
   },
   {
-    "title": "Go after big money",
+    "title": "Review progress report from Low Country Virtual",
+    "notes": "[⏱ 5m]",
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "7A814B2A-F538-4525-83A1-CFE7915D978B"
+  },
+  {
+    "title": "Give each person their own dashboard that they could start a process and have multiple people",
     "notes": "",
-    "listName": "Personal"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "5846CB2E-EE77-4A1B-8718-ACCBE4403BA0"
   },
   {
-    "title": "Sign the waivers",
+    "title": "Go point by point over the job losses and everything with Matt",
     "notes": "",
-    "listName": "Personal"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "A59C0D01-63E0-4787-AA5B-79FD619EC05F"
   },
   {
-    "title": "Do the product placement shirts link or whatever that people can donate their logo on a shirt and then they probably end up ordering some more",
+    "title": "Update the scoring guide in the app",
     "notes": "",
-    "listName": "Personal"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "BA4677F2-B123-454C-8EF4-66C0F0E5CE6D"
   },
   {
-    "title": "Follow up on unapproved time off request for Sept 2",
-    "notes": "Gusto notification states the time off request for Wed Sep 2 was not approved. Contact Justin Evans or submit a new request.",
-    "listName": "Personal"
-  },
-  {
-    "title": "Sell iPad",
+    "title": "Create the Nigeria campaign and show it to Stacy before I release it",
     "notes": "",
-    "listName": "Personal"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "76552BBF-C752-4CB5-8C69-87454A74C01C"
   },
   {
-    "title": "Make a post about being an angry Buddhist",
+    "title": "Map out a plan with the app to figure out why so many not explicitly discussed in intake interviews and how to get better responses",
     "notes": "",
-    "listName": "Personal"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "95FD895D-FB02-486D-987A-6E57D0407485"
   },
   {
-    "title": "Have the boys doing Posts",
+    "title": "Add the question to tell me about the top five people in your life who are not family",
     "notes": "",
-    "listName": "Personal"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "0CE04F5C-CECB-499F-931D-CEBDD8DDC371"
   },
   {
-    "title": "Do a campaign that says you can change youth soccer",
+    "title": "Build out the checklist and the checklist for day one should include building out a briefcase",
     "notes": "",
-    "listName": "Personal"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "E9C74CB6-825D-4225-8FAB-926CA5865B72"
   },
   {
-    "title": "Combine gmails and forward google voice",
+    "title": "Build out all of these other if this then that statement is like what week are they in and then what needs to happen and what is their briefcase and AI can give us feedback on all those things and what needs to get done",
     "notes": "",
-    "listName": "Personal"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "30AC8BCB-3A59-4AF6-9B5F-5D0796B687FD"
   },
   {
-    "title": "Use the hosting your stuff to point towards the briefcase",
+    "title": "Review benefits open enrollment info forwarded by Meredith (deadline October 31)",
+    "notes": "[⏱ 5m]",
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "C96B6132-8195-47E9-B4B0-333963BF77C0"
+  },
+  {
+    "title": "Reach out to John and see about implementing some of the other options with him",
     "notes": "",
-    "listName": "Personal"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "77228B76-7C40-409A-8FEC-92E52CEF5682"
   },
   {
-    "title": "Get oil change stuff for the cars",
+    "title": "Add counties through the bottom of prerelease exits.",
     "notes": "",
-    "listName": "Personal"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "6CB12A9F-F31C-4FB4-9D4A-51BE4AF733BA"
   },
   {
-    "title": "Add to the story that he only taught his kids all the stuff because it is actually helpful but not the superstition park",
+    "title": "Daisy resource app-asked her to move it to git hub",
     "notes": "",
-    "listName": "Personal"
+    "listName": "Personal",
+    "dueDate": null,
+    "appleReminderId": "66AB7117-52D4-483B-AB3B-28EB40D9D05D"
   },
   {
-    "title": "Have AI go through and write it all out in a story form of all my to-do on how to get it all done",
-    "notes": "",
-    "listName": "Personal"
+    "title": "Conduct documentation audit across all three centers to establish baseline standards with case notes",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "40EAAFE5-6679-4E75-BA98-C2106C3191E1"
   },
   {
-    "title": "Talk through the processes and record",
-    "notes": "",
-    "listName": "Personal"
+    "title": "Discuss orientation scheduling process with Matt offline to optimize without overloading",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "89E7E43B-DC92-4E6C-9FBD-105E2130FF65"
   },
   {
-    "title": "Finish the assessments and also to upload all the new people",
-    "notes": "",
-    "listName": "Personal"
+    "title": "Coordinate on publishing the resource app to the App Store",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "942D4943-B740-4832-BE85-98A7D2A7B35B"
   },
   {
-    "title": "Our father equals lucky",
-    "notes": "",
-    "listName": "Personal"
+    "title": "Respond to James Westpoint's attorney regarding Turn 90 participation and court",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "9DCA4495-2EF1-4BD0-9A83-B63680EC9D37"
   },
   {
-    "title": "Lindsey chris and Dan",
-    "notes": "",
-    "listName": "Personal"
+    "title": "Review and respond to Amy's comments on Employer Partner Pipeline definitions in Claude",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "60C0691A-6415-46D9-80AD-8599EE97F3BF"
   },
   {
-    "title": "Text Daniel Hodges back",
-    "notes": "Respond to Daniel Hodges.",
-    "listName": "Personal"
-  },
-  {
-    "title": "Fill out the template of case management with the explanation of those needs and patterns and then a spot for skills",
-    "notes": "Complete the case management template including needs, patterns, and skills section.",
-    "listName": "Personal"
-  },
-  {
-    "title": "See if the navigation briefcase can be step by step but then transition into",
-    "notes": "Review navigation briefcase flow and transition steps.",
-    "listName": "Personal"
-  },
-  {
-    "title": "Use smatleads for (843) but also look for some jobs in Columbia",
-    "notes": "",
-    "listName": "Personal"
-  },
-  {
-    "title": "Social media is going to be the gate to get everything else opened up as far as speaking getting paid the book everything",
-    "notes": "",
-    "listName": "Personal"
-  },
-  {
-    "title": "Look for jobs in Columbia",
-    "notes": "",
-    "listName": "Personal"
-  },
-  {
-    "title": "Apply for jobs to Bill for Anthony or not for Anthony for Colin and for Antoine",
-    "notes": "",
-    "listName": "Personal"
-  },
-  {
-    "title": "Put some s'mores toppers on top of the other stuff I already made",
-    "notes": "",
-    "listName": "Personal"
-  },
-  {
-    "title": "Work on Daisy's recommendation letter",
-    "notes": "",
-    "listName": "Personal"
-  },
-  {
-    "title": "Use AI to build a budget app",
-    "notes": "[List: Can ag analyze bank records?]\n",
-    "listName": "Personal"
+    "title": "Reply to Tammy Beagen regarding VR training and whether Johnnie Lynn stopped by",
+    "notes": "[⏱ 5m]",
+    "listName": "Turn90",
+    "dueDate": "2026-10-30T13:00:00Z",
+    "appleReminderId": "73833568-7BEA-46E8-97BB-39CE52715349"
   }
 ]

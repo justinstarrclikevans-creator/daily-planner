@@ -68,7 +68,7 @@ export default function DeskPage() {
       if (json.tasks && Array.isArray(json.tasks)) {
         // Ensure every task is matched to a project
         const mapped = json.tasks
-          .filter((t: Task) => !isTaskScheduledForFuture(t.dueDate))
+          .filter((t: Task) => t.status !== 'completed' && !isTaskScheduledForFuture(t.dueDate))
           .map((t: Task) => {
             const matchedProj = matchTaskToProject(t, currentProjects);
             return {
