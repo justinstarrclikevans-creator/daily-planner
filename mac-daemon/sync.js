@@ -48,6 +48,35 @@ function normalizeListName(rawName, source) {
     return 'General';
 }
 
+function matchProjectForTask(title, description, rawListName, source, customProjects = []) {
+    if (source === 'slack') return 'Turn90';
+
+    const direct = normalizeListName(rawListName, source);
+    if (direct !== 'General') return direct;
+
+    const combined = `${title || ''} ${description || ''}`.toLowerCase();
+
+    if (Array.isArray(customProjects)) {
+        for (const proj of customProjects) {
+            if (Array.isArray(proj.keywords)) {
+                for (const kw of proj.keywords) {
+                    if (kw && combined.includes(kw.toLowerCase())) {
+                        return proj.name;
+                    }
+                }
+            }
+        }
+    }
+
+    if (/turn90|turn 90|\bt90\b|first shift|reentry|apricot|skillcat/i.test(combined)) return 'Turn90';
+    if (/843|843fc|football|soccer|fourth wall|crowded/i.test(combined)) return '843FC';
+    if (/nosa|royvi|claire/i.test(combined)) return 'Nosa';
+    if (/book|memoir|synapse|draft|chapter/i.test(combined)) return 'Book (Memoir) and Synapse';
+    if (/groceries|vet|apartment|family|bills|health/i.test(combined)) return 'Personal';
+
+    return 'General';
+}
+
 function normalizeTitle(str) {
     return (str || '')
         .toLowerCase()
@@ -105,6 +134,7 @@ async function runHourlySync() {
                 title: r.title,
                 notes: r.description || '',
                 listName: r.listName || 'Personal',
+                priority: r.priority || 'medium',
                 dueDate: r.dueDate || null,
                 appleReminderId: r.id
             }));
@@ -167,8 +197,9 @@ async function runHourlySync() {
                         continue;
                     }
 
-                    const targetList = normalizeListName(item.listName, item.source);
+                    const targetList = matchProjectForTask(item.title, item.description || (item.subtasks || []).join(' '), item.listName, item.source);
                     const mins = item.estimatedMinutes || 5;
+                    const priority = item.priority || 'medium';
                     const noteLines = [`[⏱ ${mins}m]`];
 
                     if (Array.isArray(item.subtasks) && item.subtasks.length > 0) {
@@ -183,17 +214,18 @@ async function runHourlySync() {
                     }
 
                     const finalNotes = noteLines.join('\n');
-                    const ok = await addReminder(targetList, item.title, finalNotes);
+                    const ok = await addReminder(targetList, item.title, finalNotes, priority);
                     if (!ok) {
                         console.error(`Failed to push reminder to list (${targetList}):`, item.title);
                     } else {
-                        console.log(`Added to [${targetList}]: ${item.title} (${(item.subtasks || []).length} subtasks)`);
+                        console.log(`Added to [${targetList}] [${priority.toUpperCase()}]: ${item.title} (${(item.subtasks || []).length} subtasks)`);
                         activeTitlesSet.add(normTitle);
                     }
 
                     item.listName = targetList;
                     item.description = finalNotes;
                     item.estimatedMinutes = mins;
+                    item.priority = priority;
                     await syncTaskToSupabase(item);
                 }
             }

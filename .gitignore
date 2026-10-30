@@ -3,6 +3,9 @@
 node_modules/
 build/
 ios-companion/build/
+ios-companion/.build/
+* 2.*
+* 2
 *.xcuserstate
 xcuserdata/
 DerivedData/

@@ -78,6 +78,7 @@ struct Project: Identifiable, Codable, Hashable {
     var icon: String
     var goal: String
     var instructions: String?
+    var keywords: [String]?
     var scheduleRule: ProjectScheduleRule?
     var customStartMinutes: Int?
     var customEndMinutes: Int?
@@ -92,6 +93,7 @@ struct Project: Identifiable, Codable, Hashable {
         case icon
         case goal
         case instructions
+        case keywords
         case scheduleRule = "schedule_rule"
         case customStartMinutes = "custom_start_minutes"
         case customEndMinutes = "custom_end_minutes"
@@ -107,6 +109,7 @@ struct Project: Identifiable, Codable, Hashable {
         icon: String,
         goal: String,
         instructions: String? = nil,
+        keywords: [String]? = nil,
         scheduleRule: ProjectScheduleRule? = .always,
         customStartMinutes: Int? = 480,
         customEndMinutes: Int? = 1020,
@@ -120,6 +123,7 @@ struct Project: Identifiable, Codable, Hashable {
         self.icon = icon
         self.goal = goal
         self.instructions = instructions
+        self.keywords = keywords
         self.scheduleRule = scheduleRule
         self.customStartMinutes = customStartMinutes
         self.customEndMinutes = customEndMinutes
@@ -265,6 +269,7 @@ struct Project: Identifiable, Codable, Hashable {
                 color: "#6366F1",
                 icon: "tray.full.fill",
                 goal: "General tasks, workflows, and uncategorized action items.",
+                keywords: ["general", "workflow", "review", "inbox", "daily"],
                 scheduleRule: .always),
         Project(id: UUID(uuidString: "22222222-2222-2222-2222-222222222222")!,
                 name: "Turn90",
@@ -272,6 +277,7 @@ struct Project: Identifiable, Codable, Hashable {
                 color: "#EF4444",
                 icon: "briefcase.fill",
                 goal: "Turn90 re-entry operations, Apricot reports, evaluations, and participant support.",
+                keywords: ["turn90", "turn 90", "t90", "reentry", "re-entry", "first shift", "case notes", "employer", "participant", "curriculum", "briefcase", "apricot", "matt", "amy", "tammy"],
                 scheduleRule: .always),
         Project(id: UUID(uuidString: "33333333-3333-3333-3333-333333333333")!,
                 name: "843FC",
@@ -279,6 +285,7 @@ struct Project: Identifiable, Codable, Hashable {
                 color: "#10B981",
                 icon: "sportscourt.fill",
                 goal: "843FC coaching, tournament planning, trainings, and player recruiting.",
+                keywords: ["843", "843fc", "soccer", "football", "crowded", "fourth wall", "merch", "tournament", "rec", "drills", "kevin"],
                 scheduleRule: .always),
         Project(id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
                 name: "Personal",
@@ -286,6 +293,7 @@ struct Project: Identifiable, Codable, Hashable {
                 color: "#8B5CF6",
                 icon: "person.fill",
                 goal: "Personal life, health, appointments, and family errands.",
+                keywords: ["personal", "flea", "cats", "health", "dentist", "doctor", "family", "errand", "groceries", "yoga"],
                 scheduleRule: .always),
         Project(id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
                 name: "Nosa",
@@ -293,6 +301,7 @@ struct Project: Identifiable, Codable, Hashable {
                 color: "#F59E0B",
                 icon: "sparkles",
                 goal: "Nosa product roadmap, website updates, and customer validation.",
+                keywords: ["nosa", "royvi"],
                 scheduleRule: .always),
         Project(id: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!,
                 name: "Book (Memoir) and Synapse",
@@ -300,6 +309,7 @@ struct Project: Identifiable, Codable, Hashable {
                 color: "#3B82F6",
                 icon: "book.closed.fill",
                 goal: "Memoir writing, outlines, and Synapse creative/research work.",
+                keywords: ["book", "memoir", "synapse", "cbt", "ai engine", "chapter", "writing"],
                 scheduleRule: .always)
     ]
 }

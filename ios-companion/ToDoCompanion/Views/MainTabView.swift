@@ -5,9 +5,9 @@ struct MainTabView: View {
     
     var body: some View {
         TabView(selection: $selectedTab) {
-            HomeCardStacksView()
+            ProjectWorkspaceView()
                 .tabItem {
-                    Label("Cards", systemImage: "square.stack.3d.up.fill")
+                    Label("Workspace", systemImage: "rectangle.grid.1x2.fill")
                 }
                 .tag(0)
             

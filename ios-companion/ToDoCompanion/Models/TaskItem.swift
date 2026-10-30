@@ -72,6 +72,7 @@ struct TaskItem: Identifiable, Codable, Hashable {
     
     // MARK: - First-Class Tiimo Execution Properties (Supabase Columns)
     var estimatedMinutes: Int
+    var priority: String
     var actualSeconds: Int
     var inPlayQueue: Bool
     var firstFiveMinutesPrompt: String?
@@ -81,6 +82,10 @@ struct TaskItem: Identifiable, Codable, Hashable {
         get { status == "completed" }
         set { status = newValue ? "completed" : "pending" }
     }
+    
+    var isHighPriority: Bool { priority.lowercased() == "high" }
+    var isMediumPriority: Bool { priority.lowercased() == "medium" }
+    var isLowPriority: Bool { priority.lowercased() == "low" }
     
     var isScheduledForFuture: Bool {
         guard let due = dueDate else { return false }
@@ -102,6 +107,7 @@ struct TaskItem: Identifiable, Codable, Hashable {
         case appleReminderId = "apple_reminder_id"
         case createdAt = "created_at"
         case estimatedMinutes = "estimated_minutes"
+        case priority
         case actualSeconds = "actual_seconds"
         case inPlayQueue = "in_play_queue"
         case firstFiveMinutesPrompt = "first_five_minutes"
@@ -120,6 +126,7 @@ struct TaskItem: Identifiable, Codable, Hashable {
         appleReminderId: String? = nil,
         createdAt: Date? = Date(),
         estimatedMinutes: Int? = nil,
+        priority: String = "medium",
         actualSeconds: Int = 0,
         inPlayQueue: Bool = false,
         firstFiveMinutesPrompt: String? = nil,
@@ -135,6 +142,7 @@ struct TaskItem: Identifiable, Codable, Hashable {
         self.source = source
         self.appleReminderId = appleReminderId
         self.createdAt = createdAt
+        self.priority = priority
         self.actualSeconds = actualSeconds
         self.inPlayQueue = inPlayQueue
         self.firstFiveMinutesPrompt = firstFiveMinutesPrompt
@@ -196,6 +204,17 @@ struct TaskItem: Identifiable, Codable, Hashable {
         } else {
             self.subtasks = []
         }
+        
+        // 5. Resolve priority
+        if let colPriority = try container.decodeIfPresent(String.self, forKey: .priority) {
+            self.priority = colPriority
+        } else if let desc = rawDesc?.lowercased(), desc.contains("[🔥 high]") || desc.contains("priority: high") {
+            self.priority = "high"
+        } else if let desc = rawDesc?.lowercased(), desc.contains("[🌱 low]") || desc.contains("priority: low") {
+            self.priority = "low"
+        } else {
+            self.priority = "medium"
+        }
     }
     
     func encode(to encoder: Encoder) throws {
@@ -213,6 +232,7 @@ struct TaskItem: Identifiable, Codable, Hashable {
         
         // First-class columns
         try container.encode(estimatedMinutes, forKey: .estimatedMinutes)
+        try container.encode(priority, forKey: .priority)
         try container.encode(actualSeconds, forKey: .actualSeconds)
         try container.encode(inPlayQueue, forKey: .inPlayQueue)
         try container.encodeIfPresent(firstFiveMinutesPrompt, forKey: .firstFiveMinutesPrompt)

@@ -145,6 +145,15 @@ class RemindersManager: ObservableObject {
                 reminder.dueDateComponents = nil
             }
             
+            // Sync priority (1 = High, 5 = Medium, 9 = Low)
+            if task.priority.lowercased() == "high" {
+                reminder.priority = 1
+            } else if task.priority.lowercased() == "low" {
+                reminder.priority = 9
+            } else {
+                reminder.priority = 5
+            }
+            
             // Move between lists in Apple Reminders if listName changed
             if reminder.calendar?.title.caseInsensitiveCompare(task.listName) != .orderedSame {
                 _ = await createReminderList(named: task.listName)
@@ -530,6 +539,18 @@ class RemindersManager: ObservableObject {
                 current.listName = listName
                 current.projectId = matchedProject?.id
                 if let due = dueDate { current.dueDate = due }
+                
+                // Resolve priority from reminder priority or notes
+                if r.priority >= 1 && r.priority <= 4 {
+                    current.priority = "high"
+                } else if r.priority >= 6 && r.priority <= 9 {
+                    current.priority = "low"
+                } else if let notes = r.notes?.lowercased(), notes.contains("[🔥 high]") || notes.contains("priority: high") {
+                    current.priority = "high"
+                } else if let notes = r.notes?.lowercased(), notes.contains("[🌱 low]") || notes.contains("priority: low") {
+                    current.priority = "low"
+                }
+                
                 if let notes = r.notes, !notes.isEmpty {
                     current.description = notes
                     if let mins = TaskItem.extractEstimatedMinutes(from: notes) {
@@ -552,6 +573,17 @@ class RemindersManager: ObservableObject {
                     continue
                 }
                 
+                var prio = "medium"
+                if r.priority >= 1 && r.priority <= 4 {
+                    prio = "high"
+                } else if r.priority >= 6 && r.priority <= 9 {
+                    prio = "low"
+                } else if let notes = r.notes?.lowercased(), notes.contains("[🔥 high]") || notes.contains("priority: high") {
+                    prio = "high"
+                } else if let notes = r.notes?.lowercased(), notes.contains("[🌱 low]") || notes.contains("priority: low") {
+                    prio = "low"
+                }
+                
                 let mins = TaskItem.extractEstimatedMinutes(from: r.notes ?? "") ?? 5
                 let parsedSubtasks = TaskItem.extractSubtasks(from: r.notes ?? "")
                 await SupabaseService.shared.createTask(
@@ -562,6 +594,7 @@ class RemindersManager: ObservableObject {
                     dueDate: dueDate,
                     appleReminderId: reminderId,
                     estimatedMinutes: mins,
+                    priority: prio,
                     subtasks: parsedSubtasks
                 )
             }

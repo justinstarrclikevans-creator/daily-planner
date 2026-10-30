@@ -321,6 +321,7 @@ class SupabaseService: ObservableObject {
         dueDate: Date? = nil,
         appleReminderId: String? = nil,
         estimatedMinutes: Int? = 5,
+        priority: String = "medium",
         inPlayQueue: Bool = false,
         firstFiveMinutes: String? = nil,
         subtasks: [SubtaskItem] = []
@@ -346,6 +347,7 @@ class SupabaseService: ObservableObject {
             appleReminderId: appleReminderId,
             createdAt: Date(),
             estimatedMinutes: effectiveMinutes,
+            priority: priority,
             actualSeconds: 0,
             inPlayQueue: inPlayQueue,
             firstFiveMinutesPrompt: firstFiveMinutes,
@@ -484,6 +486,48 @@ class SupabaseService: ObservableObject {
     
     func bumpTaskToTomorrow(task: TaskItem) async {
         await deferTaskToLater(task: task)
+    }
+    
+    func updateTaskPriority(task: TaskItem, priority: String) async {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var copy = tasks[index]
+        copy.priority = priority
+        await updateTask(copy)
+    }
+    
+    func createProjectFromTask(task: TaskItem, name: String, color: String, icon: String, keywords: [String]) async {
+        let slug = name.lowercased()
+            .replacingOccurrences(of: " ", with: "-")
+            .filter { $0.isLetter || $0.isNumber || $0 == "-" }
+        let newProj = Project(
+            id: UUID(),
+            name: name,
+            slug: slug,
+            color: color,
+            icon: icon,
+            goal: "Dedicated focus on \(name)",
+            keywords: keywords
+        )
+        self.projects.append(newProj)
+        persistCustomProjects()
+        
+        await moveTask(task, toProjectNamed: name)
+        
+        guard AppConfig.isSupabaseConfigured,
+              let url = URL(string: "\(AppConfig.supabaseURL)/rest/v1/projects") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(AppConfig.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(AppConfig.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        do {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            request.httpBody = try encoder.encode(newProj)
+            _ = try await URLSession.shared.data(for: request)
+        } catch {
+            print("Error creating project in Supabase: \(error)")
+        }
     }
     
     // MARK: - "Do it again" (Repeatable Tasks & Subtasks)

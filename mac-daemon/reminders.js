@@ -18,6 +18,7 @@ async function getIncompleteReminders() {
                     listName: r.listName,
                     updated: r.updated,
                     dueDate: r.dueDate,
+                    priority: r.priority || 'medium',
                     isCompleted: false
                 }));
                 resolve(data);
@@ -45,6 +46,7 @@ async function getRecentCompletedReminders() {
                     listName: r.listName,
                     updated: r.updated,
                     dueDate: r.dueDate,
+                    priority: r.priority || 'medium',
                     isCompleted: true,
                     completionDate: r.completionDate
                 }));
@@ -73,6 +75,7 @@ async function getAllReminders() {
                     listName: r.listName,
                     updated: r.updated,
                     dueDate: r.dueDate,
+                    priority: r.priority || 'medium',
                     isCompleted: !!r.isCompleted,
                     completionDate: r.completionDate
                 }));
@@ -100,17 +103,18 @@ async function completeReminder(id) {
     });
 }
 
-async function addReminder(listName, title, notes = "") {
+async function addReminder(listName, title, notes = "", priority = "medium") {
     const safeTitle = (title || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const safeNotes = (notes || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const safeList = (listName || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const prioVal = priority === 'high' ? 1 : (priority === 'low' ? 9 : 5);
     const script = `
     tell application "Reminders"
         if not (exists list "${safeList}") then
             make new list with properties {name:"${safeList}"}
         end if
         set targetList to list "${safeList}"
-        make new reminder at end of reminders of targetList with properties {name:"${safeTitle}", body:"${safeNotes}"}
+        make new reminder at end of reminders of targetList with properties {name:"${safeTitle}", body:"${safeNotes}", priority:${prioVal}}
     end tell
     `;
     return new Promise((resolve) => {

@@ -66,7 +66,8 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
 
     5. FORMAT & SCHEMA:
        - Do NOT generate "first 5 minutes" or first-step prompts.
-       - Default "estimatedMinutes" to 5.
+       - Default "estimatedMinutes" to 5 (or realistic 5, 10, 15, 30, 45, 60 based on context).
+       - "priority": Set to "high" (urgent deadlines, client/exec blockers, high-leverage moves), "medium" (standard day-to-day work), or "low" (casual ideas, someday exploration, background reference).
        - Output MUST be a raw JSON array of objects (no markdown fences):
          [
            {
@@ -74,6 +75,7 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
              "subtasks": ["Subtask or thought 1", "Subtask or thought 2"],
              "source": "slack" | "email" | "letterly",
              "listName": "Turn90" | "843FC" | "Personal" | "Nosa" | "Book (Memoir) and Synapse" | "General",
+             "priority": "high" | "medium" | "low",
              "estimatedMinutes": 5
            }
          ]
@@ -111,7 +113,13 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
         }
 
         const parsed = JSON.parse(text);
-        return Array.isArray(parsed) ? parsed : [];
+        if (!Array.isArray(parsed)) return [];
+        return parsed.map(item => ({
+            ...item,
+            priority: (item.priority && ['high', 'medium', 'low'].includes(String(item.priority).toLowerCase()))
+                ? String(item.priority).toLowerCase()
+                : 'medium'
+        }));
     } catch (error) {
         console.error("AI Extraction Error:", error);
         return [];

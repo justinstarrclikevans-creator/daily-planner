@@ -40,6 +40,10 @@
 		22220000000000000000001E /* Views/Cards/ProjectDeckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000001E /* Views/Cards/ProjectDeckView.swift */; };
 		22220000000000000000001F /* Views/Cards/ProjectStackCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11110000000000000000001F /* Views/Cards/ProjectStackCardView.swift */; };
 		222200000000000000000020 /* Views/Cards/HomeCardStacksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000020 /* Views/Cards/HomeCardStacksView.swift */; };
+		222200000000000000000021 /* Views/Tasks/ProjectWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000021 /* Views/Tasks/ProjectWorkspaceView.swift */; };
+		222200000000000000000022 /* Views/Tasks/TaskItemRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000022 /* Views/Tasks/TaskItemRowView.swift */; };
+		222200000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift */; };
+		222200000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -76,6 +80,10 @@
 		11110000000000000000001E /* Views/Cards/ProjectDeckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Cards/ProjectDeckView.swift; sourceTree = "<group>"; };
 		11110000000000000000001F /* Views/Cards/ProjectStackCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Cards/ProjectStackCardView.swift; sourceTree = "<group>"; };
 		111100000000000000000020 /* Views/Cards/HomeCardStacksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Cards/HomeCardStacksView.swift; sourceTree = "<group>"; };
+		111100000000000000000021 /* Views/Tasks/ProjectWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/ProjectWorkspaceView.swift; sourceTree = "<group>"; };
+		111100000000000000000022 /* Views/Tasks/TaskItemRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/TaskItemRowView.swift; sourceTree = "<group>"; };
+		111100000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/BuildMyDaySheet.swift; sourceTree = "<group>"; };
+		111100000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Projects/ConvertTaskToProjectSheet.swift; sourceTree = "<group>"; };
 		1111000000000000000003E7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		333300000000000000000001 /* ToDoCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ToDoCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -136,6 +144,10 @@
 				11110000000000000000001E /* Views/Cards/ProjectDeckView.swift */,
 				11110000000000000000001F /* Views/Cards/ProjectStackCardView.swift */,
 				111100000000000000000020 /* Views/Cards/HomeCardStacksView.swift */,
+				111100000000000000000021 /* Views/Tasks/ProjectWorkspaceView.swift */,
+				111100000000000000000022 /* Views/Tasks/TaskItemRowView.swift */,
+				111100000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift */,
+				111100000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift */,
 			);
 			path = ToDoCompanion;
 			sourceTree = "<group>";
@@ -249,6 +261,10 @@
 				22220000000000000000001E /* Views/Cards/ProjectDeckView.swift in Sources */,
 				22220000000000000000001F /* Views/Cards/ProjectStackCardView.swift in Sources */,
 				222200000000000000000020 /* Views/Cards/HomeCardStacksView.swift in Sources */,
+				222200000000000000000021 /* Views/Tasks/ProjectWorkspaceView.swift in Sources */,
+				222200000000000000000022 /* Views/Tasks/TaskItemRowView.swift in Sources */,
+				222200000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift in Sources */,
+				222200000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

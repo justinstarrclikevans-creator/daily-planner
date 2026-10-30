@@ -31,6 +31,13 @@ store.requestAccess(to: .reminder) { (granted, error) in
                         dueDateStr = formatter.string(from: date)
                     }
                     
+                    var priorityStr = "medium"
+                    if r.priority > 0 && r.priority <= 4 {
+                        priorityStr = "high"
+                    } else if r.priority >= 6 {
+                        priorityStr = "low"
+                    }
+                    
                     allResults.append([
                         "id": r.calendarItemIdentifier,
                         "name": r.title ?? "",
@@ -38,6 +45,7 @@ store.requestAccess(to: .reminder) { (granted, error) in
                         "listName": r.calendar?.title ?? "",
                         "updated": updatedStr,
                         "dueDate": dueDateStr,
+                        "priority": priorityStr,
                         "isCompleted": false,
                         "completionDate": ""
                     ])
@@ -65,6 +73,12 @@ store.requestAccess(to: .reminder) { (granted, error) in
                     if let comp = r.completionDate {
                         completionDateStr = formatter.string(from: comp)
                     }
+                    var priorityStr = "medium"
+                    if r.priority > 0 && r.priority <= 4 {
+                        priorityStr = "high"
+                    } else if r.priority >= 6 {
+                        priorityStr = "low"
+                    }
                     
                     allResults.append([
                         "id": r.calendarItemIdentifier,
@@ -73,6 +87,7 @@ store.requestAccess(to: .reminder) { (granted, error) in
                         "listName": r.calendar?.title ?? "",
                         "updated": updatedStr,
                         "dueDate": dueDateStr,
+                        "priority": priorityStr,
                         "isCompleted": true,
                         "completionDate": completionDateStr
                     ])
