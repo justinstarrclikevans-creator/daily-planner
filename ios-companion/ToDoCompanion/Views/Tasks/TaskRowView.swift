@@ -98,6 +98,44 @@ struct TaskRowView: View {
                 
                 // Badges Row
                 HStack(spacing: 6) {
+                    // Priority Menu Pill
+                    Menu {
+                        Button {
+                            Task { await supabase.updateTaskPriority(task: task, priority: "high") }
+                        } label: {
+                            Label("High Priority", systemImage: "flame.fill")
+                        }
+                        Button {
+                            Task { await supabase.updateTaskPriority(task: task, priority: "medium") }
+                        } label: {
+                            Label("Medium Priority", systemImage: "bolt.fill")
+                        }
+                        Button {
+                            Task { await supabase.updateTaskPriority(task: task, priority: "low") }
+                        } label: {
+                            Label("Low Priority", systemImage: "leaf.fill")
+                        }
+                    } label: {
+                        HStack(spacing: 2) {
+                            if task.isHighPriority {
+                                Image(systemName: "flame.fill").foregroundColor(.red)
+                                Text("High").foregroundColor(.red)
+                            } else if task.isLowPriority {
+                                Image(systemName: "leaf.fill").foregroundColor(.green)
+                                Text("Low").foregroundColor(.green)
+                            } else {
+                                Image(systemName: "bolt.fill").foregroundColor(.orange)
+                                Text("Med").foregroundColor(.orange)
+                            }
+                        }
+                        .font(.system(size: 10, weight: .bold))
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(priorityBackgroundColor)
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(.borderless)
+
                     // Interactive Project Switcher Badge (Move task between projects)
                     Menu {
                         Section("Move to Project") {
@@ -261,6 +299,15 @@ struct TaskRowView: View {
         }
     }
     
+    private var priorityBackgroundColor: Color {
+        if task.isHighPriority {
+            return Color.red.opacity(0.12)
+        } else if task.isLowPriority {
+            return Color.green.opacity(0.12)
+        }
+        return Color.orange.opacity(0.12)
+    }
+
     private var durationBadgeColor: Color {
         if task.estimatedMinutes <= 10 {
             return .green

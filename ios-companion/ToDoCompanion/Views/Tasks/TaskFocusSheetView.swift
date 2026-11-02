@@ -25,10 +25,23 @@ struct TaskFocusSheetView: View {
     
     // Subtask and AI breakdown state
     @State private var newStepTitle: String = ""
+    @State private var showBatchSubtasks: Bool = false
+    @State private var batchSubtasksText: String = ""
     @State private var selectedDetailLevel: BreakdownDetailLevel = .balanced
     @State private var isGeneratingBreakdown: Bool = false
     @State private var breakdownError: String? = nil
     @State private var didSaveToDoItAgain: Bool = false
+    
+    private var parsedBatchSubtasks: [String] {
+        let lines = batchSubtasksText.components(separatedBy: .newlines)
+        return lines.compactMap { line in
+            let cleaned = line
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "^[-•*\\d.)]+\\s*", with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return cleaned.isEmpty ? nil : cleaned
+        }
+    }
     
     let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     
@@ -41,6 +54,9 @@ struct TaskFocusSheetView: View {
                     VStack(spacing: 20) {
                         // Task Header
                         headerSection
+                        
+                        // Importance / Priority Selector
+                        prioritySelectorSection
                         
                         // Single-Step Zero-Paralysis Runner Action Card (ONLY shown if the item has subtasks)
                         if !task.subtasks.isEmpty {
@@ -217,6 +233,67 @@ struct TaskFocusSheetView: View {
         .padding(.horizontal)
     }
     
+    // MARK: - Priority Selector Section
+    private var prioritySelectorSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("IMPORTANCE / PRIORITY", systemImage: "flag.fill")
+                .font(.system(size: 11, weight: .black))
+                .tracking(0.5)
+                .foregroundColor(.secondary)
+            
+            HStack(spacing: 8) {
+                Button {
+                    setPriority("high")
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "flame.fill")
+                        Text("High")
+                    }
+                    .font(.system(size: 13, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(task.isHighPriority ? Color.red : Color.red.opacity(0.12))
+                    .foregroundColor(task.isHighPriority ? .white : .red)
+                    .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                
+                Button {
+                    setPriority("medium")
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "bolt.fill")
+                        Text("Medium")
+                    }
+                    .font(.system(size: 13, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(task.isMediumPriority ? Color.orange : Color.orange.opacity(0.12))
+                    .foregroundColor(task.isMediumPriority ? .white : .orange)
+                    .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                
+                Button {
+                    setPriority("low")
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "leaf.fill")
+                        Text("Low")
+                    }
+                    .font(.system(size: 13, weight: .bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    .background(task.isLowPriority ? Color.green : Color.green.opacity(0.12))
+                    .foregroundColor(task.isLowPriority ? .white : .green)
+                    .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal)
+    }
+    
     // MARK: - Time Frame Preset Selector Bar
     private var timeFrameSelectorSection: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -377,9 +454,27 @@ struct TaskFocusSheetView: View {
                 
                 if !task.subtasks.isEmpty {
                     let completed = task.subtasks.filter { $0.isCompleted }.count
-                    Text("\(completed)/\(task.subtasks.count) completed")
+                    Text("\(completed)/\(task.subtasks.count) done")
                         .font(.caption)
                         .foregroundColor(.secondary)
+                }
+                
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        showBatchSubtasks.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: showBatchSubtasks ? "pencil" : "list.bullet.rectangle")
+                        Text(showBatchSubtasks ? "Single Mode" : "+ Paste Multiple")
+                    }
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .foregroundColor(.indigo)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.indigo.opacity(0.12))
+                    .cornerRadius(8)
                 }
             }
             
@@ -424,24 +519,73 @@ struct TaskFocusSheetView: View {
                 .cornerRadius(14)
             }
             
-            // Inline Add Step Field
-            HStack {
-                TextField("Add a bite-sized step...", text: $newStepTitle)
-                    .font(.subheadline)
-                    .onSubmit {
-                        addManualStep()
-                    }
-                
-                if !newStepTitle.trimmingCharacters(in: .whitespaces).isEmpty {
-                    Button(action: addManualStep) {
-                        Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.indigo)
+            if showBatchSubtasks {
+                // Batch Multiple Subtasks Input
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Paste or type multiple subtasks (one per line):")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                    
+                    TextEditor(text: $batchSubtasksText)
+                        .font(.subheadline)
+                        .frame(minHeight: 80, maxHeight: 130)
+                        .padding(6)
+                        .background(Color(.secondarySystemBackground))
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                        )
+                    
+                    HStack {
+                        let count = parsedBatchSubtasks.count
+                        Text(count == 0 ? "No steps detected" : "\(count) step\(count == 1 ? "" : "s") ready")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        
+                        Spacer()
+                        
+                        Button {
+                            addBatchSubtasks()
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus.circle.fill")
+                                Text("Add \(count > 0 ? "\(count) " : "")Steps")
+                            }
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(count > 0 ? Color.indigo : Color.secondary.opacity(0.3))
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                        }
+                        .disabled(count == 0)
                     }
                 }
+                .padding(12)
+                .background(Color(.secondarySystemBackground).opacity(0.6))
+                .cornerRadius(12)
+            } else {
+                // Inline Add Single Step Field (Also splits on pasted newlines)
+                HStack {
+                    TextField("Add a step (or paste multiple lines)...", text: $newStepTitle)
+                        .font(.subheadline)
+                        .onSubmit {
+                            addManualStep()
+                        }
+                    
+                    if !newStepTitle.trimmingCharacters(in: .whitespaces).isEmpty {
+                        Button(action: addManualStep) {
+                            Image(systemName: "plus.circle.fill")
+                                .foregroundColor(.indigo)
+                        }
+                    }
+                }
+                .padding(12)
+                .background(Color(.secondarySystemBackground))
+                .cornerRadius(12)
             }
-            .padding(12)
-            .background(Color(.secondarySystemBackground))
-            .cornerRadius(12)
         }
         .padding(.horizontal)
     }
@@ -713,15 +857,46 @@ struct TaskFocusSheetView: View {
         saveTaskToSupabase()
     }
     
+    private func setPriority(_ newPriority: String) {
+        task.priority = newPriority
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        Task {
+            await supabase.updateTaskPriority(task: task, priority: newPriority)
+        }
+    }
+    
     private func addManualStep() {
-        let trimmed = newStepTitle.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
+        let lines = newStepTitle.components(separatedBy: .newlines)
+        let cleanedSteps = lines.compactMap { line -> String? in
+            let cleaned = line
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "^[-•*\\d.)]+\\s*", with: "", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return cleaned.isEmpty ? nil : cleaned
+        }
+        guard !cleanedSteps.isEmpty else { return }
         
         var currentSubtasks = task.subtasks
-        currentSubtasks.append(SubtaskItem(title: trimmed, isCompleted: false))
+        for step in cleanedSteps {
+            currentSubtasks.append(SubtaskItem(title: step, isCompleted: false))
+        }
         task.updateMetadata(subtasks: currentSubtasks)
         newStepTitle = ""
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        saveTaskToSupabase()
+    }
+    
+    private func addBatchSubtasks() {
+        let steps = parsedBatchSubtasks
+        guard !steps.isEmpty else { return }
+        var currentSubtasks = task.subtasks
+        for step in steps {
+            currentSubtasks.append(SubtaskItem(title: step, isCompleted: false))
+        }
+        task.updateMetadata(subtasks: currentSubtasks)
+        batchSubtasksText = ""
+        showBatchSubtasks = false
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         saveTaskToSupabase()
     }
     

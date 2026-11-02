@@ -6,6 +6,7 @@ struct ProjectDetailView: View {
     @State private var selectedTab: Int = 0 // 0: Tasks, 1: Ideas
     @State private var showVoiceSheet: Bool = false
     @State private var showPlaybookEditor: Bool = false
+    @State private var showCreateTask: Bool = false
     @State private var activeFocusTask: TaskItem? = nil
     
     var liveProject: Project {
@@ -106,13 +107,26 @@ struct ProjectDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showVoiceSheet = true
-                } label: {
-                    Label("Voice Brainstorm", systemImage: "mic.fill")
-                        .foregroundColor(project.swiftUIColor)
+                HStack(spacing: 12) {
+                    Button {
+                        showCreateTask = true
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundColor(project.swiftUIColor)
+                    }
+                    
+                    Button {
+                        showVoiceSheet = true
+                    } label: {
+                        Label("Voice Brainstorm", systemImage: "mic.fill")
+                            .foregroundColor(project.swiftUIColor)
+                    }
                 }
             }
+        }
+        .sheet(isPresented: $showCreateTask) {
+            CreateTaskSheetView(prefillProject: project)
         }
         .sheet(isPresented: $showVoiceSheet) {
             VoiceSheetView(activeProject: project)
@@ -128,6 +142,27 @@ struct ProjectDetailView: View {
     // MARK: - Tasks Section
     private var tasksSection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Project Tasks")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    showCreateTask = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Add Task")
+                    }
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(liveProject.swiftUIColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(liveProject.swiftUIColor.opacity(0.12))
+                    .cornerRadius(8)
+                }
+            }
+            
             if projectTasks.isEmpty {
                 VStack(spacing: 8) {
                     Image(systemName: "checkmark.circle")

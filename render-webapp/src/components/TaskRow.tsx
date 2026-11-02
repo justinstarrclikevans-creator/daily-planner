@@ -23,6 +23,7 @@ interface TaskRowProps {
   onUpdatePriority: (taskId: string, priority: TaskPriority) => void;
   onUpdateDuration: (taskId: string, minutes: number) => void;
   onToggleSubtask: (taskId: string, subtaskId: string) => void;
+  onAddSubtasks?: (taskId: string, titles: string[]) => void;
   onLater: (taskId: string) => void;
   onConvertToProject: (task: Task) => void;
   onStartSprint: (task: Task) => void;
@@ -36,6 +37,7 @@ export const TaskRow: React.FC<TaskRowProps> = ({
   onUpdatePriority,
   onUpdateDuration,
   onToggleSubtask,
+  onAddSubtasks,
   onLater,
   onConvertToProject,
   onStartSprint,
@@ -44,6 +46,9 @@ export const TaskRow: React.FC<TaskRowProps> = ({
   const [showPriorityMenu, setShowPriorityMenu] = useState(false);
   const [showDurationMenu, setShowDurationMenu] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
+  const [singleSubtaskText, setSingleSubtaskText] = useState('');
+  const [isBatchAdding, setIsBatchAdding] = useState(false);
+  const [batchSubtaskText, setBatchSubtaskText] = useState('');
 
   const durationPresets = [5, 10, 15, 25, 30, 45, 60, 90];
 
@@ -207,18 +212,21 @@ export const TaskRow: React.FC<TaskRowProps> = ({
         </div>
 
         {/* Subtask count badge & toggle */}
-        {totalSubs > 0 && (
-          <button
-            type="button"
-            onClick={() => setShowSubtasks(!showSubtasks)}
-            className="flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-lg bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/60 transition-colors"
-          >
-            {showSubtasks ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            <span>
-              {completedSubs}/{totalSubs}
-            </span>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => setShowSubtasks(!showSubtasks)}
+          className={`flex items-center gap-1 text-[10px] font-mono px-2 py-1 rounded-lg border transition-colors ${
+            totalSubs > 0
+              ? 'bg-slate-800/50 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border-slate-700/60'
+              : 'text-slate-500 hover:text-slate-300 border-transparent hover:border-slate-800'
+          }`}
+          title={totalSubs > 0 ? 'Toggle subtasks' : 'Add subtasks'}
+        >
+          {showSubtasks ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+          <span>
+            {totalSubs > 0 ? `${completedSubs}/${totalSubs}` : '+ Steps'}
+          </span>
+        </button>
 
         {/* Action Buttons */}
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -255,9 +263,9 @@ export const TaskRow: React.FC<TaskRowProps> = ({
       </div>
 
       {/* Expanded Subtasks List */}
-      {showSubtasks && task.subtasks && task.subtasks.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-slate-800/80 pl-8 space-y-1.5">
-          {task.subtasks.map((sub) => (
+      {showSubtasks && (
+        <div className="mt-3 pt-3 border-t border-slate-800/80 pl-8 space-y-2">
+          {task.subtasks && task.subtasks.map((sub) => (
             <div key={sub.id} className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -274,6 +282,114 @@ export const TaskRow: React.FC<TaskRowProps> = ({
               </span>
             </div>
           ))}
+
+          {/* Inline Add Subtask Form with Batch Multi-line Paste support */}
+          {onAddSubtasks && (
+            <div className="pt-1.5">
+              {isBatchAdding ? (
+                <div className="space-y-1.5">
+                  <textarea
+                    rows={3}
+                    placeholder="Paste multiple subtasks (one per line)..."
+                    value={batchSubtaskText}
+                    onChange={(e) => setBatchSubtaskText(e.target.value)}
+                    className="w-full rounded-xl bg-slate-950 border border-slate-800 px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-500">
+                      {batchSubtaskText.split('\n').filter((l) => l.trim()).length} steps detected
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsBatchAdding(false)}
+                        className="text-[11px] text-slate-400 hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const lines = batchSubtaskText
+                            .split('\n')
+                            .map((l) => l.replace(/^[-•*\d.)]+\s*/, '').trim())
+                            .filter(Boolean);
+                          if (lines.length > 0) {
+                            onAddSubtasks(task.id, lines);
+                            setBatchSubtaskText('');
+                            setIsBatchAdding(false);
+                          }
+                        }}
+                        className="rounded-lg bg-indigo-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-indigo-500"
+                      >
+                        Add Steps
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    placeholder="Add step (or paste multiple lines)..."
+                    value={singleSubtaskText}
+                    onChange={(e) => setSingleSubtaskText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const lines = singleSubtaskText
+                          .split('\n')
+                          .map((l) => l.replace(/^[-•*\d.)]+\s*/, '').trim())
+                          .filter(Boolean);
+                        if (lines.length > 0) {
+                          onAddSubtasks(task.id, lines);
+                          setSingleSubtaskText('');
+                        }
+                      }
+                    }}
+                    onPaste={(e) => {
+                      const text = e.clipboardData.getData('text');
+                      if (text.includes('\n')) {
+                        e.preventDefault();
+                        const lines = text
+                          .split('\n')
+                          .map((l) => l.replace(/^[-•*\d.)]+\s*/, '').trim())
+                          .filter(Boolean);
+                        if (lines.length > 0) {
+                          onAddSubtasks(task.id, lines);
+                          setSingleSubtaskText('');
+                        }
+                      }
+                    }}
+                    className="flex-1 rounded-lg bg-slate-950 border border-slate-800 px-2.5 py-1 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const lines = singleSubtaskText
+                        .split('\n')
+                        .map((l) => l.replace(/^[-•*\d.)]+\s*/, '').trim())
+                        .filter(Boolean);
+                      if (lines.length > 0) {
+                        onAddSubtasks(task.id, lines);
+                        setSingleSubtaskText('');
+                      }
+                    }}
+                    className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold px-2 py-1"
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsBatchAdding(true)}
+                    className="text-[11px] text-slate-500 hover:text-slate-300 font-medium whitespace-nowrap"
+                  >
+                    Paste Multi
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

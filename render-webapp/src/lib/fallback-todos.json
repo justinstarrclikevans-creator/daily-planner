@@ -440,6 +440,38 @@
     "appleReminderId": "3300730B-1104-4E05-9DFB-ACAE538FB161"
   },
   {
+    "title": "Order a drum tuner",
+    "notes": "",
+    "listName": "Personal",
+    "priority": "medium",
+    "dueDate": null,
+    "appleReminderId": "030FCF3C-5105-406B-BF74-091F4D8F75F4"
+  },
+  {
+    "title": "Styx",
+    "notes": "",
+    "listName": "Personal",
+    "priority": "medium",
+    "dueDate": null,
+    "appleReminderId": "6CB19BCC-C51B-4645-9B0B-4FDEA3D207D3"
+  },
+  {
+    "title": "Review new charges posted to Miler Properties lease ledger",
+    "notes": "[⏱ 5m]",
+    "listName": "Personal",
+    "priority": "high",
+    "dueDate": null,
+    "appleReminderId": "BB2310DF-AAE6-4452-8534-3155BEB53A03"
+  },
+  {
+    "title": "Make it so simple the first command is just open the app pick one task that's an X number of time and then do it",
+    "notes": "",
+    "listName": "Personal",
+    "priority": "medium",
+    "dueDate": null,
+    "appleReminderId": "DA1766DB-C171-4C05-A77C-0A4CF13BA18E"
+  },
+  {
     "title": "Conduct documentation audit across all three centers to establish baseline standards with case notes",
     "notes": "[⏱ 5m]",
     "listName": "Turn90",
@@ -510,13 +542,5 @@
     "priority": "high",
     "dueDate": null,
     "appleReminderId": "D2439BC6-BF76-4F85-8C1E-C5CCD59BDAD1"
-  },
-  {
-    "title": "Pull job placement percentage data comparing all three centers for future analysis",
-    "notes": "[⏱ 20m]",
-    "listName": "Turn90",
-    "priority": "medium",
-    "dueDate": null,
-    "appleReminderId": "EF20767E-6BFC-4A47-86C7-76AA4FF8BD71"
   }
 ]

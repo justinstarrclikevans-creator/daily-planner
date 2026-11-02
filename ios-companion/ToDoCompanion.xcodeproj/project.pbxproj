@@ -44,6 +44,7 @@
 		222200000000000000000022 /* Views/Tasks/TaskItemRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000022 /* Views/Tasks/TaskItemRowView.swift */; };
 		222200000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift */; };
 		222200000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift */; };
+		222200000000000000000025 /* Views/Tasks/CreateTaskSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000025 /* Views/Tasks/CreateTaskSheetView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -84,6 +85,7 @@
 		111100000000000000000022 /* Views/Tasks/TaskItemRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/TaskItemRowView.swift; sourceTree = "<group>"; };
 		111100000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/BuildMyDaySheet.swift; sourceTree = "<group>"; };
 		111100000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Projects/ConvertTaskToProjectSheet.swift; sourceTree = "<group>"; };
+		111100000000000000000025 /* Views/Tasks/CreateTaskSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/CreateTaskSheetView.swift; sourceTree = "<group>"; };
 		1111000000000000000003E7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		333300000000000000000001 /* ToDoCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ToDoCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -148,6 +150,7 @@
 				111100000000000000000022 /* Views/Tasks/TaskItemRowView.swift */,
 				111100000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift */,
 				111100000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift */,
+				111100000000000000000025 /* Views/Tasks/CreateTaskSheetView.swift */,
 			);
 			path = ToDoCompanion;
 			sourceTree = "<group>";
@@ -265,6 +268,7 @@
 				222200000000000000000022 /* Views/Tasks/TaskItemRowView.swift in Sources */,
 				222200000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift in Sources */,
 				222200000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift in Sources */,
+				222200000000000000000025 /* Views/Tasks/CreateTaskSheetView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

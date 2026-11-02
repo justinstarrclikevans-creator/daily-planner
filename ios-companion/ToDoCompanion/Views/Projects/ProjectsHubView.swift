@@ -6,6 +6,7 @@ struct ProjectsHubView: View {
     @State private var showSettings: Bool = false
     @State private var showBuildMyDay: Bool = false
     @State private var showCreateProject: Bool = false
+    @State private var showCreateTask: Bool = false
     @State private var suggestedProjectName: String? = nil
     @State private var showAllProjectsOverride: Bool = false
     @State private var selectedFilter: TaskFilter = .all
@@ -111,11 +112,22 @@ struct ProjectsHubView: View {
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 14) {
-                        Button {
-                            suggestedProjectName = nil
-                            showCreateProject = true
+                        Menu {
+                            Button {
+                                showCreateTask = true
+                            } label: {
+                                Label("New Task", systemImage: "checkmark.circle.badge.plus")
+                            }
+                            
+                            Button {
+                                suggestedProjectName = nil
+                                showCreateProject = true
+                            } label: {
+                                Label("New Project", systemImage: "folder.badge.plus")
+                            }
                         } label: {
-                            Image(systemName: "plus")
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
                                 .foregroundColor(.indigo)
                         }
                         
@@ -149,6 +161,9 @@ struct ProjectsHubView: View {
             }
             .sheet(isPresented: $showCreateProject) {
                 CreateProjectSheetView(prefillName: suggestedProjectName ?? "")
+            }
+            .sheet(isPresented: $showCreateTask) {
+                CreateTaskSheetView()
             }
             .sheet(item: $activeFocusTask) { task in
                 TaskFocusSheetView(task: binding(for: task))
@@ -340,6 +355,23 @@ struct ProjectsHubView: View {
                 Text("Action Items")
                     .font(.headline)
                 Spacer()
+                Button {
+                    showCreateTask = true
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle.fill")
+                        Text("Add Task")
+                    }
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.indigo)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.indigo.opacity(0.12))
+                    .cornerRadius(8)
+                }
+                .padding(.trailing, 4)
+                
                 Text("\(filteredTasks.count) open")
                     .font(.caption)
                     .foregroundColor(.secondary)

@@ -1,9 +1,9 @@
 {
   "lastSlackSync": 1793379708,
   "lastEmailSync": {
-    "token.json": 1793387780000,
-    "token_2.json": 1793387360000,
-    "token_3.json": 1793384675000
+    "token.json": 1793553209000,
+    "token_2.json": 1793541789000,
+    "token_3.json": 1793579797000
   },
   "lastLetterlySync": 1793036330926,
   "lastAppOpenedAt": 1792872969378,
@@ -113,6 +113,10 @@
     "share sc works trident wednesday works hiring event details with participants and staff",
     "brief daisy on 8week commitment messaging for recruitment conversations",
     "add renfro brothers recruiter contact to seans employer partnership list",
-    "pull job placement percentage data comparing all three centers for analysis"
+    "pull job placement percentage data comparing all three centers for analysis",
+    "test todocompanion build 10 202610301512 on testflight",
+    "complete online checkin for hilton hotel reservation",
+    "test todocompanion build 10 202610301625 on testflight",
+    "pull job placement percentage data comparing all three centers for future analysis"
   ]
 }

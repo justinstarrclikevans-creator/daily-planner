@@ -5,6 +5,7 @@ import {
   supabase,
   Task,
   Project,
+  Subtask,
   TaskPriority,
   DEFAULT_PROJECTS,
   matchTaskToProject,
@@ -230,6 +231,39 @@ export default function WorkspacePage() {
       });
     } catch (e) {
       console.error('Failed to update subtasks:', e);
+    }
+  };
+
+  const handleAddSubtasks = async (taskId: string, newTitles: string[]) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || newTitles.length === 0) return;
+
+    const newSubtaskObjects: Subtask[] = newTitles.map((title) => ({
+      id: crypto.randomUUID(),
+      title,
+      isCompleted: false,
+    }));
+
+    const updatedSubtasks = [...(task.subtasks || []), ...newSubtaskObjects];
+
+    setTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, subtasks: updatedSubtasks } : t))
+    );
+
+    const serialized = serializeSubtasksIntoDescription(task.description, updatedSubtasks);
+
+    try {
+      await fetch('/api/desk', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: taskId,
+          description: serialized,
+          updated_at: new Date().toISOString(),
+        }),
+      });
+    } catch (e) {
+      console.error('Failed to add subtasks:', e);
     }
   };
 
@@ -556,6 +590,7 @@ export default function WorkspacePage() {
                     onUpdatePriority={handleUpdatePriority}
                     onUpdateDuration={handleUpdateDuration}
                     onToggleSubtask={handleToggleSubtask}
+                    onAddSubtasks={handleAddSubtasks}
                     onLater={handleLaterTask}
                     onConvertToProject={handleOpenConvertToProject}
                     onStartSprint={setActiveSprintTask}

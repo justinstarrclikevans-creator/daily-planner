@@ -34,11 +34,29 @@ export default function NewCardModal({
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [firstFiveMinutes, setFirstFiveMinutes] = useState('');
   const [subtasks, setSubtasks] = useState<string[]>(['']);
+  const [isBatchSubtasks, setIsBatchSubtasks] = useState(false);
+  const [batchSubtasksText, setBatchSubtasksText] = useState('');
 
   const handleSubtaskChange = (index: number, val: string) => {
     const updated = [...subtasks];
     updated[index] = val;
     setSubtasks(updated);
+  };
+
+  const handleSubtaskPaste = (e: React.ClipboardEvent<HTMLInputElement>, index: number) => {
+    const text = e.clipboardData.getData('text');
+    if (text.includes('\n')) {
+      e.preventDefault();
+      const lines = text
+        .split('\n')
+        .map((l) => l.replace(/^[-•*\d.)]+\s*/, '').trim())
+        .filter(Boolean);
+      if (lines.length > 0) {
+        const updated = [...subtasks];
+        updated.splice(index, 1, ...lines);
+        setSubtasks(updated);
+      }
+    }
   };
 
   const addSubtaskRow = () => {
@@ -47,6 +65,21 @@ export default function NewCardModal({
 
   const removeSubtaskRow = (index: number) => {
     setSubtasks(subtasks.filter((_, i) => i !== index));
+  };
+
+  const toggleBatchMode = () => {
+    if (!isBatchSubtasks) {
+      const existing = subtasks.map((s) => s.trim()).filter(Boolean).join('\n');
+      setBatchSubtasksText(existing);
+      setIsBatchSubtasks(true);
+    } else {
+      const parsed = batchSubtasksText
+        .split('\n')
+        .map((l) => l.replace(/^[-•*\d.)]+\s*/, '').trim())
+        .filter(Boolean);
+      setSubtasks(parsed.length > 0 ? parsed : ['']);
+      setIsBatchSubtasks(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -60,10 +93,17 @@ export default function NewCardModal({
       chosenProj = projects.find((p) => p.id === selectedProjectId);
     }
 
-    const validSubtasks = subtasks
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((s) => ({ title: s, isCompleted: false }));
+    let finalSubtaskStrings: string[] = [];
+    if (isBatchSubtasks) {
+      finalSubtaskStrings = batchSubtasksText
+        .split('\n')
+        .map((l) => l.replace(/^[-•*\d.)]+\s*/, '').trim())
+        .filter(Boolean);
+    } else {
+      finalSubtaskStrings = subtasks.map((s) => s.trim()).filter(Boolean);
+    }
+
+    const validSubtasks = finalSubtaskStrings.map((s) => ({ title: s, isCompleted: false }));
 
     onCreate({
       title: title.trim(),
@@ -214,37 +254,75 @@ export default function NewCardModal({
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                 Subtasks
               </label>
-              <button
-                type="button"
-                onClick={addSubtaskRow}
-                className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
-              >
-                <Plus className="h-3.5 w-3.5" /> Add Step
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleBatchMode}
+                  className="text-xs text-indigo-400 hover:text-indigo-300 font-semibold"
+                >
+                  {isBatchSubtasks ? 'Switch to Step-by-Step' : '+ Paste Multiple'}
+                </button>
+                {!isBatchSubtasks && (
+                  <button
+                    type="button"
+                    onClick={addSubtaskRow}
+                    className="flex items-center gap-1 text-xs text-slate-400 hover:text-white font-medium"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add
+                  </button>
+                )}
+              </div>
             </div>
 
-            <div className="mt-2 space-y-2 max-h-32 overflow-y-auto">
-              {subtasks.map((st, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder={`Step ${i + 1}`}
-                    value={st}
-                    onChange={(e) => handleSubtaskChange(i, e.target.value)}
-                    className="flex-1 rounded-xl bg-slate-950 border border-slate-800 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                  />
-                  {subtasks.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeSubtaskRow(i)}
-                      className="text-slate-500 hover:text-rose-400 p-1"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  )}
+            {isBatchSubtasks ? (
+              <div className="mt-2 space-y-1.5">
+                <textarea
+                  rows={4}
+                  placeholder={`Paste multiple subtasks (one per line):
+- Review pull request
+- Test local build
+- Reply to comments`}
+                  value={batchSubtasksText}
+                  onChange={(e) => setBatchSubtasksText(e.target.value)}
+                  className="w-full rounded-xl bg-slate-950 border border-slate-800 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono"
+                />
+                <div className="flex items-center justify-between text-[11px] text-slate-500">
+                  <span>
+                    {
+                      batchSubtasksText
+                        .split('\n')
+                        .map((l) => l.trim())
+                        .filter(Boolean).length
+                    }{' '}
+                    subtasks detected (lines will auto-split)
+                  </span>
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : (
+              <div className="mt-2 space-y-2 max-h-36 overflow-y-auto">
+                {subtasks.map((st, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder={`Step ${i + 1} (or paste multiple lines)`}
+                      value={st}
+                      onChange={(e) => handleSubtaskChange(i, e.target.value)}
+                      onPaste={(e) => handleSubtaskPaste(e, i)}
+                      className="flex-1 rounded-xl bg-slate-950 border border-slate-800 px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                    />
+                    {subtasks.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeSubtaskRow(i)}
+                        className="text-slate-500 hover:text-rose-400 p-1"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Submit Actions */}
