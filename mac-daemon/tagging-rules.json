@@ -19,7 +19,8 @@
         "skillcat",
         "reentry navigation",
         "transfr",
-        "vr training"
+        "vr training",
+        "lscmi"
       ]
     },
     {
@@ -74,7 +75,11 @@
         "bills",
         "lease",
         "apartment",
-        "personal"
+        "personal",
+        "flea treatment",
+        "porch slates",
+        "garage",
+        "attic"
       ]
     }
   ],
@@ -113,6 +118,71 @@
       "tag": "tammy",
       "label": "Tammy",
       "keywords": ["tammy"]
+    },
+    {
+      "tag": "stacy",
+      "label": "Stacy",
+      "keywords": ["stacy"]
+    },
+    {
+      "tag": "casey",
+      "label": "Casey",
+      "keywords": ["casey", "casey sexton"]
+    },
+    {
+      "tag": "brooke",
+      "label": "Brooke",
+      "keywords": ["brooke"]
+    },
+    {
+      "tag": "kat",
+      "label": "Kat",
+      "keywords": ["kat"]
+    },
+    {
+      "tag": "tb",
+      "label": "TB",
+      "keywords": ["tb"]
+    },
+    {
+      "tag": "isiah",
+      "label": "Isiah",
+      "keywords": ["isiah"]
+    },
+    {
+      "tag": "kwatez",
+      "label": "Kwatez",
+      "keywords": ["kwatez"]
+    },
+    {
+      "tag": "brandon",
+      "label": "Brandon",
+      "keywords": ["brandon"]
+    },
+    {
+      "tag": "lashawn",
+      "label": "LaShawn",
+      "keywords": ["lashawn"]
+    },
+    {
+      "tag": "anthony",
+      "label": "Anthony",
+      "keywords": ["anthony"]
+    },
+    {
+      "tag": "kevin",
+      "label": "Coach Kevin",
+      "keywords": ["kevin", "coach kevin"]
+    },
+    {
+      "tag": "terrance",
+      "label": "Terrance",
+      "keywords": ["terrance"]
+    },
+    {
+      "tag": "diyoung",
+      "label": "Diyoung",
+      "keywords": ["diyoung"]
     }
   ],
   "projects": [
@@ -161,6 +231,101 @@
         "synapse",
         "passive training",
         "viral video"
+      ]
+    },
+    {
+      "tag": "nigeria-campaign",
+      "label": "Nigeria Campaign",
+      "keywords": [
+        "nigeria",
+        "nigeria campaign",
+        "flyers",
+        "signups"
+      ]
+    },
+    {
+      "tag": "lscmi",
+      "label": "LSCMI Updates",
+      "keywords": [
+        "lscmi",
+        "scoring guide",
+        "automated lscmi",
+        "intake interviews"
+      ]
+    },
+    {
+      "tag": "leadership-l10",
+      "label": "Leadership L10",
+      "keywords": [
+        "leadership l10",
+        "l10",
+        "personal best",
+        "professional best",
+        "headlines"
+      ]
+    },
+    {
+      "tag": "training-app",
+      "label": "Training App for Boys",
+      "keywords": [
+        "training app",
+        "training app for boys"
+      ]
+    },
+    {
+      "tag": "t90-app",
+      "label": "T90 App",
+      "keywords": [
+        "t90 app",
+        "voice analysis",
+        "criminal history",
+        "failure of nerve"
+      ]
+    },
+    {
+      "tag": "antigravity",
+      "label": "Antigravity",
+      "keywords": [
+        "antigravity",
+        "rea",
+        "workllm"
+      ]
+    },
+    {
+      "tag": "resource-navigation",
+      "label": "Resource Navigation App",
+      "keywords": [
+        "resource navigation",
+        "resource app",
+        "name search"
+      ]
+    },
+    {
+      "tag": "todo-app",
+      "label": "TO DO App",
+      "keywords": [
+        "todo app",
+        "to do app"
+      ]
+    },
+    {
+      "tag": "skillcat",
+      "label": "SkillCat / Trades",
+      "keywords": [
+        "skillcat",
+        "trades tracks",
+        "trades"
+      ]
+    },
+    {
+      "tag": "program-updates",
+      "label": "Program Updates",
+      "keywords": [
+        "program updates",
+        "module 6",
+        "spb",
+        "emotion regulation",
+        "pay pack"
       ]
     }
   ],
