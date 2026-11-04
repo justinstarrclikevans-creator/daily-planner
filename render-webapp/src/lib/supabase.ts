@@ -29,6 +29,7 @@ export type Task = {
   inPlayQueue: boolean;
   firstFiveMinutes?: string | null;
   subtasks: Subtask[];
+  tags?: string[];
   createdAt?: string;
 };
 
@@ -260,11 +261,15 @@ export function getFallbackTasks(projects: Project[]): Task[] {
       priority = 'low';
     }
 
+    const fullText = `${item.title || ''} ${item.notes || ''}`;
+    const tagMatches = fullText.match(/#([a-zA-Z0-9_\-]+)/g) || [];
+    const extractedTags = Array.from(new Set(tagMatches.map((t: string) => t.substring(1).toLowerCase())));
+
     const task: Task = {
       id,
       title: item.title,
       description: item.notes || '',
-      listName: item.listName || 'Personal',
+      listName: item.listName || 'General',
       status: 'pending',
       dueDate: item.dueDate || null,
       appleReminderId: item.appleReminderId || id,
@@ -272,6 +277,7 @@ export function getFallbackTasks(projects: Project[]): Task[] {
       priority,
       inPlayQueue: false,
       subtasks,
+      tags: extractedTags,
       createdAt: new Date().toISOString(),
     };
     const matched = matchTaskToProject(task, projects);

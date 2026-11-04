@@ -40,7 +40,7 @@ struct TaskItemRowView: View {
                 
                 // Title & Subtitle
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(task.title)
+                    Text(task.cleanTitle)
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(isVisuallyDone ? .secondary : .primary)
                         .strikethrough(isVisuallyDone)
@@ -51,6 +51,17 @@ struct TaskItemRowView: View {
                         Text(task.listName)
                             .font(.caption2)
                             .foregroundColor(.secondary)
+                        
+                        // Tag pills
+                        ForEach(task.allTags.prefix(2), id: \.self) { tag in
+                            Text("#\(tag)")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.indigo)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1.5)
+                                .background(Color.indigo.opacity(0.12))
+                                .cornerRadius(4)
+                        }
                         
                         if let firstFive = task.firstFiveMinutesPrompt, !firstFive.isEmpty {
                             Text("• ⚡ \(firstFive)")

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import taggingRules from '@/lib/tagging-rules.json';
 import {
   supabase,
   Task,
@@ -36,6 +37,10 @@ export default function WorkspacePage() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>(DEFAULT_PROJECTS);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  // Context Gate & Tags Filters
+  const [selectedSpace, setSelectedSpace] = useState<string>('all');
+  const [selectedPerson, setSelectedPerson] = useState<string>('anyone');
 
   // Filters
   const [priorityFilter, setPriorityFilter] = useState<TaskPriority | 'all'>('all');
@@ -112,39 +117,73 @@ export default function WorkspacePage() {
 
   // Filtered Tasks
   const filteredTasks = useMemo(() => {
-    return tasks.filter((task) => {
-      // 1. Project filter
-      if (selectedProjectId && task.projectId !== selectedProjectId) {
-        return false;
-      }
+    return tasks
+      .filter((task) => {
+        // 1. Project filter
+        if (selectedProjectId && task.projectId !== selectedProjectId) {
+          return false;
+        }
 
-      // 2. Priority filter
-      if (priorityFilter !== 'all' && task.priority !== priorityFilter) {
-        return false;
-      }
+        // 2. Space filter
+        if (selectedSpace !== 'all') {
+          const s = selectedSpace.toLowerCase();
+          const hasSpaceTag =
+            (task.tags && task.tags.includes(s)) ||
+            task.title.toLowerCase().includes(`#${s}`) ||
+            (task.description && task.description.toLowerCase().includes(`#${s}`));
+          if (!hasSpaceTag) return false;
+        }
 
-      // 3. Duration filter
-      if (durationFilter === 'quick' && task.estimatedMinutes > 15) {
-        return false;
-      }
-      if (durationFilter === 'medium' && (task.estimatedMinutes < 15 || task.estimatedMinutes > 30)) {
-        return false;
-      }
-      if (durationFilter === 'deep' && task.estimatedMinutes <= 30) {
-        return false;
-      }
+        // 3. Person filter
+        if (selectedPerson === 'solo') {
+          const allPeople = taggingRules.people.map((p) => p.tag.toLowerCase());
+          const hasAnyPerson =
+            (task.tags && task.tags.some((t) => allPeople.includes(t.toLowerCase()))) ||
+            allPeople.some((p) => task.title.toLowerCase().includes(`#${p}`));
+          if (hasAnyPerson) return false;
+        } else if (selectedPerson !== 'anyone') {
+          const p = selectedPerson.toLowerCase();
+          const hasPersonTag =
+            (task.tags && task.tags.includes(p)) ||
+            task.title.toLowerCase().includes(`#${p}`) ||
+            (task.description && task.description.toLowerCase().includes(`#${p}`));
+          if (!hasPersonTag) return false;
+        }
 
-      // 4. Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const inTitle = task.title.toLowerCase().includes(q);
-        const inSubs = task.subtasks?.some((s) => s.title.toLowerCase().includes(q));
-        if (!inTitle && !inSubs) return false;
-      }
+        // 4. Priority filter
+        if (priorityFilter !== 'all' && task.priority !== priorityFilter) {
+          return false;
+        }
 
-      return true;
-    });
-  }, [tasks, selectedProjectId, priorityFilter, durationFilter, searchQuery]);
+        // 5. Duration filter
+        if (durationFilter === 'quick' && task.estimatedMinutes > 15) {
+          return false;
+        }
+        if (durationFilter === 'medium' && (task.estimatedMinutes < 15 || task.estimatedMinutes > 30)) {
+          return false;
+        }
+        if (durationFilter === 'deep' && task.estimatedMinutes <= 30) {
+          return false;
+        }
+
+        // 6. Search query
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const inTitle = task.title.toLowerCase().includes(q);
+          const inSubs = task.subtasks?.some((s) => s.title.toLowerCase().includes(q));
+          if (!inTitle && !inSubs) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        // Strict High Priority first
+        const pWeight = (p: TaskPriority) => (p === 'high' ? 3 : p === 'medium' ? 2 : 1);
+        const diff = pWeight(b.priority) - pWeight(a.priority);
+        if (diff !== 0) return diff;
+        return (a.estimatedMinutes || 15) - (b.estimatedMinutes || 15);
+      });
+  }, [tasks, selectedProjectId, selectedSpace, selectedPerson, priorityFilter, durationFilter, searchQuery]);
 
   // Task Handlers
   const handleToggleComplete = async (taskId: string) => {
@@ -542,8 +581,86 @@ export default function WorkspacePage() {
               )}
             </div>
 
+            {/* ADHD Context Gate Bar */}
+            <div className="mt-4 p-3 bg-slate-900/80 border border-slate-800 rounded-2xl space-y-2.5">
+              {/* Space Selection */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider shrink-0 flex items-center gap-1 px-1">
+                  <span>📍</span> Space:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSpace('all')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                    selectedSpace === 'all'
+                      ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  All Spaces
+                </button>
+                {taggingRules.spaces.map((space) => (
+                  <button
+                    key={space.tag}
+                    type="button"
+                    onClick={() => setSelectedSpace(selectedSpace === space.tag ? 'all' : space.tag)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                      selectedSpace === space.tag
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    #{space.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* People Selection */}
+              <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-800/80 pt-2">
+                <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wider shrink-0 flex items-center gap-1 px-1">
+                  <span>👥</span> With:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPerson('anyone')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                    selectedPerson === 'anyone'
+                      ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  Anyone
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPerson(selectedPerson === 'solo' ? 'anyone' : 'solo')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                    selectedPerson === 'solo'
+                      ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                      : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                  }`}
+                >
+                  🧘 Solo
+                </button>
+                {taggingRules.people.map((person) => (
+                  <button
+                    key={person.tag}
+                    type="button"
+                    onClick={() => setSelectedPerson(selectedPerson === person.tag ? 'anyone' : person.tag)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                      selectedPerson === person.tag
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                        : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+                    }`}
+                  >
+                    #{person.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Filter Toolbar */}
-            <div className="mt-4">
+            <div className="mt-3">
               <FilterToolbar
                 priorityFilter={priorityFilter}
                 onPriorityChange={setPriorityFilter}

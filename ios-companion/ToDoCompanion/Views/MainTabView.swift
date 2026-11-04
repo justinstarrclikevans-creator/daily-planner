@@ -7,7 +7,7 @@ struct MainTabView: View {
         TabView(selection: $selectedTab) {
             ProjectsHubView()
                 .tabItem {
-                    Label("Projects", systemImage: "folder.fill")
+                    Label("Focus", systemImage: "bolt.fill")
                 }
                 .tag(0)
             

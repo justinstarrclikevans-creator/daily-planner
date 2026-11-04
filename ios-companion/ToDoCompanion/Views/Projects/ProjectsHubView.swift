@@ -2,6 +2,11 @@ import SwiftUI
 
 struct ProjectsHubView: View {
     @ObservedObject private var supabase = SupabaseService.shared
+    @ObservedObject private var taggingService = TaggingRulesService.shared
+    
+    @AppStorage("selected_space") private var selectedSpace: String = "all"
+    @AppStorage("selected_person") private var selectedPerson: String = "anyone"
+    
     @State private var showVoiceSheet: Bool = false
     @State private var showSettings: Bool = false
     @State private var showBuildMyDay: Bool = false
@@ -9,6 +14,7 @@ struct ProjectsHubView: View {
     @State private var showCreateTask: Bool = false
     @State private var suggestedProjectName: String? = nil
     @State private var showAllProjectsOverride: Bool = false
+    @State private var isProjectsExpanded: Bool = false
     @State private var selectedFilter: TaskFilter = .all
     @State private var activeFocusTask: TaskItem? = nil
     @State private var editingPlaybookProject: Project? = nil
@@ -46,16 +52,37 @@ struct ProjectsHubView: View {
     }
     
     private var filteredTasks: [TaskItem] {
-        let pool = supabase.tasks.filter { isTaskVisibleNow($0) && !$0.isCompleted }
-        switch selectedFilter {
-        case .all:
-            return pool
-        case .high:
-            return pool.filter { $0.isHighPriority }
-        case .quickWins:
-            return pool.filter { $0.estimatedMinutes <= 15 }
-        case .deepFocus:
-            return pool.filter { $0.estimatedMinutes > 15 }
+        let pool = supabase.tasks.filter { task in
+            guard !task.isCompleted else { return false }
+            guard isTaskVisibleNow(task) else { return false }
+            guard task.matchesSpace(selectedSpace) else { return false }
+            guard task.matchesPerson(selectedPerson) else { return false }
+            
+            switch selectedFilter {
+            case .all:
+                return true
+            case .high:
+                return task.isHighPriority
+            case .quickWins:
+                return task.estimatedMinutes <= 15
+            case .deepFocus:
+                return task.estimatedMinutes > 15
+            }
+        }
+        
+        // Strict sorting: High Priority first (🔥 High > ⚡ Med > 🌱 Low), then shortest duration first
+        return pool.sorted { a, b in
+            let prioRank: (TaskItem) -> Int = { t in
+                if t.isHighPriority { return 3 }
+                if t.isMediumPriority { return 2 }
+                return 1
+            }
+            let rankA = prioRank(a)
+            let rankB = prioRank(b)
+            if rankA != rankB {
+                return rankA > rankB
+            }
+            return a.estimatedMinutes < b.estimatedMinutes
         }
     }
     
@@ -63,15 +90,18 @@ struct ProjectsHubView: View {
         NavigationStack {
             ZStack(alignment: .bottomTrailing) {
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 20) {
                         // Header with Greeting & Build My Day Hero
                         headerSection
                         
-                        // Active Projects Grid
-                        projectsSection
+                        // ADHD Context Gate (Space & People)
+                        contextGateSection
                         
-                        // Action Items & Filters
+                        // Focus Tasks & Filters (Sorted High Priority First!)
                         recentTasksSection
+                        
+                        // Collapsible Projects
+                        projectsCollapsibleSection
                     }
                     .padding()
                     .padding(.bottom, 80) // Padding for floating mic button
@@ -88,7 +118,7 @@ struct ProjectsHubView: View {
                 // Floating Voice Mic Button
                 floatingMicButton
             }
-            .navigationTitle("Projects")
+            .navigationTitle("Focus")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -151,7 +181,7 @@ struct ProjectsHubView: View {
                 }
             }
             .sheet(isPresented: $showBuildMyDay) {
-                BuildMyDaySheet()
+                BuildMyDaySheet(initialSpace: selectedSpace, initialPerson: selectedPerson)
             }
             .sheet(isPresented: $showVoiceSheet) {
                 VoiceSheetView()
@@ -249,111 +279,282 @@ struct ProjectsHubView: View {
         return "Good evening, Justin"
     }
 
-    // MARK: - Projects Section
-    private var projectsSection: some View {
+    // MARK: - ADHD Context Gate Section
+    private var contextGateSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Projects")
-                    .font(.headline)
-                    .foregroundColor(.primary)
-                
-                Spacer()
-                
-                Button {
-                    suggestedProjectName = nil
-                    showCreateProject = true
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus")
-                        Text("New Project")
-                    }
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Color.indigo.opacity(0.12))
-                    .foregroundColor(.indigo)
-                    .cornerRadius(8)
-                }
-            }
-            
-            if hiddenProjectsCount > 0 {
+            // Space Selection
+            VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Image(systemName: "clock.badge.exclamationmark")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    Text("\(hiddenProjectsCount) project\(hiddenProjectsCount == 1 ? "" : "s") hidden by work/off-hours schedule")
-                        .font(.caption2)
+                    Image(systemName: "location.fill")
+                        .font(.caption)
+                        .foregroundColor(.indigo)
+                    Text("WHAT SPACE ARE YOU IN?")
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundColor(.secondary)
                     Spacer()
-                    Button(showAllProjectsOverride ? "Hide Scheduled" : "Show All") {
-                        showAllProjectsOverride.toggle()
+                    if selectedSpace != "all" {
+                        Button("Clear") {
+                            withAnimation { selectedSpace = "all" }
+                        }
+                        .font(.caption2.bold())
+                        .foregroundColor(.indigo)
                     }
-                    .font(.caption2)
-                    .fontWeight(.bold)
-                    .foregroundColor(.indigo)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(.secondarySystemBackground))
-                .cornerRadius(8)
+                
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        contextChip(
+                            label: "All Spaces",
+                            icon: "globe",
+                            isSelected: selectedSpace == "all"
+                        ) {
+                            withAnimation { selectedSpace = "all" }
+                        }
+                        
+                        ForEach(taggingService.rules.spaces) { space in
+                            contextChip(
+                                label: space.label,
+                                icon: spaceIcon(for: space.tag),
+                                isSelected: selectedSpace.lowercased() == space.tag.lowercased()
+                            ) {
+                                withAnimation {
+                                    if selectedSpace.lowercased() == space.tag.lowercased() {
+                                        selectedSpace = "all"
+                                    } else {
+                                        selectedSpace = space.tag.lowercased()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
             }
             
-            if visibleProjects.isEmpty {
-                VStack(spacing: 6) {
-                    Image(systemName: "moon.stars.fill")
-                        .font(.title2)
+            // Person Selection
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "person.2.fill")
+                        .font(.caption)
+                        .foregroundColor(.purple)
+                    Text("IS ANYONE WITH YOU?")
+                        .font(.system(size: 11, weight: .bold))
                         .foregroundColor(.secondary)
-                    Text("All projects are currently off-schedule.")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Button("Show Hidden Projects") {
-                        showAllProjectsOverride = true
+                    Spacer()
+                    if selectedPerson != "anyone" {
+                        Button("Clear") {
+                            withAnimation { selectedPerson = "anyone" }
+                        }
+                        .font(.caption2.bold())
+                        .foregroundColor(.purple)
                     }
-                    .font(.caption)
-                    .fontWeight(.bold)
-                    .foregroundColor(.indigo)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-            } else {
-                LazyVStack(spacing: 12) {
-                    ForEach(visibleProjects) { project in
-                        NavigationLink(destination: ProjectDetailView(project: project)) {
-                            ProjectCardView(
-                                project: project,
-                                tasks: supabase.tasks,
-                                ideas: supabase.ideas
-                            )
+                
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        contextChip(
+                            label: "Anyone",
+                            icon: "person.2",
+                            isSelected: selectedPerson == "anyone"
+                        ) {
+                            withAnimation { selectedPerson = "anyone" }
                         }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button {
-                                editingPlaybookProject = project
-                            } label: {
-                                Label("Set Visibility Hours & Playbook", systemImage: "clock.badge.checkmark")
-                            }
-                            
-                            Button(role: .destructive) {
-                                Task {
-                                    await supabase.deleteProject(projectId: project.id)
+                        
+                        contextChip(
+                            label: "Solo",
+                            icon: "person.fill",
+                            isSelected: selectedPerson == "solo"
+                        ) {
+                            withAnimation { selectedPerson = "solo" }
+                        }
+                        
+                        ForEach(taggingService.rules.people) { person in
+                            contextChip(
+                                label: person.label,
+                                icon: "person.crop.circle",
+                                isSelected: selectedPerson.lowercased() == person.tag.lowercased()
+                            ) {
+                                withAnimation {
+                                    if selectedPerson.lowercased() == person.tag.lowercased() {
+                                        selectedPerson = "anyone"
+                                    } else {
+                                        selectedPerson = person.tag.lowercased()
+                                    }
                                 }
-                            } label: {
-                                Label("Delete Project", systemImage: "trash")
                             }
                         }
                     }
+                    .padding(.vertical, 2)
                 }
             }
         }
+        .padding(14)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(16)
+        .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
     }
     
-    // MARK: - Action Items Section
+    private func contextChip(label: String, icon: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
+        }) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.caption)
+                Text(label)
+                    .font(.caption.weight(isSelected ? .bold : .medium))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(isSelected ? Color.indigo : Color(UIColor.tertiarySystemGroupedBackground))
+            .foregroundColor(isSelected ? .white : .primary)
+            .cornerRadius(12)
+            .shadow(color: isSelected ? Color.indigo.opacity(0.3) : .clear, radius: 4, x: 0, y: 2)
+        }
+        .buttonStyle(.plain)
+    }
+    
+    private func spaceIcon(for space: String) -> String {
+        switch space.lowercased() {
+        case "apricot": return "laptopcomputer"
+        case "slack": return "bubble.left.and.bubble.right.fill"
+        case "email": return "envelope.fill"
+        case "home": return "house.fill"
+        default: return "tag.fill"
+        }
+    }
+    
+    // MARK: - Collapsible Projects Section
+    private var projectsCollapsibleSection: some View {
+        DisclosureGroup(isExpanded: $isProjectsExpanded) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Projects")
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    Spacer()
+                    Button {
+                        suggestedProjectName = nil
+                        showCreateProject = true
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "plus")
+                            Text("New Project")
+                        }
+                        .font(.caption)
+                        .fontWeight(.bold)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.indigo.opacity(0.12))
+                        .foregroundColor(.indigo)
+                        .cornerRadius(8)
+                    }
+                }
+                .padding(.top, 4)
+                
+                if hiddenProjectsCount > 0 {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock.badge.exclamationmark")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text("\(hiddenProjectsCount) project\(hiddenProjectsCount == 1 ? "" : "s") hidden by work/off-hours schedule")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button(showAllProjectsOverride ? "Hide Scheduled" : "Show All") {
+                            showAllProjectsOverride.toggle()
+                        }
+                        .font(.caption2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.indigo)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(8)
+                }
+                
+                if visibleProjects.isEmpty {
+                    VStack(spacing: 6) {
+                        Image(systemName: "moon.stars.fill")
+                            .font(.title2)
+                            .foregroundColor(.secondary)
+                        Text("All projects are currently off-schedule.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                } else {
+                    LazyVStack(spacing: 12) {
+                        ForEach(visibleProjects) { project in
+                            NavigationLink(destination: ProjectDetailView(project: project)) {
+                                ProjectCardView(
+                                    project: project,
+                                    tasks: supabase.tasks,
+                                    ideas: supabase.ideas
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button {
+                                    editingPlaybookProject = project
+                                } label: {
+                                    Label("Set Visibility Hours & Playbook", systemImage: "clock.badge.checkmark")
+                                }
+                                
+                                Button(role: .destructive) {
+                                    Task {
+                                        await supabase.deleteProject(projectId: project.id)
+                                    }
+                                } label: {
+                                    Label("Delete Project", systemImage: "trash")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(.top, 8)
+        } label: {
+            HStack {
+                Image(systemName: "folder")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                Text("Projects & Playbooks (\(supabase.projects.count))")
+                    .font(.subheadline.bold())
+                    .foregroundColor(.secondary)
+                Spacer()
+            }
+        }
+        .padding(14)
+        .background(Color(UIColor.secondarySystemGroupedBackground))
+        .cornerRadius(14)
+    }
+    
+    // MARK: - Focus Tasks Section
     private var recentTasksSection: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("Action Items")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Focus Tasks")
+                        .font(.headline)
+                    if selectedSpace != "all" || selectedPerson != "anyone" {
+                        HStack(spacing: 4) {
+                            if selectedSpace != "all" {
+                                Text("#\(selectedSpace)")
+                                    .font(.caption2.bold())
+                                    .foregroundColor(.indigo)
+                            }
+                            if selectedPerson != "anyone" {
+                                Text("#\(selectedPerson)")
+                                    .font(.caption2.bold())
+                                    .foregroundColor(.purple)
+                            }
+                        }
+                    }
+                }
                 Spacer()
                 Button {
                     showCreateTask = true

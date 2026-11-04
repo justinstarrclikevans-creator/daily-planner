@@ -316,7 +316,7 @@ class SupabaseService: ObservableObject {
     func createTask(
         title: String,
         description: String? = nil,
-        listName: String = "Personal",
+        listName: String = "General",
         projectId: UUID? = nil,
         dueDate: Date? = nil,
         appleReminderId: String? = nil,
@@ -324,7 +324,8 @@ class SupabaseService: ObservableObject {
         priority: String = "medium",
         inPlayQueue: Bool = false,
         firstFiveMinutes: String? = nil,
-        subtasks: [SubtaskItem] = []
+        subtasks: [SubtaskItem] = [],
+        tags: [String] = []
     ) async {
         let effectiveMinutes = estimatedMinutes ?? TaskItem.extractEstimatedMinutes(from: description ?? "") ?? 5
         let finalDescription = TaskItem.buildDescription(
@@ -351,7 +352,8 @@ class SupabaseService: ObservableObject {
             actualSeconds: 0,
             inPlayQueue: inPlayQueue,
             firstFiveMinutesPrompt: firstFiveMinutes,
-            subtasks: subtasks
+            subtasks: subtasks,
+            tags: tags
         )
         
         // Optimistic UI update & local persistence

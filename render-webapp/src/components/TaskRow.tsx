@@ -63,6 +63,13 @@ export const TaskRow: React.FC<TaskRowProps> = ({
 
   const isVisuallyDone = isCompleting || task.status === 'completed';
 
+  // Extract clean title and tags
+  const cleanTitle = task.title.replace(/#([a-zA-Z0-9_\-]+)/g, '').trim() || task.title;
+  const titleTags = Array.from(new Set([
+    ...(task.tags || []),
+    ...((task.title.match(/#([a-zA-Z0-9_\-]+)/g) || []).map((t) => t.substring(1).toLowerCase()))
+  ]));
+
   const completedSubs = task.subtasks ? task.subtasks.filter((s) => s.isCompleted).length : 0;
   const totalSubs = task.subtasks ? task.subtasks.length : 0;
 
@@ -118,8 +125,16 @@ export const TaskRow: React.FC<TaskRowProps> = ({
                   : 'text-slate-100'
               }`}
             >
-              {task.title}
+              {cleanTitle}
             </span>
+            {titleTags.slice(0, 2).map((tag) => (
+              <span
+                key={tag}
+                className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-indigo-500/15 text-indigo-400 border border-indigo-500/20 shrink-0"
+              >
+                #{tag}
+              </span>
+            ))}
             {showProjectBadge && project && (
               <span
                 className="text-[10px] font-medium px-2 py-0.5 rounded-full border shrink-0"

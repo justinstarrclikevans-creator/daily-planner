@@ -1,5 +1,25 @@
 const { callGeminiWithRetry } = require('./gemini-helper');
+const fs = require('fs');
+const path = require('path');
 require('dotenv').config();
+
+function getTaggingRules() {
+    try {
+        const rulesPath = path.join(__dirname, 'tagging-rules.json');
+        if (fs.existsSync(rulesPath)) {
+            return JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
+        }
+    } catch (e) {
+        console.error("Failed to read tagging-rules.json:", e.message);
+    }
+    return {
+        defaultList: "General",
+        spaces: [],
+        people: [],
+        projects: [],
+        priorityRules: { high: [], low: [] }
+    };
+}
 
 async function extractTodos(slackMessages = [], emails = [], existingTodos = [], completedTodos = [], letterlyNotes = []) {
     // Handle both argument styles (if someone passes object or positional)
@@ -17,6 +37,8 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
         console.error("No Gemini API key found for extraction.");
         return [];
     }
+
+    const rules = getTaggingRules();
     
     const prompt = `
     You are an intelligent executive assistant for Justin Evans (with a sharp eye for detecting any "failure of nerve"—hesitation on high-leverage moves).
@@ -37,48 +59,46 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
     - If a task or action item is ALREADY an active todo, DO NOT extract it.
     - If Justin already took care of an email or Slack request, or finished it previously, DO NOT create a task for it.
 
-    CRITICAL EXTRACTION RULES:
-    1. SLACK & HUDDLES (Route ALL Slack & Huddle todos to "Turn90"):
-       - Read all Slack messages, huddle transcripts, and Slack summaries of huddles Justin is in.
-       - Extract action items assigned to or required by Justin (@U02AGGN2E1Z, @jevans, or Justin).
-       - Ignore tasks explicitly assigned only to other colleagues.
-       - Every todo extracted from Slack or Huddles MUST have "listName": "Turn90".
+    CRITICAL UNIFIED "GENERAL" LIST AND TAGGING ARCHITECTURE:
+    - ALL tasks belong to listName: "${rules.defaultList || 'General'}". NEVER output another listName.
+    - Instead of multiple lists, categorise every task using TAGS based on these rules:
 
-    2. EMAILS (Route to matching project, or "General" if unsure):
-       - Read emails and extract appropriate todos for Justin.
-       - Prioritize direct human communication, requests, or bills. Ignore marketing newsletters, promos, or automated spam.
-       - If you are not sure what project an email todo belongs to, set "listName": "General".
+    SPACES RULES:
+    ${JSON.stringify(rules.spaces || [], null, 2)}
+    - Assign the most appropriate space tag (e.g. "apricot", "slack", "email", "home").
 
-    3. LETTERLY RECORDINGS (Brainstorming, Ideas, and Todos):
-       - Letterly recordings may include brainstorming, ideas, or todos:
-         a) BRAINSTORMING: Set the task "title" as the main concept, and put the attached thoughts as "subtasks" (array of strings).
-         b) IDEAS: Write the idea out as a long thought in the task "title" (with empty "subtasks" unless there are sub-thoughts).
-         c) TODOS: Standard actionable task "title" with any sub-steps in "subtasks".
+    PEOPLE RULES:
+    ${JSON.stringify(rules.people || [], null, 2)}
+    - If a task involves or was requested by or mentions a known colleague/person, add their tag (e.g. "matt", "jenn", "sean", "daisy", "katie", "amy", "tammy").
 
-    4. PROJECT / APPLE REMINDERS LIST MAPPING:
-       Valid "listName" values (MUST be one of these exact 6 list names):
-       - "Turn90": All Slack/Huddle todos, Turn 90 / T90 operations, Apricot, casework, reentry navigation, SkillCat.
-       - "843FC": 843FC club, coaching, holiday events, Fourth Wall / Crowded, campaigns.
-       - "Personal": Household tasks, family, personal bills, health, cats, personal routine.
-       - "Nosa": Nosa, Royvi, Claire ID/admin items.
-       - "Book (Memoir) and Synapse": Memoir book, Synapse AI engine, passive training certification, viral videos.
-       - "General": Any task, idea, or email todo where the specific project is uncertain.
+    PROJECTS RULES:
+    ${JSON.stringify(rules.projects || [], null, 2)}
+    - Add matching project tag (e.g. "turn90", "843fc", "nosa", "book").
 
-    5. FORMAT & SCHEMA:
-       - Do NOT generate "first 5 minutes" or first-step prompts.
-       - Default "estimatedMinutes" to 5 (or realistic 5, 10, 15, 30, 45, 60 based on context).
-       - "priority": Set to "high" (urgent deadlines, client/exec blockers, high-leverage moves), "medium" (standard day-to-day work), or "low" (casual ideas, someday exploration, background reference).
-       - Output MUST be a raw JSON array of objects (no markdown fences):
-         [
-           {
-             "title": "Main task title, concept, or long idea thought",
-             "subtasks": ["Subtask or thought 1", "Subtask or thought 2"],
-             "source": "slack" | "email" | "letterly",
-             "listName": "Turn90" | "843FC" | "Personal" | "Nosa" | "Book (Memoir) and Synapse" | "General",
-             "priority": "high" | "medium" | "low",
-             "estimatedMinutes": 5
-           }
-         ]
+    PRIORITY RULES:
+    - "high": matches high-priority triggers (${(rules.priorityRules?.high || []).join(', ')}), urgent deadlines, client/exec blockers, payroll, high-leverage moves.
+    - "low": matches low-priority triggers (${(rules.priorityRules?.low || []).join(', ')}), casual ideas, someday exploration.
+    - "medium": all standard operational tasks.
+
+    DURATION & SUBTASKS:
+    - "estimatedMinutes": Realistic estimate (5, 10, 15, 20, 25, 30, 45, 60).
+    - "subtasks": Array of bite-sized sequential execution steps.
+
+    OUTPUT SCHEMA:
+    Output MUST be a raw JSON array of objects (no markdown fences):
+    [
+      {
+        "title": "Clean, punchy task title",
+        "subtasks": ["Subtask 1", "Subtask 2"],
+        "source": "slack" | "email" | "letterly",
+        "listName": "${rules.defaultList || 'General'}",
+        "tags": ["apricot", "turn90", "matt", "high", "15m"],
+        "space": "apricot" | "slack" | "email" | "home",
+        "people": ["matt"],
+        "priority": "high" | "medium" | "low",
+        "estimatedMinutes": 15
+      }
+    ]
 
     Recently Completed Todos (NEVER re-extract or duplicate any of these):
     ${JSON.stringify((completedTodos || []).slice(0, 100).map(t => ({ title: t.title || t.name, listName: t.listName })))}
@@ -114,12 +134,33 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
 
         const parsed = JSON.parse(text);
         if (!Array.isArray(parsed)) return [];
-        return parsed.map(item => ({
-            ...item,
-            priority: (item.priority && ['high', 'medium', 'low'].includes(String(item.priority).toLowerCase()))
+        return parsed.map(item => {
+            let tags = Array.isArray(item.tags) ? item.tags.map(t => String(t).replace(/^#/, '').toLowerCase().trim()).filter(Boolean) : [];
+            if (item.space && !tags.includes(item.space.toLowerCase())) {
+                tags.push(item.space.toLowerCase());
+            }
+            if (Array.isArray(item.people)) {
+                for (const p of item.people) {
+                    const cleanP = String(p).replace(/^#/, '').toLowerCase().trim();
+                    if (cleanP && !tags.includes(cleanP)) tags.push(cleanP);
+                }
+            }
+            const prio = (item.priority && ['high', 'medium', 'low'].includes(String(item.priority).toLowerCase()))
                 ? String(item.priority).toLowerCase()
-                : 'medium'
-        }));
+                : 'medium';
+            if (!tags.includes(prio)) {
+                tags.push(prio);
+            }
+            return {
+                ...item,
+                listName: rules.defaultList || 'General',
+                tags,
+                space: item.space || '',
+                people: Array.isArray(item.people) ? item.people : [],
+                priority: prio,
+                estimatedMinutes: Number(item.estimatedMinutes) || 15
+            };
+        });
     } catch (error) {
         console.error("AI Extraction Error:", error);
         return [];

@@ -77,15 +77,79 @@ struct TaskItem: Identifiable, Codable, Hashable {
     var inPlayQueue: Bool
     var firstFiveMinutesPrompt: String?
     var subtasks: [SubtaskItem]
+    var tags: [String] = []
     
     var isCompleted: Bool {
         get { status == "completed" }
         set { status = newValue ? "completed" : "pending" }
     }
     
-    var isHighPriority: Bool { priority.lowercased() == "high" }
-    var isMediumPriority: Bool { priority.lowercased() == "medium" }
-    var isLowPriority: Bool { priority.lowercased() == "low" }
+    var isHighPriority: Bool {
+        priority.lowercased() == "high" || allTags.contains("high")
+    }
+    var isMediumPriority: Bool {
+        priority.lowercased() == "medium" || allTags.contains("medium") || allTags.contains("med")
+    }
+    var isLowPriority: Bool {
+        priority.lowercased() == "low" || allTags.contains("low")
+    }
+    
+    var allTags: [String] {
+        var set = Set(tags.map { $0.lowercased().replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })
+        for t in TaskItem.extractHashtags(from: title) {
+            set.insert(t)
+        }
+        if let desc = description {
+            for t in TaskItem.extractHashtags(from: desc) {
+                set.insert(t)
+            }
+        }
+        return Array(set)
+    }
+    
+    var cleanTitle: String {
+        var result = title
+        if let regex = try? NSRegularExpression(pattern: #"\s*#([a-zA-Z0-9_\-]+)"#) {
+            let nsString = result as NSString
+            result = regex.stringByReplacingMatches(in: result, options: [], range: NSRange(location: 0, length: nsString.length), withTemplate: "")
+        }
+        let trimmed = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? title : trimmed
+    }
+    
+    var spaceTag: String? {
+        let knownSpaces = ["apricot", "slack", "email", "home"]
+        if let match = allTags.first(where: { knownSpaces.contains($0) }) {
+            return match
+        }
+        let lowerList = listName.lowercased()
+        if knownSpaces.contains(lowerList) { return lowerList }
+        return nil
+    }
+    
+    var peopleInTask: [String] {
+        let knownPeople = ["matt", "jenn", "sean", "daisy", "katie", "amy", "tammy", "london", "reece", "alexa"]
+        return allTags.filter { knownPeople.contains($0) }
+    }
+    
+    func matchesSpace(_ space: String) -> Bool {
+        if space.isEmpty || space.lowercased() == "all" { return true }
+        let target = space.lowercased()
+        if allTags.contains(target) { return true }
+        let text = "\(title) \(description ?? "") \(listName)".lowercased()
+        return text.contains(target)
+    }
+    
+    func matchesPerson(_ person: String) -> Bool {
+        if person.isEmpty || person.lowercased() == "anyone" || person.lowercased() == "all" { return true }
+        let target = person.lowercased()
+        if target == "solo" {
+            return peopleInTask.isEmpty
+        }
+        if allTags.contains(target) { return true }
+        let text = "\(title) \(description ?? "")".lowercased()
+        return text.contains(target)
+    }
     
     var isScheduledForFuture: Bool {
         guard let due = dueDate else { return false }
@@ -112,6 +176,7 @@ struct TaskItem: Identifiable, Codable, Hashable {
         case inPlayQueue = "in_play_queue"
         case firstFiveMinutesPrompt = "first_five_minutes"
         case subtasks
+        case tags
     }
     
     init(
@@ -119,7 +184,7 @@ struct TaskItem: Identifiable, Codable, Hashable {
         projectId: UUID? = nil,
         title: String,
         description: String? = nil,
-        listName: String = "Personal",
+        listName: String = "General",
         status: String = "pending",
         dueDate: Date? = nil,
         source: String = "ios",
@@ -130,7 +195,8 @@ struct TaskItem: Identifiable, Codable, Hashable {
         actualSeconds: Int = 0,
         inPlayQueue: Bool = false,
         firstFiveMinutesPrompt: String? = nil,
-        subtasks: [SubtaskItem] = []
+        subtasks: [SubtaskItem] = [],
+        tags: [String] = []
     ) {
         self.id = id
         self.projectId = projectId
@@ -147,6 +213,7 @@ struct TaskItem: Identifiable, Codable, Hashable {
         self.inPlayQueue = inPlayQueue
         self.firstFiveMinutesPrompt = firstFiveMinutesPrompt
         self.subtasks = subtasks
+        self.tags = tags.isEmpty ? (Self.extractHashtags(from: title) + Self.extractHashtags(from: description ?? "")) : tags
         
         // Duration heuristics if not provided
         if let mins = estimatedMinutes, mins > 0 {
@@ -215,6 +282,13 @@ struct TaskItem: Identifiable, Codable, Hashable {
         } else {
             self.priority = "medium"
         }
+        
+        // 6. Resolve tags
+        if let colTags = try container.decodeIfPresent([String].self, forKey: .tags), !colTags.isEmpty {
+            self.tags = colTags
+        } else {
+            self.tags = Self.extractHashtags(from: self.title) + Self.extractHashtags(from: rawDesc ?? "")
+        }
     }
     
     func encode(to encoder: Encoder) throws {
@@ -237,9 +311,17 @@ struct TaskItem: Identifiable, Codable, Hashable {
         try container.encode(inPlayQueue, forKey: .inPlayQueue)
         try container.encodeIfPresent(firstFiveMinutesPrompt, forKey: .firstFiveMinutesPrompt)
         try container.encode(subtasks, forKey: .subtasks)
+        try container.encode(tags, forKey: .tags)
     }
     
     // MARK: - Helpers & Fallbacks
+    
+    static func extractHashtags(from text: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: #"#([a-zA-Z0-9_\-]+)"#) else { return [] }
+        let nsString = text as NSString
+        let results = regex.matches(in: text, range: NSRange(location: 0, length: nsString.length))
+        return results.map { nsString.substring(with: $0.range(at: 1)).lowercased() }
+    }
     
     static func extractEstimatedMinutes(from desc: String) -> Int? {
         if let range = desc.range(of: #"\[⏱\s*(\d+)m\]"#, options: .regularExpression) {

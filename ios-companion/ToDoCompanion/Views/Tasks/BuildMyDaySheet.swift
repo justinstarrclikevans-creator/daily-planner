@@ -4,6 +4,10 @@ struct BuildMyDaySheet: View {
     @ObservedObject private var supabase = SupabaseService.shared
     @Environment(\.dismiss) private var dismiss
     
+    var initialSpace: String = "all"
+    var initialPerson: String = "anyone"
+    
+    @State private var filterByCurrentContext: Bool = true
     @State private var availableMinutes: Int = 120 // default 2 hours
     @State private var selectedTaskToRun: TaskItem? = nil
     
@@ -19,23 +23,24 @@ struct BuildMyDaySheet: View {
         supabase.tasks.filter { task in
             guard !task.isCompleted else { return false }
             guard !task.isScheduledForFuture else { return false }
+            if filterByCurrentContext {
+                if !task.matchesSpace(initialSpace) { return false }
+                if !task.matchesPerson(initialPerson) { return false }
+            }
             return true
         }
     }
     
     private var scheduledPlan: (tasks: [TaskItem], totalMinutes: Int, highCount: Int, medCount: Int) {
-        let priorityWeight: (String) -> Int = { p in
-            switch p.lowercased() {
-            case "high": return 3
-            case "medium": return 2
-            case "low": return 1
-            default: return 2
-            }
+        let priorityWeight: (TaskItem) -> Int = { t in
+            if t.isHighPriority { return 3 }
+            if t.isMediumPriority { return 2 }
+            return 1
         }
         
         let sorted = eligibleTasks.sorted { a, b in
-            let wA = priorityWeight(a.priority)
-            let wB = priorityWeight(b.priority)
+            let wA = priorityWeight(a)
+            let wB = priorityWeight(b)
             if wA != wB { return wA > wB }
             return a.estimatedMinutes < b.estimatedMinutes
         }
@@ -88,6 +93,35 @@ struct BuildMyDaySheet: View {
                         LinearGradient(colors: [Color.indigo, Color.purple], startPoint: .topLeading, endPoint: .bottomTrailing)
                     )
                     .cornerRadius(20)
+                    
+                    // Active Context Filter Toggle
+                    if initialSpace != "all" || initialPerson != "anyone" {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("ACTIVE CONTEXT FILTER")
+                                    .font(.system(size: 10, weight: .bold))
+                                    .foregroundColor(.secondary)
+                                HStack(spacing: 6) {
+                                    if initialSpace != "all" {
+                                        Text("Space: #\(initialSpace)")
+                                            .font(.caption.bold())
+                                            .foregroundColor(.indigo)
+                                    }
+                                    if initialPerson != "anyone" {
+                                        Text("With: #\(initialPerson)")
+                                            .font(.caption.bold())
+                                            .foregroundColor(.purple)
+                                    }
+                                }
+                            }
+                            Spacer()
+                            Toggle("", isOn: $filterByCurrentContext)
+                                .labelsHidden()
+                        }
+                        .padding(12)
+                        .background(Color(UIColor.secondarySystemGroupedBackground))
+                        .cornerRadius(14)
+                    }
                     
                     // Available time preset buttons
                     VStack(alignment: .leading, spacing: 10) {

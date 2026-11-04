@@ -45,6 +45,8 @@
 		222200000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift */; };
 		222200000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift */; };
 		222200000000000000000025 /* Views/Tasks/CreateTaskSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000025 /* Views/Tasks/CreateTaskSheetView.swift */; };
+		222200000000000000000026 /* Services/TaggingRulesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000026 /* Services/TaggingRulesService.swift */; };
+		222200000000000000000027 /* Config/tagging-rules.json in Resources */ = {isa = PBXBuildFile; fileRef = 111100000000000000000027 /* Config/tagging-rules.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -86,6 +88,8 @@
 		111100000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/BuildMyDaySheet.swift; sourceTree = "<group>"; };
 		111100000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Projects/ConvertTaskToProjectSheet.swift; sourceTree = "<group>"; };
 		111100000000000000000025 /* Views/Tasks/CreateTaskSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views/Tasks/CreateTaskSheetView.swift; sourceTree = "<group>"; };
+		111100000000000000000026 /* Services/TaggingRulesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/TaggingRulesService.swift; sourceTree = "<group>"; };
+		111100000000000000000027 /* Config/tagging-rules.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = Config/tagging-rules.json; sourceTree = "<group>"; };
 		1111000000000000000003E7 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		333300000000000000000001 /* ToDoCompanion.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ToDoCompanion.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -151,6 +155,8 @@
 				111100000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift */,
 				111100000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift */,
 				111100000000000000000025 /* Views/Tasks/CreateTaskSheetView.swift */,
+				111100000000000000000026 /* Services/TaggingRulesService.swift */,
+				111100000000000000000027 /* Config/tagging-rules.json */,
 			);
 			path = ToDoCompanion;
 			sourceTree = "<group>";
@@ -222,6 +228,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				222200000000000000000011 /* Assets.xcassets in Resources */,
+				222200000000000000000027 /* Config/tagging-rules.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -269,6 +276,7 @@
 				222200000000000000000023 /* Views/Tasks/BuildMyDaySheet.swift in Sources */,
 				222200000000000000000024 /* Views/Projects/ConvertTaskToProjectSheet.swift in Sources */,
 				222200000000000000000025 /* Views/Tasks/CreateTaskSheetView.swift in Sources */,
+				222200000000000000000026 /* Services/TaggingRulesService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

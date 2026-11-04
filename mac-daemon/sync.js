@@ -197,9 +197,33 @@ async function runHourlySync() {
                         continue;
                     }
 
-                    const targetList = matchProjectForTask(item.title, item.description || (item.subtasks || []).join(' '), item.listName, item.source);
-                    const mins = item.estimatedMinutes || 5;
+                    let targetList = 'General';
+                    try {
+                        const rulesPath = path.join(__dirname, 'tagging-rules.json');
+                        if (fs.existsSync(rulesPath)) {
+                            const r = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
+                            targetList = r.defaultList || 'General';
+                        }
+                    } catch (e) {}
+
+                    const mins = item.estimatedMinutes || 15;
                     const priority = item.priority || 'medium';
+                    const rawTags = Array.isArray(item.tags) ? item.tags : [];
+                    const tags = rawTags.map(t => String(t).replace(/^#/, '').toLowerCase().trim()).filter(Boolean);
+                    if (item.space && !tags.includes(item.space.toLowerCase())) {
+                        tags.push(item.space.toLowerCase());
+                    }
+                    if (!tags.includes(priority)) {
+                        tags.push(priority);
+                    }
+                    if (!tags.includes(`${mins}m`)) {
+                        tags.push(`${mins}m`);
+                    }
+
+                    // Format hashtags for Apple Reminders so it creates native tag pills
+                    const hashtagString = tags.map(t => `#${t}`).join(' ');
+                    const finalTitleWithTags = hashtagString ? `${item.title} ${hashtagString}` : item.title;
+
                     const noteLines = [`[⏱ ${mins}m]`];
 
                     if (Array.isArray(item.subtasks) && item.subtasks.length > 0) {
@@ -214,15 +238,16 @@ async function runHourlySync() {
                     }
 
                     const finalNotes = noteLines.join('\n');
-                    const ok = await addReminder(targetList, item.title, finalNotes, priority);
+                    const ok = await addReminder(targetList, finalTitleWithTags, finalNotes, priority);
                     if (!ok) {
                         console.error(`Failed to push reminder to list (${targetList}):`, item.title);
                     } else {
-                        console.log(`Added to [${targetList}] [${priority.toUpperCase()}]: ${item.title} (${(item.subtasks || []).length} subtasks)`);
+                        console.log(`Added to [${targetList}] [${priority.toUpperCase()}]: ${item.title} (Tags: ${tags.join(', ')})`);
                         activeTitlesSet.add(normTitle);
                     }
 
                     item.listName = targetList;
+                    item.tags = tags;
                     item.description = finalNotes;
                     item.estimatedMinutes = mins;
                     item.priority = priority;

@@ -565,6 +565,12 @@ class RemindersManager: ObservableObject {
                 } else if current.estimatedMinutes <= 0 {
                     current.estimatedMinutes = 5
                 }
+                
+                let hashtags = TaskItem.extractHashtags(from: title) + TaskItem.extractHashtags(from: r.notes ?? "")
+                if !hashtags.isEmpty {
+                    current.tags = Array(Set(current.tags + hashtags))
+                }
+                
                 SupabaseService.shared.tasks[index] = current
             } else {
                 // If this reminder matches a completed task, complete it in EventKit and DO NOT create a new pending task
@@ -586,6 +592,8 @@ class RemindersManager: ObservableObject {
                 
                 let mins = TaskItem.extractEstimatedMinutes(from: r.notes ?? "") ?? 5
                 let parsedSubtasks = TaskItem.extractSubtasks(from: r.notes ?? "")
+                let hashtags = TaskItem.extractHashtags(from: title) + TaskItem.extractHashtags(from: r.notes ?? "")
+                
                 await SupabaseService.shared.createTask(
                     title: title,
                     description: r.notes,
@@ -595,7 +603,8 @@ class RemindersManager: ObservableObject {
                     appleReminderId: reminderId,
                     estimatedMinutes: mins,
                     priority: prio,
-                    subtasks: parsedSubtasks
+                    subtasks: parsedSubtasks,
+                    tags: hashtags
                 )
             }
         }

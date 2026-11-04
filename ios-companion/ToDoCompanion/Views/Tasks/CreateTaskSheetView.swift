@@ -5,11 +5,14 @@ struct CreateTaskSheetView: View {
     
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var supabase = SupabaseService.shared
+    @ObservedObject private var taggingService = TaggingRulesService.shared
     
     @State private var title: String = ""
     @State private var selectedProjectName: String = "General"
     @State private var selectedPriority: String = "medium" // "high" | "medium" | "low"
     @State private var selectedDuration: Int = 15
+    @State private var selectedSpaceTag: String = ""
+    @State private var selectedPersonTag: String = ""
     @State private var firstFiveMinutes: String = ""
     
     // Subtasks input modes: Batch (multi-line paste/type) vs Single
@@ -41,14 +44,49 @@ struct CreateTaskSheetView: View {
                 }
                 
                 // Section 2: Project
-                Section("Project") {
-                    Picker("Assign to Project", selection: $selectedProjectName) {
-                        ForEach(supabase.projects) { proj in
+                Section("List / Project") {
+                    Picker("Assign to List", selection: $selectedProjectName) {
+                        Text("General (Default)").tag("General")
+                        ForEach(supabase.projects.filter { $0.name.lowercased() != "general" }) { proj in
                             HStack {
                                 Label(proj.name, systemImage: proj.icon)
                             }
                             .tag(proj.name)
                         }
+                    }
+                }
+                
+                // Section 3: Context / Space Tag
+                Section("Context / Space Tag") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            tagChip(label: "None", isSelected: selectedSpaceTag.isEmpty) {
+                                selectedSpaceTag = ""
+                            }
+                            ForEach(taggingService.rules.spaces) { space in
+                                tagChip(label: "#\(space.tag)", isSelected: selectedSpaceTag == space.tag) {
+                                    selectedSpaceTag = (selectedSpaceTag == space.tag) ? "" : space.tag
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                
+                // Section 4: Person Tag
+                Section("Person Tag (Optional)") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            tagChip(label: "None", isSelected: selectedPersonTag.isEmpty) {
+                                selectedPersonTag = ""
+                            }
+                            ForEach(taggingService.rules.people) { person in
+                                tagChip(label: "#\(person.tag)", isSelected: selectedPersonTag == person.tag) {
+                                    selectedPersonTag = (selectedPersonTag == person.tag) ? "" : person.tag
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
                     }
                 }
                 
@@ -222,6 +260,19 @@ struct CreateTaskSheetView: View {
         .buttonStyle(.plain)
     }
     
+    private func tagChip(label: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(label)
+                .font(.caption.bold())
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(isSelected ? Color.indigo : Color(UIColor.secondarySystemGroupedBackground))
+                .foregroundColor(isSelected ? .white : .primary)
+                .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
+    }
+
     private func addSingleStep() {
         let trimmed = singleStepTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -240,6 +291,18 @@ struct CreateTaskSheetView: View {
         
         let firstFive = firstFiveMinutes.trimmingCharacters(in: .whitespacesAndNewlines)
         let firstFiveOpt = firstFive.isEmpty ? nil : firstFive
+
+        var finalTags: [String] = []
+        if !selectedSpaceTag.isEmpty { finalTags.append(selectedSpaceTag) }
+        if !selectedPersonTag.isEmpty { finalTags.append(selectedPersonTag) }
+        if selectedPriority == "high" { finalTags.append("high") }
+
+        var reminderTitle = finalTitle
+        for tag in finalTags {
+            if !reminderTitle.lowercased().contains("#\(tag.lowercased())") {
+                reminderTitle += " #\(tag)"
+            }
+        }
         
         Task {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
@@ -253,16 +316,16 @@ struct CreateTaskSheetView: View {
                 subtasks: subtaskItems
             )
             
-            // Sync to Apple Reminders with EventKit Priority
+            // Sync to Apple Reminders with EventKit Priority and hashtags in title
             let reminderId = try? await RemindersManager.shared.addReminder(
-                title: finalTitle,
+                title: reminderTitle,
                 notes: serializedNotes,
                 listName: selectedProjectName
             )
             
             // Create in Supabase & local state
             await supabase.createTask(
-                title: finalTitle,
+                title: reminderTitle,
                 description: serializedNotes,
                 listName: selectedProjectName,
                 projectId: matchedProj?.id,
@@ -270,7 +333,8 @@ struct CreateTaskSheetView: View {
                 estimatedMinutes: selectedDuration,
                 priority: selectedPriority,
                 firstFiveMinutes: firstFiveOpt,
-                subtasks: subtaskItems
+                subtasks: subtaskItems,
+                tags: finalTags
             )
             
             dismiss()

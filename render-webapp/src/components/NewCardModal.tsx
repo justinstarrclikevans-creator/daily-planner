@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { Project, TaskPriority } from '@/lib/supabase';
 import { determineProjectForTask } from '@/lib/routing';
+import taggingRules from '@/lib/tagging-rules.json';
 import { X, Plus, Trash2, Clock, Flame, Zap, Sprout, Sparkles } from 'lucide-react';
 
 interface NewCardModalProps {
@@ -30,6 +31,8 @@ export default function NewCardModal({
   const [selectedProjectId, setSelectedProjectId] = useState<string>(
     defaultProjectId || 'auto'
   );
+  const [selectedSpaceTag, setSelectedSpaceTag] = useState<string>('');
+  const [selectedPersonTag, setSelectedPersonTag] = useState<string>('');
   const [estimatedMinutes, setEstimatedMinutes] = useState(15);
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [firstFiveMinutes, setFirstFiveMinutes] = useState('');
@@ -105,10 +108,18 @@ export default function NewCardModal({
 
     const validSubtasks = finalSubtaskStrings.map((s) => ({ title: s, isCompleted: false }));
 
+    let finalTitle = title.trim();
+    if (selectedSpaceTag && !finalTitle.toLowerCase().includes(`#${selectedSpaceTag.toLowerCase()}`)) {
+      finalTitle += ` #${selectedSpaceTag}`;
+    }
+    if (selectedPersonTag && !finalTitle.toLowerCase().includes(`#${selectedPersonTag.toLowerCase()}`)) {
+      finalTitle += ` #${selectedPersonTag}`;
+    }
+
     onCreate({
-      title: title.trim(),
+      title: finalTitle,
       projectId: chosenProj?.id,
-      listName: chosenProj?.name || 'Personal',
+      listName: chosenProj?.name || 'General',
       estimatedMinutes,
       priority,
       firstFiveMinutes: firstFiveMinutes.trim() || undefined,
@@ -231,6 +242,75 @@ export default function NewCardModal({
                   {mins}m
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Space & Person Context Tags */}
+          <div className="space-y-2 border-t border-slate-800/80 pt-3">
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-indigo-400 mb-1">
+                Context / Space Tag
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedSpaceTag('')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                    selectedSpaceTag === ''
+                      ? 'bg-indigo-600 text-white'
+                      : 'bg-slate-950 text-slate-400 border border-slate-800 hover:bg-slate-800'
+                  }`}
+                >
+                  None
+                </button>
+                {taggingRules.spaces.map((s) => (
+                  <button
+                    key={s.tag}
+                    type="button"
+                    onClick={() => setSelectedSpaceTag(selectedSpaceTag === s.tag ? '' : s.tag)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                      selectedSpaceTag === s.tag
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                        : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                    }`}
+                  >
+                    #{s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-wider text-purple-400 mb-1">
+                Person Tag (Optional)
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setSelectedPersonTag('')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                    selectedPersonTag === ''
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-slate-950 text-slate-400 border border-slate-800 hover:bg-slate-800'
+                  }`}
+                >
+                  None
+                </button>
+                {taggingRules.people.map((p) => (
+                  <button
+                    key={p.tag}
+                    type="button"
+                    onClick={() => setSelectedPersonTag(selectedPersonTag === p.tag ? '' : p.tag)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                      selectedPersonTag === p.tag
+                        ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+                        : 'bg-slate-950 text-slate-300 border border-slate-800 hover:bg-slate-800'
+                    }`}
+                  >
+                    #{p.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

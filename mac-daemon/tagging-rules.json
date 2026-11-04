@@ -1,0 +1,190 @@
+{
+  "defaultList": "General",
+  "spaces": [
+    {
+      "tag": "apricot",
+      "label": "Apricot",
+      "icon": "doc.text.magnifyingglass",
+      "description": "Casework, intake, attendance, participant profiles, employment updates, reentry navigation",
+      "keywords": [
+        "apricot",
+        "intake",
+        "participant",
+        "casework",
+        "case note",
+        "case notes",
+        "caseworker",
+        "employment update",
+        "attendance",
+        "skillcat",
+        "reentry navigation",
+        "transfr",
+        "vr training"
+      ]
+    },
+    {
+      "tag": "slack",
+      "label": "Slack",
+      "icon": "bubble.left.and.bubble.right.fill",
+      "description": "Team chat, Slack huddles, threads, all-staff communication",
+      "keywords": [
+        "slack",
+        "huddle",
+        "channel",
+        "thread",
+        "dm",
+        "all staff meeting"
+      ]
+    },
+    {
+      "tag": "email",
+      "label": "Email",
+      "icon": "envelope.fill",
+      "description": "Inboxes, email replies, vendors, invoices, customer support, registrations",
+      "keywords": [
+        "email",
+        "inbox",
+        "gmail",
+        "reply to",
+        "invoice",
+        "receipt",
+        "gusto",
+        "stripe",
+        "time off request"
+      ]
+    },
+    {
+      "tag": "home",
+      "label": "Home",
+      "icon": "house.fill",
+      "description": "Personal, household, errands, family, pets, health, shopping",
+      "keywords": [
+        "home",
+        "household",
+        "groceries",
+        "cats",
+        "errand",
+        "buy",
+        "order",
+        "clean",
+        "ups store",
+        "amazon return",
+        "vet",
+        "doctor",
+        "bills",
+        "lease",
+        "apartment",
+        "personal"
+      ]
+    }
+  ],
+  "people": [
+    {
+      "tag": "matt",
+      "label": "Matt",
+      "keywords": ["matt", "matthew"]
+    },
+    {
+      "tag": "jenn",
+      "label": "Jenn",
+      "keywords": ["jenn", "jennifer"]
+    },
+    {
+      "tag": "sean",
+      "label": "Sean",
+      "keywords": ["sean", "sean mcgowan"]
+    },
+    {
+      "tag": "daisy",
+      "label": "Daisy",
+      "keywords": ["daisy", "daisy boynton"]
+    },
+    {
+      "tag": "katie",
+      "label": "Katie",
+      "keywords": ["katie", "katie bergeron"]
+    },
+    {
+      "tag": "amy",
+      "label": "Amy",
+      "keywords": ["amy"]
+    },
+    {
+      "tag": "tammy",
+      "label": "Tammy",
+      "keywords": ["tammy"]
+    }
+  ],
+  "projects": [
+    {
+      "tag": "turn90",
+      "label": "Turn90",
+      "keywords": [
+        "turn90",
+        "turn 90",
+        "t90",
+        "sc works",
+        "first shift",
+        "charleston center",
+        "spartanburg",
+        "columbia center"
+      ]
+    },
+    {
+      "tag": "843fc",
+      "label": "843FC",
+      "keywords": [
+        "843fc",
+        "843",
+        "soccer",
+        "futsal",
+        "football club",
+        "practice",
+        "coaching"
+      ]
+    },
+    {
+      "tag": "nosa",
+      "label": "Nosa",
+      "keywords": [
+        "nosa",
+        "royvi",
+        "claire"
+      ]
+    },
+    {
+      "tag": "book",
+      "label": "Book & Synapse",
+      "keywords": [
+        "memoir",
+        "book",
+        "synapse",
+        "passive training",
+        "viral video"
+      ]
+    }
+  ],
+  "priorityRules": {
+    "high": [
+      "urgent",
+      "today",
+      "asap",
+      "deadline",
+      "blocker",
+      "executive",
+      "payroll",
+      "immediate",
+      "failure of nerve",
+      "high leverage"
+    ],
+    "low": [
+      "someday",
+      "idea",
+      "explore",
+      "read later",
+      "optional",
+      "low priority"
+    ]
+  },
+  "durationPresets": [5, 10, 15, 20, 25, 30, 45, 60]
+}
