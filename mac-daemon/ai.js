@@ -1,7 +1,7 @@
 const { callGeminiWithRetry } = require('./gemini-helper');
 const fs = require('fs');
 const path = require('path');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 function getTaggingRules() {
     try {
@@ -59,44 +59,26 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
     - If a task or action item is ALREADY an active todo, DO NOT extract it.
     - If Justin already took care of an email or Slack request, or finished it previously, DO NOT create a task for it.
 
-    CRITICAL UNIFIED "GENERAL" LIST AND TAGGING ARCHITECTURE:
-    - ALL tasks belong to listName: "${rules.defaultList || 'General'}". NEVER output another listName.
-    - Instead of multiple lists, categorise every task using TAGS based on these rules:
-
-    SPACES RULES:
-    ${JSON.stringify(rules.spaces || [], null, 2)}
-    - Assign the most appropriate space tag (e.g. "apricot", "slack", "email", "home").
-
-    PEOPLE RULES:
-    ${JSON.stringify(rules.people || [], null, 2)}
-    - If a task involves or was requested by or mentions a known colleague/person, add their tag (e.g. "matt", "jenn", "sean", "daisy", "katie", "amy", "tammy").
-
-    PROJECTS RULES:
-    ${JSON.stringify(rules.projects || [], null, 2)}
-    - Add matching project tag (e.g. "turn90", "843fc", "nosa", "book").
+    CRITICAL UNIFIED "GENERAL" LIST ARCHITECTURE:
+    - ALL tasks belong to listName: "${rules.defaultList || 'General'}".
+    - DO NOT generate hashtags (#tag) in the title or anywhere else. Justin will add tags himself.
+    - DO NOT generate time estimates or durations (e.g. [⏱ 15m] or estimatedMinutes). Justin will add times himself.
+    - DO NOT generate microsteps, checklist items, or subtasks. Keep it to a single clean actionable task.
 
     PRIORITY RULES:
-    - "high": matches high-priority triggers (${(rules.priorityRules?.high || []).join(', ')}), urgent deadlines, client/exec blockers, payroll, high-leverage moves.
-    - "low": matches low-priority triggers (${(rules.priorityRules?.low || []).join(', ')}), casual ideas, someday exploration.
+    - "high": matches urgent deadlines, client/exec blockers, payroll, high-leverage moves where hesitating is a failure of nerve.
+    - "low": casual ideas, someday exploration.
     - "medium": all standard operational tasks.
-
-    DURATION & SUBTASKS:
-    - "estimatedMinutes": Realistic estimate (5, 10, 15, 20, 25, 30, 45, 60).
-    - "subtasks": Array of bite-sized sequential execution steps.
 
     OUTPUT SCHEMA:
     Output MUST be a raw JSON array of objects (no markdown fences):
     [
       {
-        "title": "Clean, punchy task title",
-        "subtasks": ["Subtask 1", "Subtask 2"],
+        "title": "Clean, punchy task title (NO hashtags, NO time estimates)",
+        "description": "Short 1-2 sentence context or quote from the source if helpful, NO checklist steps or subtasks",
         "source": "slack" | "email" | "letterly",
         "listName": "${rules.defaultList || 'General'}",
-        "tags": ["apricot", "turn90", "matt", "high", "15m"],
-        "space": "apricot" | "slack" | "email" | "home",
-        "people": ["matt"],
-        "priority": "high" | "medium" | "low",
-        "estimatedMinutes": 15
+        "priority": "high" | "medium" | "low"
       }
     ]
 
@@ -135,30 +117,28 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
         const parsed = JSON.parse(text);
         if (!Array.isArray(parsed)) return [];
         return parsed.map(item => {
-            let tags = Array.isArray(item.tags) ? item.tags.map(t => String(t).replace(/^#/, '').toLowerCase().trim()).filter(Boolean) : [];
-            if (item.space && !tags.includes(item.space.toLowerCase())) {
-                tags.push(item.space.toLowerCase());
-            }
-            if (Array.isArray(item.people)) {
-                for (const p of item.people) {
-                    const cleanP = String(p).replace(/^#/, '').toLowerCase().trim();
-                    if (cleanP && !tags.includes(cleanP)) tags.push(cleanP);
-                }
-            }
             const prio = (item.priority && ['high', 'medium', 'low'].includes(String(item.priority).toLowerCase()))
                 ? String(item.priority).toLowerCase()
                 : 'medium';
-            if (!tags.includes(prio)) {
-                tags.push(prio);
-            }
+            const cleanTitle = (item.title || '')
+                .replace(/#\w[\w-]*/g, '')
+                .replace(/\[⏱\s*\d+m\]/g, '')
+                .trim();
+            const cleanDesc = (item.description || '')
+                .replace(/\[⏱\s*\d+m\]/g, '')
+                .split('\n')
+                .filter(line => !line.trim().startsWith('- [ ]') && !line.trim().startsWith('- [x]'))
+                .join('\n')
+                .trim();
             return {
-                ...item,
+                title: cleanTitle,
+                description: cleanDesc,
                 listName: rules.defaultList || 'General',
-                tags,
-                space: item.space || '',
-                people: Array.isArray(item.people) ? item.people : [],
+                tags: [],
+                subtasks: [],
+                estimatedMinutes: null,
                 priority: prio,
-                estimatedMinutes: Number(item.estimatedMinutes) || 15
+                source: item.source || 'other'
             };
         });
     } catch (error) {

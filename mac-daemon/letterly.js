@@ -5,15 +5,53 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const MCP_URL = 'https://mcp.letterly.app/mcp';
 const OAUTH_TOKENS_PATH = '/Users/justinevans/.gemini/antigravity/mcp_oauth_tokens.json';
 
-async function getValidAccessToken() {
-    // 1. Check environment variable first
-    if (process.env.LETTERLY_ACCESS_TOKEN && process.env.LETTERLY_ACCESS_TOKEN.trim()) {
-        return process.env.LETTERLY_ACCESS_TOKEN.trim();
+async function refreshOAuthToken() {
+    if (!fs.existsSync(OAUTH_TOKENS_PATH)) return null;
+    try {
+        const raw = JSON.parse(fs.readFileSync(OAUTH_TOKENS_PATH, 'utf8'));
+        const entry = raw[MCP_URL] || raw['letterly'];
+        if (!entry || !entry.token?.refresh_token || !entry.token_url) return null;
+
+        const params = new URLSearchParams({
+            grant_type: 'refresh_token',
+            refresh_token: entry.token.refresh_token,
+            client_id: entry.client_id || ''
+        });
+        const resp = await fetch(entry.token_url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        });
+        if (resp.ok) {
+            const refreshed = await resp.json();
+            entry.token.access_token = refreshed.access_token || entry.token.access_token;
+            if (refreshed.refresh_token) entry.token.refresh_token = refreshed.refresh_token;
+            if (refreshed.expires_in) {
+                entry.token.expiry = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
+            }
+            fs.writeFileSync(OAUTH_TOKENS_PATH, JSON.stringify(raw, null, 2));
+            console.log('[Letterly MCP] Successfully refreshed OAuth access token.');
+            return entry.token.access_token;
+        } else {
+            console.error('[Letterly MCP] Refresh token call failed HTTP:', resp.status);
+            return null;
+        }
+    } catch (e) {
+        console.error('[Letterly MCP] Token refresh error:', e.message);
+        return null;
+    }
+}
+
+async function getValidAccessToken(forceRefresh = false) {
+    if (forceRefresh) {
+        return await refreshOAuthToken();
     }
 
-    // 2. Check mcp_oauth_tokens.json
     if (!fs.existsSync(OAUTH_TOKENS_PATH)) {
-        console.error('[Letterly MCP] Missing mcp_oauth_tokens.json and no LETTERLY_ACCESS_TOKEN in .env');
+        if (process.env.LETTERLY_ACCESS_TOKEN && process.env.LETTERLY_ACCESS_TOKEN.trim()) {
+            return process.env.LETTERLY_ACCESS_TOKEN.trim();
+        }
+        console.error('[Letterly MCP] Missing mcp_oauth_tokens.json');
         return null;
     }
 
@@ -21,53 +59,33 @@ async function getValidAccessToken() {
         const raw = JSON.parse(fs.readFileSync(OAUTH_TOKENS_PATH, 'utf8'));
         const entry = raw[MCP_URL] || raw['letterly'];
         if (!entry || !entry.token || !entry.token.access_token) {
+            if (process.env.LETTERLY_ACCESS_TOKEN) return process.env.LETTERLY_ACCESS_TOKEN.trim();
             console.error('[Letterly MCP] No token found for', MCP_URL);
             return null;
         }
 
-        // Check if token is near expiry and refresh if needed
+        // Check if token is near expiry (within 2 minutes) or already expired
         if (entry.token.expiry) {
             const expiryTime = new Date(entry.token.expiry).getTime();
-            if (!isNaN(expiryTime) && Date.now() > expiryTime - 60000 && entry.token.refresh_token && entry.token_url) {
-                try {
-                    const params = new URLSearchParams({
-                        grant_type: 'refresh_token',
-                        refresh_token: entry.token.refresh_token,
-                        client_id: entry.client_id || ''
-                    });
-                    const resp = await fetch(entry.token_url, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: params.toString()
-                    });
-                    if (resp.ok) {
-                        const refreshed = await resp.json();
-                        entry.token.access_token = refreshed.access_token || entry.token.access_token;
-                        if (refreshed.refresh_token) entry.token.refresh_token = refreshed.refresh_token;
-                        if (refreshed.expires_in) {
-                            entry.token.expiry = new Date(Date.now() + refreshed.expires_in * 1000).toISOString();
-                        }
-                        fs.writeFileSync(OAUTH_TOKENS_PATH, JSON.stringify(raw, null, 2));
-                        console.log('[Letterly MCP] Refreshed OAuth access token.');
-                    }
-                } catch (err) {
-                    console.error('[Letterly MCP] Token refresh warning:', err.message);
-                }
+            if (isNaN(expiryTime) || Date.now() > (expiryTime - 120000)) {
+                console.log('[Letterly MCP] Token expired or nearing expiry; refreshing...');
+                const refreshed = await refreshOAuthToken();
+                if (refreshed) return refreshed;
             }
         }
 
         return entry.token.access_token;
     } catch (e) {
         console.error('[Letterly MCP] Error reading token file:', e.message);
-        return null;
+        return process.env.LETTERLY_ACCESS_TOKEN || null;
     }
 }
 
-async function callLetterlyMCPTool(toolName, args = {}) {
-    const accessToken = await getValidAccessToken();
+async function callLetterlyMCPTool(toolName, args = {}, isRetry = false) {
+    let accessToken = await getValidAccessToken(false);
     if (!accessToken) return null;
 
-    const resp = await fetch(MCP_URL, {
+    let resp = await fetch(MCP_URL, {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${accessToken}`,
@@ -84,6 +102,14 @@ async function callLetterlyMCPTool(toolName, args = {}) {
             }
         })
     });
+
+    if (resp.status === 401 && !isRetry) {
+        console.warn('[Letterly MCP] Received HTTP 401. Forcing token refresh and retrying once...');
+        accessToken = await refreshOAuthToken();
+        if (accessToken) {
+            return await callLetterlyMCPTool(toolName, args, true);
+        }
+    }
 
     if (!resp.ok) {
         throw new Error(`Letterly MCP HTTP ${resp.status}`);

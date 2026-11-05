@@ -1,11 +1,11 @@
 {
   "lastSlackSync": 1793714484,
   "lastEmailSync": {
-    "token.json": 1793810023000,
-    "token_2.json": 1793810217000,
-    "token_3.json": 1793809549000
+    "token.json": 1793882348000,
+    "token_2.json": 1793823228000,
+    "token_3.json": 1793882929000
   },
-  "lastLetterlySync": 1793036330926,
+  "lastLetterlySync": 1793883070941,
   "lastAppOpenedAt": 1792872969378,
   "lastTaskCompletedAt": 1792872969378,
   "lastAngryNudgeSentAt": 1793282436804,
@@ -140,6 +140,11 @@
     "follow up on missed call from 843 7386116",
     "investigate why melvin browns consultation was not completed and why the brief was generated without it",
     "invites for app for jenn",
-    "ask katie to change reentry needs assessment to reentry consultation in apricot and link orientation to enrollment"
+    "ask katie to change reentry needs assessment to reentry consultation in apricot and link orientation to enrollment",
+    "review sean mcgowans shared claude chat on employer partner pipeline implementation",
+    "ask katie to rename reentry needs assessment to reentry consultation in apricot and link orientation to enrollment",
+    "investigate why melvin browns consultation was not completed and how the brief was generated without it",
+    "reply to terrence browns introductory email",
+    "finish the assessments turn90 personal 15m"
   ]
 }

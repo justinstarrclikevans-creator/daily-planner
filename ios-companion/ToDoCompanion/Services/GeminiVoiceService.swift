@@ -80,8 +80,6 @@ class GeminiVoiceService {
            - a clean action-verb `title`
            - `description` (relevant context)
            - assigned `listName` ("General", "Turn90", "843FC", "Personal", "Nosa", or "Book (Memoir) and Synapse" — use "General" if unsure)
-           - `estimatedMinutes` (integer: 5, 10, 15, 20, 25, 30, 45, or 60. Standard default for all new tasks is 5m.)
-           - `subtasks` (array of 2-5 concrete checklist steps if the task has multiple steps)
         
         Respond with ONLY a valid raw JSON object matching this schema:
         {
@@ -92,9 +90,7 @@ class GeminiVoiceService {
             {
               "title": "Clear action verb title",
               "description": "Any relevant details",
-              "listName": "General",
-              "estimatedMinutes": 5,
-              "subtasks": ["Step 1", "Step 2", "Step 3"]
+              "listName": "General"
             }
           ]
         }
@@ -180,8 +176,6 @@ class GeminiVoiceService {
         - `title`: Clear action-verb title
         - `description`: Brief context
         - `listName`: "\(projectName)"
-        - `estimatedMinutes`: Realistic duration in minutes (5, 10, 15, 30. Default is 5)
-        - `subtasks`: Array of \(detailLevel.stepCountRange)
         
         Respond with ONLY valid JSON matching:
         {
@@ -189,9 +183,7 @@ class GeminiVoiceService {
             {
               "title": "Action title",
               "description": "Context",
-              "listName": "\(projectName)",
-              "estimatedMinutes": 5,
-              "subtasks": ["Subtask 1", "Subtask 2", "Subtask 3"]
+              "listName": "\(projectName)"
             }
           ]
         }

@@ -1,4 +1,6 @@
-const { google } = require('googleapis');
+const { gmail: getGmailClient } = require('googleapis/build/src/apis/gmail');
+const { calendar: getCalendarClient } = require('googleapis/build/src/apis/calendar');
+const { OAuth2Client } = require('google-auth-library');
 const fs = require('fs');
 const path = require('path');
 
@@ -21,7 +23,7 @@ async function getAllGoogleAuths() {
             for (const tFile of tokenFiles) {
                 try {
                     const token = JSON.parse(fs.readFileSync(path.join(__dirname, tFile), 'utf8'));
-                    const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+                    const oAuth2Client = new OAuth2Client(client_id, client_secret, redirect_uris[0]);
                     oAuth2Client.setCredentials(token);
                     auths.push({ client: oAuth2Client, account: tFile });
                 } catch (e) {
@@ -40,7 +42,7 @@ async function getRecentEmails(sinceMap = {}) {
     const allEmails = [];
     
     for (const authObj of auths) {
-        const gmail = google.gmail({version: 'v1', auth: authObj.client});
+        const gmail = getGmailClient({version: 'v1', auth: authObj.client});
         const accountSince = typeof sinceMap === 'object' && sinceMap !== null ? sinceMap[authObj.account] : sinceMap;
         
         try {
@@ -88,7 +90,7 @@ async function getTodaysCalendarEvents() {
     const eventsData = [];
     
     for (const authObj of auths) {
-        const calendar = google.calendar({version: 'v3', auth: authObj.client});
+        const calendar = getCalendarClient({version: 'v3', auth: authObj.client});
         
         try {
             const now = new Date();
@@ -125,7 +127,7 @@ async function getUpcomingCalendarEvents(minutesAhead = 15) {
     const eventsData = [];
     
     for (const authObj of auths) {
-        const calendar = google.calendar({version: 'v3', auth: authObj.client});
+        const calendar = getCalendarClient({version: 'v3', auth: authObj.client});
         
         try {
             const now = new Date();

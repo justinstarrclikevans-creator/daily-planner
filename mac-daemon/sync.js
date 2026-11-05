@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { getIncompleteReminders, getRecentCompletedReminders, addReminder } = require('./reminders');
 const { getRecentSlackMessages } = require('./slack');
 const { getRecentEmails, getTodaysCalendarEvents } = require('./google');
@@ -206,50 +207,39 @@ async function runHourlySync() {
                         }
                     } catch (e) {}
 
-                    const mins = item.estimatedMinutes || 15;
                     const priority = item.priority || 'medium';
-                    const rawTags = Array.isArray(item.tags) ? item.tags : [];
-                    const tags = rawTags.map(t => String(t).replace(/^#/, '').toLowerCase().trim()).filter(Boolean);
-                    if (item.space && !tags.includes(item.space.toLowerCase())) {
-                        tags.push(item.space.toLowerCase());
-                    }
-                    if (!tags.includes(priority)) {
-                        tags.push(priority);
-                    }
-                    if (!tags.includes(`${mins}m`)) {
-                        tags.push(`${mins}m`);
-                    }
 
-                    // Format hashtags for Apple Reminders so it creates native tag pills
-                    const hashtagString = tags.map(t => `#${t}`).join(' ');
-                    const finalTitleWithTags = hashtagString ? `${item.title} ${hashtagString}` : item.title;
+                    // Clean title without hashtags or time brackets (user will add tags & times themselves)
+                    const cleanTitle = (item.title || '')
+                        .replace(/#\w[\w-]*/g, '')
+                        .replace(/\[⏱\s*\d+m\]/g, '')
+                        .trim();
 
-                    const noteLines = [`[⏱ ${mins}m]`];
+                    // Clean notes: brief context only, NO time estimates, NO subtasks / microsteps
+                    let cleanNotes = (item.description || '')
+                        .replace(/\[⏱\s*\d+m\]/g, '')
+                        .trim();
+                    // Remove any microstep checklist lines if present
+                    cleanNotes = cleanNotes
+                        .split('\n')
+                        .filter(line => !line.trim().startsWith('- [ ]') && !line.trim().startsWith('- [x]'))
+                        .join('\n')
+                        .trim();
 
-                    if (Array.isArray(item.subtasks) && item.subtasks.length > 0) {
-                        for (const sub of item.subtasks) {
-                            const cleanedSub = String(sub).trim();
-                            if (cleanedSub) {
-                                noteLines.push(`- [ ] ${cleanedSub}`);
-                            }
-                        }
-                    } else if (item.description && item.description.trim()) {
-                        noteLines.push(item.description.trim());
-                    }
-
-                    const finalNotes = noteLines.join('\n');
-                    const ok = await addReminder(targetList, finalTitleWithTags, finalNotes, priority);
+                    const ok = await addReminder(targetList, cleanTitle, cleanNotes, priority);
                     if (!ok) {
-                        console.error(`Failed to push reminder to list (${targetList}):`, item.title);
+                        console.error(`Failed to push reminder to list (${targetList}):`, cleanTitle);
                     } else {
-                        console.log(`Added to [${targetList}] [${priority.toUpperCase()}]: ${item.title} (Tags: ${tags.join(', ')})`);
+                        console.log(`Added to [${targetList}] [${priority.toUpperCase()}]: ${cleanTitle}`);
                         activeTitlesSet.add(normTitle);
                     }
 
+                    item.title = cleanTitle;
                     item.listName = targetList;
-                    item.tags = tags;
-                    item.description = finalNotes;
-                    item.estimatedMinutes = mins;
+                    item.tags = [];
+                    item.description = cleanNotes;
+                    item.estimatedMinutes = null;
+                    item.subtasks = [];
                     item.priority = priority;
                     await syncTaskToSupabase(item);
                 }
