@@ -65,6 +65,16 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
     - DO NOT generate time estimates or durations (e.g. [⏱ 15m] or estimatedMinutes). Justin will add times himself.
     - DO NOT generate microsteps, checklist items, or subtasks. Keep it to a single clean actionable task.
 
+    CRITICAL ACTIVE SENTENCE RULE (IMPERATIVE ACTION VOICE):
+    - Every task title MUST be written as an active, imperative action sentence starting with a strong action verb (e.g., "Review...", "Call...", "Draft...", "Send...", "Schedule...", "Decide on...", "Build...", "Enroll...").
+    - NEVER output vague topics, noun phrases, or passive voice.
+      - BAD: "Nigeria campaign simplification" -> GOOD: "Simplify the Nigeria campaign flyers and webpage"
+      - BAD: "Marketing vault consideration" -> GOOD: "Decide on purchasing the Marketing Vault"
+      - BAD: "Termite inspection" -> GOOD: "Schedule termite inspection"
+      - BAD: "Donor tour" -> GOOD: "Prepare materials for upcoming donor tour"
+      - BAD: "Participant enrollment" -> GOOD: "Enroll participant in SC Works"
+    - Make every title a clear, unambiguous, direct instruction that tells Justin exactly what physical or cognitive step to take immediately.
+
     PRIORITY RULES:
     - "high": matches urgent deadlines, client/exec blockers, payroll, high-leverage moves where hesitating is a failure of nerve.
     - "low": casual ideas, someday exploration.
@@ -74,7 +84,7 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
     Output MUST be a raw JSON array of objects (no markdown fences):
     [
       {
-        "title": "Clean, punchy task title (NO hashtags, NO time estimates)",
+        "title": "Active imperative task title starting with action verb (NO hashtags, NO time estimates)",
         "description": "Short 1-2 sentence context or quote from the source if helpful, NO checklist steps or subtasks",
         "source": "slack" | "email" | "letterly",
         "listName": "${rules.defaultList || 'General'}",

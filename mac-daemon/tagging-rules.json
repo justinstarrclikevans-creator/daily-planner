@@ -1,5 +1,14 @@
 {
   "defaultList": "General",
+  "reminderTitleConvention": {
+    "style": "active_imperative_sentence",
+    "description": "Every reminder title must be written as an active, imperative action sentence starting with a strong action verb (e.g. Call..., Review..., Schedule..., Draft...). Never use passive voice, topics, or noun phrases.",
+    "examples": [
+      { "bad": "Termite inspection", "good": "Schedule termite inspection" },
+      { "bad": "Nigeria campaign simplification", "good": "Simplify Nigeria campaign flyers and webpage" },
+      { "bad": "Marketing vault consideration", "good": "Decide on purchasing the Marketing Vault" }
+    ]
+  },
   "spaces": [
     {
       "tag": "apricot",

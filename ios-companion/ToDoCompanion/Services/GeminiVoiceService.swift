@@ -77,8 +77,8 @@ class GeminiVoiceService {
         2. A concise 1-2 sentence conceptual summary of any ideas, philosophies, or analogies mentioned.
         3. 1-3 relevant topic tags.
         4. Any concrete actionable tasks with:
-           - a clean action-verb `title`
-           - `description` (relevant context)
+           - `title`: An active, imperative action sentence starting with a strong action verb (e.g. "Draft proposal...", "Call Matt about...", "Schedule inspection"). NEVER use passive topics or noun phrases.
+           - `description`: relevant context
            - assigned `listName` ("General", "Turn90", "843FC", "Personal", "Nosa", or "Book (Memoir) and Synapse" — use "General" if unsure)
         
         Respond with ONLY a valid raw JSON object matching this schema:
@@ -88,7 +88,7 @@ class GeminiVoiceService {
           "tags": ["tag1", "tag2"],
           "tasks": [
             {
-              "title": "Clear action verb title",
+              "title": "Active sentence starting with an action verb",
               "description": "Any relevant details",
               "listName": "General"
             }
@@ -173,7 +173,7 @@ class GeminiVoiceService {
         Granularity Mode: \(detailLevel.stepCountRange)
         
         Create 1 to 4 actionable tasks. For each task include:
-        - `title`: Clear action-verb title
+        - `title`: An active, imperative action sentence starting with a strong action verb (e.g. "Draft...", "Review...", "Build..."). NEVER use passive topics or noun phrases.
         - `description`: Brief context
         - `listName`: "\(projectName)"
         
@@ -181,7 +181,7 @@ class GeminiVoiceService {
         {
           "tasks": [
             {
-              "title": "Action title",
+              "title": "Active sentence starting with an action verb",
               "description": "Context",
               "listName": "\(projectName)"
             }

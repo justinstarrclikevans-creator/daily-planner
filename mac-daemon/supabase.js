@@ -137,6 +137,13 @@ async function syncTaskToSupabase(task, appleReminderId = null) {
             return data ? data[0] : null;
         }
     } catch (err) {
+        if (err.message && err.message.includes('fetch failed')) {
+            if (!supabaseDisabled) {
+                console.log("[Supabase] Network/fetch unreachable. Pausing cloud sync.");
+                supabaseDisabled = true;
+            }
+            return null;
+        }
         console.error("Exception syncing task to Supabase:", err.message);
         return null;
     }
