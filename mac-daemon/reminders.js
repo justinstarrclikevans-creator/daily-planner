@@ -103,18 +103,44 @@ async function completeReminder(id) {
     });
 }
 
-async function addReminder(listName, title, notes = "", priority = "medium") {
+async function addReminder(listName, title, notes = "", priority = "medium", dueDate = null) {
     const safeTitle = (title || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const safeNotes = (notes || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const safeList = (listName || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const prioVal = priority === 'high' ? 1 : (priority === 'low' ? 9 : 5);
+
+    let dateScript = '';
+    let propDueDate = '';
+    if (dueDate) {
+        const d = new Date(dueDate);
+        if (!isNaN(d.getTime())) {
+            const year = d.getFullYear();
+            const month = d.getMonth() + 1;
+            const day = d.getDate();
+            const hours = d.getHours();
+            const minutes = d.getMinutes();
+            const seconds = d.getSeconds();
+            dateScript = `
+        set d to current date
+        set year of d to ${year}
+        set month of d to ${month}
+        set day of d to ${day}
+        set hours of d to ${hours}
+        set minutes of d to ${minutes}
+        set seconds of d to ${seconds}
+            `;
+            propDueDate = ', due date:d';
+        }
+    }
+
     const script = `
     tell application "Reminders"
         if not (exists list "${safeList}") then
             make new list with properties {name:"${safeList}"}
         end if
         set targetList to list "${safeList}"
-        make new reminder at end of reminders of targetList with properties {name:"${safeTitle}", body:"${safeNotes}", priority:${prioVal}}
+        ${dateScript}
+        make new reminder at end of reminders of targetList with properties {name:"${safeTitle}", body:"${safeNotes}", priority:${prioVal}${propDueDate}}
     end tell
     `;
     return new Promise((resolve) => {

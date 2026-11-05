@@ -31,9 +31,11 @@ async function getProjects() {
     try {
         const { data, error } = await supabase.from('projects').select('*').order('name');
         if (error) {
-            if (error.message && error.message.includes('Unregistered API key')) {
-                console.log("[Supabase] Unregistered API key in .env. Disabling Supabase background sync.");
-                supabaseDisabled = true;
+            if (error.message && (error.message.includes('Unregistered API key') || error.message.includes('fetch failed'))) {
+                if (!supabaseDisabled) {
+                    console.log("[Supabase] Cloud endpoint unreachable or paused. Disabling background cloud sync.");
+                    supabaseDisabled = true;
+                }
                 return [];
             }
             console.error("Error fetching projects from Supabase:", error.message);

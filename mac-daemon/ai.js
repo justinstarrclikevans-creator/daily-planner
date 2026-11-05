@@ -259,9 +259,126 @@ async function getMeetingRelatedTasks(event, tasks) {
     }
 }
 
+function fallbackFormatCalendarEvent(ev) {
+    let summary = (ev.summary || '').trim();
+    if (!summary) return null;
+
+    let title = summary;
+    title = title.replace(/^(hold\s*[-:]?\s*|meeting\s*[-:]?\s*)/i, '').trim();
+
+    const low = title.toLowerCase();
+    const actionVerbs = ['attend', 'join', 'lead', 'host', 'tour', 'call', 'review', 'prepare', 'conduct', 'drive', 'meet', 'visit', 'present', 'work on', 'process', 'organize'];
+    const startsWithVerb = actionVerbs.some(v => low.startsWith(v + ' ') || low === v);
+
+    if (!startsWithVerb) {
+        if (low.includes('l10') || low.includes('meeting') || low.includes('huddle') || low.includes('sync')) {
+            title = `Attend ${title} meeting`;
+        } else if (low.includes('tour')) {
+            title = `Host ${title}`;
+        } else if (low.includes('training') || low.includes('workshop')) {
+            title = `Attend ${title}`;
+        } else if (low.includes('application') || low.includes('review') || low.includes('audit')) {
+            title = `Process ${title}`;
+        } else {
+            title = `Attend ${title}`;
+        }
+    }
+
+    title = title.charAt(0).toUpperCase() + title.slice(1);
+
+    let notes = (ev.description || '').trim();
+    if (notes.includes('Notice: This message may contain confidential')) {
+        notes = notes.split('Notice: This message may contain confidential')[0].trim();
+    }
+    if (ev.location) {
+        notes = notes ? `Location: ${ev.location}\n\n${notes}` : `Location: ${ev.location}`;
+    }
+
+    return {
+        id: ev.id,
+        title,
+        notes,
+        start: ev.start,
+        priority: 'medium'
+    };
+}
+
+async function convertCalendarEventsToReminders(events = []) {
+    if (!Array.isArray(events) || events.length === 0) return [];
+
+    const validEvents = events.filter(e => e && e.summary && e.start);
+    if (validEvents.length === 0) return [];
+
+    if (!process.env.GEMINI_API_KEY) {
+        return validEvents.map(fallbackFormatCalendarEvent).filter(Boolean);
+    }
+
+    const prompt = `
+    You are Justin's executive assistant.
+    Convert the following calendar events into scheduled reminder tasks for Justin's to-do list.
+
+    CRITICAL ACTIVE SENTENCE RULE:
+    - Every reminder title MUST be an active, imperative action sentence starting with a strong action verb (e.g. "Attend...", "Host...", "Lead...", "Conduct...", "Process...", "Meet with...", "Deliver...").
+    - NEVER leave it as a passive topic or noun phrase.
+      - "Charleston School of Law Tour" -> "Host Charleston School of Law tour"
+      - "HOLD - SCThrive Applications" -> "Process SCThrive applications (SNAP, TANF, Medicaid)"
+      - "Recruitment / Community Engagement L10" -> "Attend Recruitment / Community Engagement L10 meeting"
+      - "Program Training" -> "Attend Program Training session"
+      - "Tour Turn90" -> "Lead Turn90 tour" (or "Attend Turn90 tour")
+    - Keep the title clean: NO hashtags, NO durations, NO bracketed times.
+    - Keep notes clean: include relevant details (location, attendees, or agenda), but STRIP any boilerplate email confidentiality footers or legal notices.
+
+    Calendar Events:
+    ${JSON.stringify(validEvents.map(e => ({ id: e.id, summary: e.summary, start: e.start, description: e.description, location: e.location })))}
+
+    OUTPUT SCHEMA:
+    Output MUST be a raw JSON array of objects (no markdown fences):
+    [
+      {
+        "id": "event_id",
+        "title": "Active imperative title starting with a verb",
+        "notes": "Clean description/location context, without disclaimer boilerplate",
+        "start": "ISO start time",
+        "priority": "high" | "medium" | "low"
+      }
+    ]
+    `;
+
+    try {
+        const response = await callGeminiWithRetry({
+            model: 'gemini-3.8-flash',
+            contents: prompt,
+            config: { temperature: 0.1 }
+        });
+
+        let text = response.text.trim();
+        if (text.startsWith('```json')) {
+            text = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
+        } else if (text.startsWith('```')) {
+            text = text.replace(/^```\n?/, '').replace(/\n?```$/, '');
+        }
+
+        const parsed = JSON.parse(text);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map(item => ({
+                id: item.id,
+                title: (item.title || '').replace(/#\w[\w-]*/g, '').replace(/\[⏱\s*\d+m\]/g, '').trim(),
+                notes: (item.notes || '').trim(),
+                start: item.start,
+                priority: ['high', 'medium', 'low'].includes(item.priority) ? item.priority : 'medium'
+            }));
+        }
+    } catch (err) {
+        console.warn("[Calendar Sync] Gemini conversion warning, using fallback formatter:", err.message);
+    }
+
+    return validEvents.map(fallbackFormatCalendarEvent).filter(Boolean);
+}
+
 module.exports = {
     extractTodos,
     generateDailySummary,
     getMostImportantTask,
-    getMeetingRelatedTasks
+    getMeetingRelatedTasks,
+    convertCalendarEventsToReminders
 };

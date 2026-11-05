@@ -6,7 +6,7 @@ const { getIncompleteReminders, getRecentCompletedReminders, addReminder } = req
 const { getRecentSlackMessages } = require('./slack');
 const { getRecentEmails, getTodaysCalendarEvents } = require('./google');
 const { getRecentLetterlyNotes } = require('./letterly');
-const { extractTodos } = require('./ai');
+const { extractTodos, convertCalendarEventsToReminders } = require('./ai');
 const { checkUpcomingMeetings, triggerStalePurgeOffer, checkAggressiveMotivationNudges } = require('./sms-handler');
 const { syncTaskToSupabase } = require('./supabase');
 
@@ -91,14 +91,102 @@ function loadState() {
         if (fs.existsSync(STATE_FILE)) {
             const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
             data.completedTaskTitles = data.completedTaskTitles || [];
+            data.syncedCalendarEventIds = data.syncedCalendarEventIds || [];
             return data;
         }
     } catch (e) {}
-    return { completedTaskTitles: [] };
+    return { completedTaskTitles: [], syncedCalendarEventIds: [] };
 }
 
 function saveState(state) {
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+}
+
+async function syncCalendarEventsAsReminders(events, incompleteTodos, completedTodos, state) {
+    if (!Array.isArray(events) || events.length === 0) return;
+
+    state.syncedCalendarEventIds = state.syncedCalendarEventIds || [];
+    const activeTitlesSet = new Set(incompleteTodos.map(t => normalizeTitle(t.title)));
+    const completedTitlesSet = new Set([
+        ...completedTodos.map(t => normalizeTitle(t.title)),
+        ...(state.completedTaskTitles || [])
+    ]);
+
+    const now = Date.now();
+    // Filter events: only timed events that are upcoming or started recently (within 45 minutes)
+    const candidateEvents = events.filter(ev => {
+        if (!ev.summary || !ev.start) return false;
+        if (ev.isAllDay) return false; // skip background all-day events
+        const startMs = new Date(ev.start).getTime();
+        if (isNaN(startMs)) return false;
+        if (startMs < now - 45 * 60 * 1000) return false; // skip past events
+        if (ev.id && state.syncedCalendarEventIds.includes(ev.id)) return false;
+        return true;
+    });
+
+    if (candidateEvents.length === 0) {
+        return;
+    }
+
+    console.log(`[Calendar] Processing ${candidateEvents.length} upcoming calendar events for scheduled reminders...`);
+    const reminderItems = await convertCalendarEventsToReminders(candidateEvents);
+
+    let targetList = 'General';
+    try {
+        const rulesPath = path.join(__dirname, 'tagging-rules.json');
+        if (fs.existsSync(rulesPath)) {
+            const r = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
+            targetList = r.defaultList || 'General';
+        }
+    } catch (e) {}
+
+    let addedCount = 0;
+    for (const item of reminderItems) {
+        const normTitle = normalizeTitle(item.title);
+        if (!normTitle) continue;
+
+        // Skip if already completed
+        if (completedTitlesSet.has(normTitle)) {
+            console.log(`[Calendar] Event "${item.title}" was already completed. Skipping.`);
+            if (item.id) state.syncedCalendarEventIds.push(item.id);
+            continue;
+        }
+
+        // Skip if already an active reminder
+        if (activeTitlesSet.has(normTitle) || incompleteTodos.some(t => {
+            const nt = normalizeTitle(t.title);
+            return nt.includes(normTitle) || normTitle.includes(nt);
+        })) {
+            console.log(`[Calendar] Event "${item.title}" already exists in Reminders. Skipping.`);
+            if (item.id) state.syncedCalendarEventIds.push(item.id);
+            continue;
+        }
+
+        const ok = await addReminder(targetList, item.title, item.notes || '', item.priority || 'medium', item.start);
+        if (ok) {
+            console.log(`[Calendar Scheduled] Added to [${targetList}]: "${item.title}" scheduled for ${new Date(item.start).toLocaleTimeString()}`);
+            activeTitlesSet.add(normTitle);
+            incompleteTodos.push({ title: item.title, listName: targetList, dueDate: item.start });
+            if (item.id) state.syncedCalendarEventIds.push(item.id);
+            addedCount++;
+
+            await syncTaskToSupabase({
+                title: item.title,
+                listName: targetList,
+                description: item.notes || '',
+                dueDate: item.start,
+                priority: item.priority || 'medium'
+            });
+        }
+    }
+
+    if (state.syncedCalendarEventIds.length > 500) {
+        state.syncedCalendarEventIds = state.syncedCalendarEventIds.slice(-500);
+    }
+    saveState(state);
+    if (addedCount > 0) {
+        console.log(`[Calendar] Successfully synced ${addedCount} scheduled reminders to Apple Reminders.`);
+    }
 }
 
 async function runHourlySync() {
@@ -143,6 +231,9 @@ async function runHourlySync() {
         } catch (e) {
             // non-fatal
         }
+
+        // 1. Sync Calendar Events to Apple Reminders as Scheduled Reminders
+        await syncCalendarEventsAsReminders(events, incompleteTodos, completedTodos, state);
 
         if (slack.length > 0 || emails.length > 0 || letterlyNotes.length > 0) {
             console.log(`New inputs found (Slack: ${slack.length}, Emails: ${emails.length}, Letterly: ${letterlyNotes.length}). Active Apple Reminders: ${incompleteTodos.length}, Completed: ${completedTodos.length}.`);

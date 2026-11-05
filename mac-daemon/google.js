@@ -6,12 +6,13 @@ const path = require('path');
 
 async function getAllGoogleAuths() {
     return new Promise((resolve) => {
-        if (!fs.existsSync('credentials.json')) {
-            console.error("Missing Google credentials.json");
+        const credPath = path.join(__dirname, 'credentials.json');
+        if (!fs.existsSync(credPath)) {
+            console.error("Missing Google credentials.json at", credPath);
             return resolve([]);
         }
         
-        fs.readFile('credentials.json', (err, content) => {
+        fs.readFile(credPath, (err, content) => {
             if (err) return resolve([]);
             const credentials = JSON.parse(content);
             const {client_secret, client_id, redirect_uris} = credentials.installed;
@@ -108,9 +109,13 @@ async function getTodaysCalendarEvents() {
             const events = res.data.items || [];
             events.forEach(event => {
                 eventsData.push({
+                    id: event.id,
                     summary: event.summary,
                     start: event.start.dateTime || event.start.date,
-                    description: event.description || ''
+                    end: event.end?.dateTime || event.end?.date,
+                    isAllDay: !event.start.dateTime,
+                    description: event.description || '',
+                    location: event.location || ''
                 });
             });
         } catch (e) {
