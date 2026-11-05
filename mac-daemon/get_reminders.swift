@@ -31,9 +31,11 @@ store.requestAccess(to: .reminder) { (granted, error) in
                         dueDateStr = formatter.string(from: date)
                     }
                     
-                    var priorityStr = "medium"
+                    var priorityStr = "none"
                     if r.priority > 0 && r.priority <= 4 {
                         priorityStr = "high"
+                    } else if r.priority == 5 {
+                        priorityStr = "medium"
                     } else if r.priority >= 6 {
                         priorityStr = "low"
                     }
@@ -73,9 +75,11 @@ store.requestAccess(to: .reminder) { (granted, error) in
                     if let comp = r.completionDate {
                         completionDateStr = formatter.string(from: comp)
                     }
-                    var priorityStr = "medium"
+                    var priorityStr = "none"
                     if r.priority > 0 && r.priority <= 4 {
                         priorityStr = "high"
+                    } else if r.priority == 5 {
+                        priorityStr = "medium"
                     } else if r.priority >= 6 {
                         priorityStr = "low"
                     }

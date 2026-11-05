@@ -74,21 +74,16 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
       - BAD: "Donor tour" -> GOOD: "Prepare materials for upcoming donor tour"
       - BAD: "Participant enrollment" -> GOOD: "Enroll participant in SC Works"
     - Make every title a clear, unambiguous, direct instruction that tells Justin exactly what physical or cognitive step to take immediately.
-
-    PRIORITY RULES:
-    - "high": matches urgent deadlines, client/exec blockers, payroll, high-leverage moves where hesitating is a failure of nerve.
-    - "low": casual ideas, someday exploration.
-    - "medium": all standard operational tasks.
+    - NO exclamation points (!). Never use exclamation marks in reminder titles or notes.
 
     OUTPUT SCHEMA:
     Output MUST be a raw JSON array of objects (no markdown fences):
     [
       {
-        "title": "Active imperative task title starting with action verb (NO hashtags, NO time estimates)",
-        "description": "Short 1-2 sentence context or quote from the source if helpful, NO checklist steps or subtasks",
+        "title": "Active imperative task title starting with action verb (NO hashtags, NO time estimates, NO exclamation marks)",
+        "description": "Short 1-2 sentence context or quote from the source if helpful, NO checklist steps, subtasks, or exclamation marks",
         "source": "slack" | "email" | "letterly",
-        "listName": "${rules.defaultList || 'General'}",
-        "priority": "high" | "medium" | "low"
+        "listName": "${rules.defaultList || 'General'}"
       }
     ]
 
@@ -127,14 +122,13 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
         const parsed = JSON.parse(text);
         if (!Array.isArray(parsed)) return [];
         return parsed.map(item => {
-            const prio = (item.priority && ['high', 'medium', 'low'].includes(String(item.priority).toLowerCase()))
-                ? String(item.priority).toLowerCase()
-                : 'medium';
             const cleanTitle = (item.title || '')
+                .replace(/!+/g, '')
                 .replace(/#\w[\w-]*/g, '')
                 .replace(/\[⏱\s*\d+m\]/g, '')
                 .trim();
             const cleanDesc = (item.description || '')
+                .replace(/!+/g, '.')
                 .replace(/\[⏱\s*\d+m\]/g, '')
                 .split('\n')
                 .filter(line => !line.trim().startsWith('- [ ]') && !line.trim().startsWith('- [x]'))
@@ -147,7 +141,7 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
                 tags: [],
                 subtasks: [],
                 estimatedMinutes: null,
-                priority: prio,
+                priority: 'none',
                 source: item.source || 'other'
             };
         });
@@ -284,9 +278,10 @@ function fallbackFormatCalendarEvent(ev) {
         }
     }
 
+    title = title.replace(/!+/g, '').trim();
     title = title.charAt(0).toUpperCase() + title.slice(1);
 
-    let notes = (ev.description || '').trim();
+    let notes = (ev.description || '').replace(/!+/g, '.').trim();
     if (notes.includes('Notice: This message may contain confidential')) {
         notes = notes.split('Notice: This message may contain confidential')[0].trim();
     }
@@ -299,7 +294,7 @@ function fallbackFormatCalendarEvent(ev) {
         title,
         notes,
         start: ev.start,
-        priority: 'medium'
+        priority: 'none'
     };
 }
 
@@ -325,8 +320,8 @@ async function convertCalendarEventsToReminders(events = []) {
       - "Recruitment / Community Engagement L10" -> "Attend Recruitment / Community Engagement L10 meeting"
       - "Program Training" -> "Attend Program Training session"
       - "Tour Turn90" -> "Lead Turn90 tour" (or "Attend Turn90 tour")
-    - Keep the title clean: NO hashtags, NO durations, NO bracketed times.
-    - Keep notes clean: include relevant details (location, attendees, or agenda), but STRIP any boilerplate email confidentiality footers or legal notices.
+    - Keep the title clean: NO hashtags, NO durations, NO bracketed times, NO exclamation points (!).
+    - Keep notes clean: include relevant details (location, attendees, or agenda), but STRIP any boilerplate email confidentiality footers, legal notices, or exclamation points.
 
     Calendar Events:
     ${JSON.stringify(validEvents.map(e => ({ id: e.id, summary: e.summary, start: e.start, description: e.description, location: e.location })))}
@@ -336,10 +331,9 @@ async function convertCalendarEventsToReminders(events = []) {
     [
       {
         "id": "event_id",
-        "title": "Active imperative title starting with a verb",
-        "notes": "Clean description/location context, without disclaimer boilerplate",
-        "start": "ISO start time",
-        "priority": "high" | "medium" | "low"
+        "title": "Active imperative title starting with a verb (NO exclamation points)",
+        "notes": "Clean description/location context, without disclaimer boilerplate or exclamation points",
+        "start": "ISO start time"
       }
     ]
     `;
@@ -362,10 +356,10 @@ async function convertCalendarEventsToReminders(events = []) {
         if (Array.isArray(parsed) && parsed.length > 0) {
             return parsed.map(item => ({
                 id: item.id,
-                title: (item.title || '').replace(/#\w[\w-]*/g, '').replace(/\[⏱\s*\d+m\]/g, '').trim(),
-                notes: (item.notes || '').trim(),
+                title: (item.title || '').replace(/!+/g, '').replace(/#\w[\w-]*/g, '').replace(/\[⏱\s*\d+m\]/g, '').trim(),
+                notes: (item.notes || '').replace(/!+/g, '.').trim(),
                 start: item.start,
-                priority: ['high', 'medium', 'low'].includes(item.priority) ? item.priority : 'medium'
+                priority: 'none'
             }));
         }
     } catch (err) {

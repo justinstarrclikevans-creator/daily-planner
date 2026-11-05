@@ -103,11 +103,15 @@ async function completeReminder(id) {
     });
 }
 
-async function addReminder(listName, title, notes = "", priority = "medium", dueDate = null) {
-    const safeTitle = (title || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    const safeNotes = (notes || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+async function addReminder(listName, title, notes = "", priority = "none", dueDate = null) {
+    const cleanTitle = (title || "").replace(/!+/g, '').replace(/#\w[\w-]*/g, '').replace(/\[⏱\s*\d+m\]/g, '').trim();
+    const cleanNotes = (notes || "").replace(/!+/g, '.');
+    const safeTitle = cleanTitle.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const safeNotes = cleanNotes.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     const safeList = (listName || "").replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-    const prioVal = priority === 'high' ? 1 : (priority === 'low' ? 9 : 5);
+    // In Apple Reminders, priority 1 = '!!!', priority 5 = '!!', priority 9 = '!'.
+    // Priority 0 means None (zero exclamation points).
+    const prioVal = (priority === 'high') ? 1 : ((priority === 'medium') ? 5 : ((priority === 'low') ? 9 : 0));
 
     let dateScript = '';
     let propDueDate = '';

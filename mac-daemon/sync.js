@@ -162,20 +162,21 @@ async function syncCalendarEventsAsReminders(events, incompleteTodos, completedT
             continue;
         }
 
-        const ok = await addReminder(targetList, item.title, item.notes || '', item.priority || 'medium', item.start);
+        const cleanItemTitle = (item.title || '').replace(/!+/g, '').trim();
+        const ok = await addReminder(targetList, cleanItemTitle, item.notes || '', 'none', item.start);
         if (ok) {
-            console.log(`[Calendar Scheduled] Added to [${targetList}]: "${item.title}" scheduled for ${new Date(item.start).toLocaleTimeString()}`);
+            console.log(`[Calendar Scheduled] Added to [${targetList}]: "${cleanItemTitle}" scheduled for ${new Date(item.start).toLocaleTimeString()}`);
             activeTitlesSet.add(normTitle);
-            incompleteTodos.push({ title: item.title, listName: targetList, dueDate: item.start });
+            incompleteTodos.push({ title: cleanItemTitle, listName: targetList, dueDate: item.start });
             if (item.id) state.syncedCalendarEventIds.push(item.id);
             addedCount++;
 
             await syncTaskToSupabase({
-                title: item.title,
+                title: cleanItemTitle,
                 listName: targetList,
                 description: item.notes || '',
                 dueDate: item.start,
-                priority: item.priority || 'medium'
+                priority: 'none'
             });
         }
     }
@@ -298,16 +299,18 @@ async function runHourlySync() {
                         }
                     } catch (e) {}
 
-                    const priority = item.priority || 'medium';
+                    const priority = 'none';
 
-                    // Clean title without hashtags or time brackets (user will add tags & times themselves)
+                    // Clean title without hashtags, time brackets, or exclamation points
                     const cleanTitle = (item.title || '')
+                        .replace(/!+/g, '')
                         .replace(/#\w[\w-]*/g, '')
                         .replace(/\[⏱\s*\d+m\]/g, '')
                         .trim();
 
-                    // Clean notes: brief context only, NO time estimates, NO subtasks / microsteps
+                    // Clean notes: brief context only, NO time estimates, NO subtasks / microsteps, NO exclamation points
                     let cleanNotes = (item.description || '')
+                        .replace(/!+/g, '.')
                         .replace(/\[⏱\s*\d+m\]/g, '')
                         .trim();
                     // Remove any microstep checklist lines if present
@@ -321,7 +324,7 @@ async function runHourlySync() {
                     if (!ok) {
                         console.error(`Failed to push reminder to list (${targetList}):`, cleanTitle);
                     } else {
-                        console.log(`Added to [${targetList}] [${priority.toUpperCase()}]: ${cleanTitle}`);
+                        console.log(`Added to [${targetList}]: ${cleanTitle}`);
                         activeTitlesSet.add(normTitle);
                     }
 

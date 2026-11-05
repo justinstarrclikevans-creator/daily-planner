@@ -2,7 +2,7 @@
   "defaultList": "General",
   "reminderTitleConvention": {
     "style": "active_imperative_sentence",
-    "description": "Every reminder title must be written as an active, imperative action sentence starting with a strong action verb (e.g. Call..., Review..., Schedule..., Draft...). Never use passive voice, topics, or noun phrases.",
+    "description": "Every reminder title must be written as an active, imperative action sentence starting with a strong action verb (e.g. Call..., Review..., Schedule..., Draft...). Never use passive voice, topics, or noun phrases. Never include exclamation marks (!) or set priorities that generate exclamation marks in Apple Reminders.",
     "examples": [
       { "bad": "Termite inspection", "good": "Schedule termite inspection" },
       { "bad": "Nigeria campaign simplification", "good": "Simplify Nigeria campaign flyers and webpage" },
