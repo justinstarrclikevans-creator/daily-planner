@@ -40,6 +40,12 @@ async function callGeminiWithRetry(options, retries = 3) {
                 lastError = error;
                 console.error(`Gemini Error (${model}, attempt ${attempt}/${retries}):`, error.message || error);
                 
+                // If 402 (prepayment credits depleted), do not loop/retry
+                if (error.status === 402 || (error.message && (error.message.includes('402') || error.message.includes('prepayment')))) {
+                    console.warn("[Gemini API] Prepayment credits depleted on Google AI Studio. Skipping further model retries.");
+                    return null;
+                }
+
                 // If 503 (high demand) or 429, try next attempt with backoff
                 if (attempt < retries) {
                     await new Promise(resolve => setTimeout(resolve, 1500 * attempt));
