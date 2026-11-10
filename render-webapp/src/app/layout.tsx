@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Card Stacks Desk | Daily Planner",
-  description: "Tactile freeform index card desk companion for daily planning and task execution.",
+  title: "Sunsama | Daily Planner",
+  description: "Guided daily planning, multi-day kanban, and calendar timeboxing synced with Mac Daemon.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

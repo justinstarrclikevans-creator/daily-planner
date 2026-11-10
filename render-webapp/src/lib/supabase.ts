@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import fallbackRaw from './fallback-todos.json';
+import taggingRules from './tagging-rules.json';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://huwattmqwiqhcfhtqely.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_secret_21i-I_QCc5xA_dPeVQPKsg_iV7ZzjQm';
@@ -25,12 +26,14 @@ export type Task = {
   source?: string;
   appleReminderId?: string | null;
   estimatedMinutes: number;
+  actualSeconds?: number;
   priority: TaskPriority;
   inPlayQueue: boolean;
   firstFiveMinutes?: string | null;
   subtasks: Subtask[];
   tags?: string[];
   createdAt?: string;
+  completedAt?: string | null;
 };
 
 export type Project = {
@@ -46,6 +49,34 @@ export type Project = {
   customActiveDays?: number[];
 };
 
+export type SunsamaChannel = {
+  tag: string;
+  label: string;
+  color: string;
+};
+
+const CHANNEL_COLORS = [
+  '#6366F1', // indigo
+  '#EF4444', // red
+  '#10B981', // emerald
+  '#F59E0B', // amber
+  '#8B5CF6', // violet
+  '#3B82F6', // blue
+  '#EC4899', // pink
+  '#14B8A6', // teal
+  '#F97316', // orange
+  '#06B6D4', // cyan
+];
+
+export const SUNSAMA_CHANNELS: SunsamaChannel[] = [
+  { tag: 'general', label: 'general', color: '#64748B' },
+  ...taggingRules.projects.map((p, idx) => ({
+    tag: p.tag.toLowerCase(),
+    label: p.label,
+    color: CHANNEL_COLORS[idx % CHANNEL_COLORS.length],
+  })),
+];
+
 export const DEFAULT_PROJECTS: Project[] = [
   {
     id: '11111111-1111-1111-1111-111111111111',
@@ -55,7 +86,6 @@ export const DEFAULT_PROJECTS: Project[] = [
     icon: 'folder',
     goal: 'General workflows & inbox tasks',
     keywords: ['general', 'workflow', 'review', 'inbox', 'admin', 'daily'],
-    instructions: 'General unclassified workflows, routine administrative tasks, and inbox items',
   },
   {
     id: '22222222-2222-2222-2222-222222222222',
@@ -64,26 +94,7 @@ export const DEFAULT_PROJECTS: Project[] = [
     color: '#EF4444',
     icon: 'briefcase',
     goal: 'Turn90 re-entry operations & case management',
-    keywords: [
-      'turn90',
-      'turn 90',
-      't90',
-      'reentry',
-      're-entry',
-      'first shift',
-      'case notes',
-      'employer',
-      'participant',
-      'curriculum',
-      'briefcase',
-      'apricot',
-      'matt',
-      'amy',
-      'tammy',
-      'vr training',
-      'columbia',
-    ],
-    instructions: 'Turn90 re-entry employment, participant casework, partner employers, and staff coordination',
+    keywords: ['turn90', 'turn 90', 't90', 'reentry', 'first shift', 'apricot', 'skillcat'],
   },
   {
     id: '33333333-3333-3333-3333-333333333333',
@@ -92,24 +103,7 @@ export const DEFAULT_PROJECTS: Project[] = [
     color: '#10B981',
     icon: 'trophy',
     goal: '843FC soccer club, leagues & tournaments',
-    keywords: [
-      '843',
-      '843fc',
-      'soccer',
-      'football',
-      'crowded',
-      'fourth wall',
-      'merch',
-      'tournament',
-      'rec',
-      'drills',
-      'kevin',
-      'albertine',
-      'coaching',
-      'futsal',
-      'uniforms',
-    ],
-    instructions: '843FC soccer training drills, youth tournaments, merchandise sales, and donor outreach',
+    keywords: ['843', '843fc', 'soccer', 'football', 'futsal'],
   },
   {
     id: '44444444-4444-4444-4444-444444444444',
@@ -118,23 +112,7 @@ export const DEFAULT_PROJECTS: Project[] = [
     color: '#8B5CF6',
     icon: 'user',
     goal: 'Personal health, life, and family',
-    keywords: [
-      'personal',
-      'flea',
-      'cats',
-      'health',
-      'dentist',
-      'doctor',
-      'family',
-      'errand',
-      'groceries',
-      'yoga',
-      'medication',
-      'cardio',
-      'workout',
-      'home',
-    ],
-    instructions: 'Personal life, health appointments, routines, pet care, and domestic tasks',
+    keywords: ['personal', 'cats', 'health', 'family', 'home'],
   },
   {
     id: '55555555-5555-5555-5555-555555555555',
@@ -143,8 +121,7 @@ export const DEFAULT_PROJECTS: Project[] = [
     color: '#F59E0B',
     icon: 'sparkles',
     goal: 'Nosa product development & roadmap',
-    keywords: ['nosa', 'royvi', 'app feature', 'nigeria'],
-    instructions: 'Nosa application features, design, testing, and deployment',
+    keywords: ['nosa', 'royvi', 'claire'],
   },
   {
     id: '66666666-6666-6666-6666-666666666666',
@@ -153,19 +130,7 @@ export const DEFAULT_PROJECTS: Project[] = [
     color: '#3B82F6',
     icon: 'book',
     goal: 'Memoir writing & Synapse AI coaching engine',
-    keywords: [
-      'book',
-      'memoir',
-      'synapse',
-      'cbt',
-      'ai engine',
-      'chapter',
-      'writing',
-      'interview skills',
-      'sandler',
-      'coaching app',
-    ],
-    instructions: 'Memoir manuscript, Synapse AI coaching engine development, and CBT training audio',
+    keywords: ['book', 'memoir', 'synapse'],
   },
 ];
 
@@ -184,10 +149,106 @@ export function extractSubtasks(description?: string | null): Subtask[] {
   return items;
 }
 
+export function extractHashtags(text?: string | null): string[] {
+  if (!text) return [];
+  const matches = text.match(/#([a-zA-Z0-9_\-]+)/g) || [];
+  return Array.from(new Set(matches.map((m) => m.substring(1).toLowerCase())));
+}
+
+export function cleanTaskTitle(title: string): string {
+  return (title || '')
+    .replace(/!+/g, '')
+    .replace(/\s*#[a-zA-Z0-9_\-]+/g, '')
+    .replace(/\[⏱\s*\d+m\]/g, '')
+    .trim() || title;
+}
+
+export function getChannelForTask(task: Task): SunsamaChannel {
+  const tags = [
+    ...(task.tags || []),
+    ...extractHashtags(task.title),
+    ...extractHashtags(task.description),
+  ].map((t) => t.toLowerCase());
+
+  for (const ch of SUNSAMA_CHANNELS) {
+    if (ch.tag !== 'general' && tags.includes(ch.tag)) {
+      return ch;
+    }
+  }
+
+  // Fallback to listName if not General
+  const lowerList = (task.listName || '').toLowerCase();
+  if (lowerList && lowerList !== 'general') {
+    const byList = SUNSAMA_CHANNELS.find(
+      (c) => lowerList.includes(c.tag) || c.label.toLowerCase().includes(lowerList)
+    );
+    if (byList) return byList;
+  }
+
+  return SUNSAMA_CHANNELS[0]; // #general
+}
+
+export function buildTaskDescription(params: {
+  cleanNotes?: string;
+  estimatedMinutes?: number;
+  inPlayQueue?: boolean;
+  subtasks?: Subtask[];
+  tags?: string[];
+}): string {
+  const headerTokens: string[] = [];
+  if (params.estimatedMinutes && params.estimatedMinutes > 0) {
+    headerTokens.push(`[⏱ ${params.estimatedMinutes}m]`);
+  }
+  if (params.inPlayQueue) {
+    headerTokens.push('[▶️ Queue]');
+  }
+  if (params.tags && params.tags.length > 0) {
+    for (const raw of params.tags) {
+      const clean = raw.replace(/^#/, '').trim().toLowerCase();
+      if (clean) headerTokens.push(`#${clean}`);
+    }
+  }
+
+  const lines: string[] = [];
+  if (headerTokens.length > 0) {
+    lines.push(headerTokens.join(' '));
+  }
+  if (params.cleanNotes && params.cleanNotes.trim()) {
+    lines.push(params.cleanNotes.trim());
+  }
+  if (params.subtasks && params.subtasks.length > 0) {
+    for (const s of params.subtasks) {
+      lines.push(`- [${s.isCompleted ? 'x' : ' '}] ${s.title}`);
+    }
+  }
+  return lines.join('\n').trim();
+}
+
+export function extractCleanNotes(description?: string | null): string {
+  if (!description) return '';
+  const lines = description
+    .split('\n')
+    .filter((line) => {
+      const t = line.trim();
+      if (t.startsWith('- [ ] ') || t.toLowerCase().startsWith('- [x] ')) return false;
+      if (t.startsWith('⚡ First 5 Minutes:')) return false;
+      return true;
+    })
+    .map((line) =>
+      line
+        .replace(/\[⏱\s*\d+m\]/g, '')
+        .replace(/\[▶️\s*Queue\]/g, '')
+        .replace(/#[a-zA-Z0-9_\-]+/g, '')
+        .trim()
+    )
+    .filter(Boolean);
+  return lines.join('\n').trim();
+}
+
 export function serializeSubtasksIntoDescription(originalDesc: string | null | undefined, subtasks: Subtask[]): string {
   const base = originalDesc || '';
-  const lines = base.split('\n').filter(l => !l.trim().startsWith('- [ ] ') && !l.trim().toLowerCase().startsWith('- [x] '));
-  const subtaskLines = subtasks.map(s => `- [${s.isCompleted ? 'x' : ' '}] ${s.title}`);
+  const lines = base.split('\n').filter((l) => !l.trim().startsWith('- [ ] ') && !l.trim().toLowerCase().startsWith('- [x] '));
+  const subtaskLines = subtasks.map((s) => `- [${s.isCompleted ? 'x' : ' '}] ${s.title}`);
   return [...lines, ...subtaskLines].join('\n').trim();
 }
 
@@ -200,42 +261,14 @@ export function isTaskScheduledForFuture(dueDate?: string | null): boolean {
   return startOfDueDate > startOfToday;
 }
 
-export function matchTaskToProject(task: { projectId?: string | null; listName?: string | null; title?: string; description?: string | null }, projects: Project[]): Project {
+export function matchTaskToProject(
+  task: { projectId?: string | null; listName?: string | null; title?: string; description?: string | null },
+  projects: Project[]
+): Project {
   if (task.projectId) {
     const byId = projects.find((p) => p.id === task.projectId);
     if (byId) return byId;
   }
-
-  const listName = (task.listName || '').toLowerCase().trim();
-  for (const p of projects) {
-    const pName = p.name.toLowerCase();
-    const pSlug = p.slug.toLowerCase();
-    if (
-      listName === pName ||
-      listName === pSlug ||
-      listName.includes(pName) ||
-      pName.includes(listName) ||
-      (pSlug === '843fc' && listName.includes('843')) ||
-      (pSlug === 'turn90' && (listName.includes('turn') || listName.includes('reentry'))) ||
-      (pSlug === 'book-memoir-and-synapse' &&
-        (listName.includes('book') || listName.includes('memoir') || listName.includes('synapse')))
-    ) {
-      return p;
-    }
-  }
-
-  // Check title & description against keywords
-  const text = `${task.title || ''} ${task.description || ''}`.toLowerCase();
-  for (const p of projects) {
-    if (p.keywords && p.keywords.length > 0) {
-      for (const kw of p.keywords) {
-        if (text.includes(kw.toLowerCase())) {
-          return p;
-        }
-      }
-    }
-  }
-
   const general = projects.find((p) => p.slug === 'general' || p.name.toLowerCase() === 'general');
   return general || projects[0] || DEFAULT_PROJECTS[0];
 }
@@ -251,23 +284,21 @@ export function getFallbackTasks(projects: Project[]): Task[] {
       estimatedMinutes = parseInt(durMatch[1], 10);
     }
 
-    // Determine initial priority
     let priority: TaskPriority = 'medium';
     const notesLower = (item.notes || '').toLowerCase();
-    const titleLower = (item.title || '').toLowerCase();
-    if (notesLower.includes('[🔥 high]') || notesLower.includes('priority: high') || titleLower.includes('deadline') || titleLower.includes('open enrollment') || titleLower.includes('court') || titleLower.includes('urgent')) {
+    if (notesLower.includes('[🔥 high]') || notesLower.includes('priority: high')) {
       priority = 'high';
     } else if (notesLower.includes('[🌱 low]') || notesLower.includes('priority: low')) {
       priority = 'low';
     }
 
     const fullText = `${item.title || ''} ${item.notes || ''}`;
-    const tagMatches = fullText.match(/#([a-zA-Z0-9_\-]+)/g) || [];
-    const extractedTags = Array.from(new Set(tagMatches.map((t: string) => t.substring(1).toLowerCase())));
+    const extractedTags = extractHashtags(fullText);
+    const inPlayQueue = (item.notes || '').includes('[▶️ Queue]');
 
     const task: Task = {
       id,
-      title: item.title,
+      title: cleanTaskTitle(item.title),
       description: item.notes || '',
       listName: item.listName || 'General',
       status: 'pending',
@@ -275,14 +306,13 @@ export function getFallbackTasks(projects: Project[]): Task[] {
       appleReminderId: item.appleReminderId || id,
       estimatedMinutes,
       priority,
-      inPlayQueue: false,
+      inPlayQueue,
       subtasks,
       tags: extractedTags,
       createdAt: new Date().toISOString(),
     };
     const matched = matchTaskToProject(task, projects);
     task.projectId = matched.id;
-    task.listName = matched.name;
     return task;
   });
 }

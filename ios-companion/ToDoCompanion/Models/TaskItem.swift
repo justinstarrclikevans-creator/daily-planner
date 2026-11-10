@@ -128,8 +128,67 @@ struct TaskItem: Identifiable, Codable, Hashable {
     }
     
     var peopleInTask: [String] {
-        let knownPeople = ["matt", "jenn", "sean", "daisy", "katie", "amy", "tammy", "london", "reece", "alexa"]
+        let dynamicPeople = TaggingRulesService.shared.rules.people.map { $0.tag.lowercased() }
+        let knownPeople = Set(dynamicPeople + ["matt", "jenn", "sean", "daisy", "katie", "amy", "tammy", "stacy", "casey", "brooke", "kat", "tb", "isiah", "kwatez", "brandon", "lashawn", "anthony", "kevin", "terrance", "diyoung"])
         return allTags.filter { knownPeople.contains($0) }
+    }
+    
+    var detectedSpace: SpaceRule? {
+        if let st = spaceTag {
+            return TaggingRulesService.shared.rules.spaces.first { $0.tag.lowercased() == st.lowercased() }
+        }
+        return nil
+    }
+    
+    var channelTag: String {
+        let projectTags = TaggingRulesService.shared.rules.projects.map { $0.tag.replacingOccurrences(of: "#", with: "").lowercased() }
+        if let match = allTags.first(where: { projectTags.contains($0.lowercased()) }) {
+            return "#\(match)"
+        }
+        if listName.lowercased() != "general" && !listName.isEmpty {
+            return "#\(listName.lowercased().replacingOccurrences(of: " ", with: "-"))"
+        }
+        return "#general"
+    }
+    
+    // MARK: - Sunsama Day Planning & Timeboxing States
+    
+    /// True when the task has no due date (lives in the Unplanned Backlog / Daemon Triage drawer)
+    var isBacklog: Bool {
+        return dueDate == nil && !inPlayQueue
+    }
+    
+    /// True when the task is committed to Today (due today, overdue, or explicitly queued for today)
+    var isPlannedForToday: Bool {
+        if inPlayQueue && dueDate == nil { return true }
+        guard let due = dueDate else { return false }
+        let cal = Calendar.current
+        if cal.isDateInToday(due) { return true }
+        return due < cal.startOfDay(for: Date())
+    }
+    
+    /// True when the task is scheduled for Tomorrow
+    var isPlannedForTomorrow: Bool {
+        guard let due = dueDate else { return false }
+        return Calendar.current.isDateInTomorrow(due)
+    }
+    
+    /// True when the task has a specific clock time assigned (not midnight 00:00:00)
+    var isTimeboxed: Bool {
+        guard let due = dueDate else { return false }
+        let comps = Calendar.current.dateComponents([.hour, .minute], from: due)
+        let h = comps.hour ?? 0
+        let m = comps.minute ?? 0
+        if h == 0 && m == 0 { return false }
+        return true
+    }
+    
+    var timeboxString: String? {
+        guard isTimeboxed, let due = dueDate else { return nil }
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        let end = due.addingTimeInterval(TimeInterval(max(5, estimatedMinutes) * 60))
+        return "\(formatter.string(from: due)) – \(formatter.string(from: end))"
     }
     
     func matchesSpace(_ space: String) -> Bool {
@@ -137,7 +196,13 @@ struct TaskItem: Identifiable, Codable, Hashable {
         let target = space.lowercased()
         if allTags.contains(target) { return true }
         let text = "\(title) \(description ?? "") \(listName)".lowercased()
-        return text.contains(target)
+        if text.contains(target) { return true }
+        if let spaceRule = TaggingRulesService.shared.rules.spaces.first(where: { $0.tag.lowercased() == target }) {
+            for kw in spaceRule.keywords {
+                if text.contains(kw.lowercased()) { return true }
+            }
+        }
+        return false
     }
     
     func matchesPerson(_ person: String) -> Bool {
@@ -148,6 +213,27 @@ struct TaskItem: Identifiable, Codable, Hashable {
         }
         if allTags.contains(target) { return true }
         let text = "\(title) \(description ?? "")".lowercased()
+        if text.contains(target) { return true }
+        if let personRule = TaggingRulesService.shared.rules.people.first(where: { $0.tag.lowercased() == target }) {
+            for kw in personRule.keywords {
+                if text.contains(kw.lowercased()) { return true }
+            }
+        }
+        return false
+    }
+    
+    func matchesChannel(_ channel: String) -> Bool {
+        if channel.isEmpty || channel.lowercased() == "all" { return true }
+        let target = channel.lowercased()
+        if allTags.contains(target) { return true }
+        if listName.lowercased() == target { return true }
+        let text = "\(title) \(description ?? "") \(listName)".lowercased()
+        if let projRule = TaggingRulesService.shared.rules.projects.first(where: { $0.tag.lowercased() == target || $0.label.lowercased() == target }) {
+            if allTags.contains(projRule.tag.lowercased()) { return true }
+            for kw in projRule.keywords {
+                if text.contains(kw.lowercased()) { return true }
+            }
+        }
         return text.contains(target)
     }
     
@@ -385,6 +471,7 @@ struct TaskItem: Identifiable, Codable, Hashable {
             var cleaned = line
                 .replacingOccurrences(of: #"\[⏱\s*\d+m\]"#, with: "", options: .regularExpression)
                 .replacingOccurrences(of: "[▶️ Queue]", with: "")
+                .replacingOccurrences(of: #"#([a-zA-Z0-9_\-]+)"#, with: "", options: .regularExpression)
                 .trimmingCharacters(in: .whitespaces)
             if cleaned.isEmpty { return nil }
             if cleaned.hasPrefix("- [ ] ") || cleaned.lowercased().hasPrefix("- [x] ") { return nil }
@@ -395,13 +482,14 @@ struct TaskItem: Identifiable, Codable, Hashable {
         return filteredLines.joined(separator: "\n")
     }
     
-    /// Rebuilds serialized description preserving clean notes, subtasks, duration, and queue state.
+    /// Rebuilds serialized description preserving clean notes, subtasks, duration, tags, and queue state.
     static func buildDescription(
         cleanNotes: String,
         estimatedMinutes: Int?,
         inPlayQueue: Bool,
         firstFiveMinutes: String? = nil,
-        subtasks: [SubtaskItem]
+        subtasks: [SubtaskItem],
+        tags: [String] = []
     ) -> String {
         var parts: [String] = []
         
@@ -411,6 +499,10 @@ struct TaskItem: Identifiable, Codable, Hashable {
         }
         if inPlayQueue {
             headerTags.append("[▶️ Queue]")
+        }
+        let cleanTags = Array(Set(tags.map { $0.lowercased().replacingOccurrences(of: "#", with: "").trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty })).sorted()
+        for t in cleanTags {
+            headerTags.append("#\(t)")
         }
         if !headerTags.isEmpty {
             parts.append(headerTags.joined(separator: " "))
@@ -436,20 +528,23 @@ struct TaskItem: Identifiable, Codable, Hashable {
         inPlayQueue: Bool? = nil,
         firstFiveMinutes: String? = nil,
         subtasks: [SubtaskItem]? = nil,
-        actualSeconds: Int? = nil
+        actualSeconds: Int? = nil,
+        tags: [String]? = nil
     ) {
         if let mins = estimatedMinutes { self.estimatedMinutes = mins }
         if let queue = inPlayQueue { self.inPlayQueue = queue }
         if let prompt = firstFiveMinutes { self.firstFiveMinutesPrompt = prompt }
         if let steps = subtasks { self.subtasks = steps }
         if let secs = actualSeconds { self.actualSeconds = secs }
+        if let updatedTags = tags { self.tags = updatedTags }
         
         self.description = Self.buildDescription(
             cleanNotes: self.cleanDescription,
             estimatedMinutes: self.estimatedMinutes,
             inPlayQueue: self.inPlayQueue,
             firstFiveMinutes: self.firstFiveMinutesPrompt,
-            subtasks: self.subtasks
+            subtasks: self.subtasks,
+            tags: self.allTags
         )
     }
 }

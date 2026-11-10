@@ -78,6 +78,10 @@ class CalendarManager: ObservableObject {
         }
     }
     
+    func fetchUpcomingEvents() async {
+        await refreshEvents()
+    }
+    
     func fetchEvents(for date: Date) -> [CalendarEventItem] {
         let cal = Calendar.current
         let startOfDay = cal.startOfDay(for: date)

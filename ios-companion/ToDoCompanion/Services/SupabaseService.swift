@@ -333,7 +333,8 @@ class SupabaseService: ObservableObject {
             estimatedMinutes: effectiveMinutes,
             inPlayQueue: inPlayQueue,
             firstFiveMinutes: firstFiveMinutes,
-            subtasks: subtasks
+            subtasks: subtasks,
+            tags: tags
         )
         
         let newTask = TaskItem(
@@ -405,7 +406,8 @@ class SupabaseService: ObservableObject {
             estimatedMinutes: current.estimatedMinutes,
             inPlayQueue: current.inPlayQueue,
             firstFiveMinutes: current.firstFiveMinutesPrompt,
-            subtasks: current.subtasks
+            subtasks: current.subtasks,
+            tags: current.tags
         )
         current.description = newDesc
         tasks[taskIndex] = current
@@ -495,6 +497,168 @@ class SupabaseService: ObservableObject {
         var copy = tasks[index]
         copy.priority = priority
         await updateTask(copy)
+    }
+    
+    // MARK: - Sunsama Daily Planner & Timeboxing Workflows
+    
+    func planTaskForToday(_ task: TaskItem) async {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var copy = tasks[index]
+        // Keep existing timebox hour if it is already scheduled for today, otherwise set to startOfDay
+        let cal = Calendar.current
+        if let existingDue = copy.dueDate, cal.isDateInToday(existingDue), copy.isTimeboxed {
+            copy.updateMetadata(inPlayQueue: true)
+        } else {
+            copy.dueDate = cal.startOfDay(for: Date())
+            copy.updateMetadata(inPlayQueue: true)
+        }
+        await updateTask(copy)
+    }
+    
+    func planTaskForTomorrow(_ task: TaskItem) async {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var copy = tasks[index]
+        let cal = Calendar.current
+        let tomorrowStart = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date())) ?? Date().addingTimeInterval(86400)
+        copy.dueDate = tomorrowStart
+        copy.updateMetadata(inPlayQueue: false)
+        await updateTask(copy)
+    }
+    
+    func moveTaskToBacklog(_ task: TaskItem) async {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var copy = tasks[index]
+        copy.dueDate = nil
+        copy.updateMetadata(inPlayQueue: false)
+        await updateTask(copy)
+    }
+    
+    func timeboxTask(_ task: TaskItem, at startDate: Date, createCalendarEvent: Bool = false) async {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var copy = tasks[index]
+        copy.dueDate = startDate
+        copy.updateMetadata(inPlayQueue: Calendar.current.isDateInToday(startDate))
+        await updateTask(copy)
+        
+        if createCalendarEvent {
+            _ = try? await CalendarManager.shared.scheduleFocusBlock(
+                title: "⚡ \(copy.cleanTitle)",
+                startDate: startDate,
+                durationMinutes: max(5, copy.estimatedMinutes),
+                notes: copy.cleanDescription
+            )
+        }
+    }
+    
+    func clearTimebox(for task: TaskItem) async {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var copy = tasks[index]
+        if let due = copy.dueDate {
+            copy.dueDate = Calendar.current.startOfDay(for: due)
+        }
+        await updateTask(copy)
+    }
+    
+    func toggleTag(on task: TaskItem, tag: String) async {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var copy = tasks[index]
+        let cleanTag = tag.lowercased().replacingOccurrences(of: "#", with: "")
+        var updatedTags = copy.tags.map { $0.lowercased().replacingOccurrences(of: "#", with: "") }
+        if let idx = updatedTags.firstIndex(of: cleanTag) {
+            updatedTags.remove(at: idx)
+        } else {
+            updatedTags.append(cleanTag)
+        }
+        copy.updateMetadata(tags: updatedTags)
+        await updateTask(copy)
+    }
+    
+    func updateEstimatedMinutes(for task: TaskItem, minutes: Int) async {
+        guard let index = tasks.firstIndex(where: { $0.id == task.id }) else { return }
+        var copy = tasks[index]
+        copy.updateMetadata(estimatedMinutes: max(5, minutes))
+        await updateTask(copy)
+    }
+    
+    /// Sunsama Auto-Timeboxer: slots un-timeboxed Today tasks into free gaps between today's Calendar events.
+    func autoTimeboxTodayTasks(tasksToSchedule: [TaskItem]? = nil, writeToCalendar: Bool = false) async -> Int {
+        await CalendarManager.shared.fetchUpcomingEvents()
+        let freeSlots = CalendarManager.shared.findFreeSlots(for: Date(), minMinutes: 5)
+        guard !freeSlots.isEmpty else { return 0 }
+        
+        let candidates: [TaskItem]
+        if let provided = tasksToSchedule {
+            candidates = provided.filter { !$0.isCompleted }
+        } else {
+            candidates = tasks.filter { !$0.isCompleted && $0.isPlannedForToday && !$0.isTimeboxed }
+        }
+        
+        let sorted = candidates.sorted { a, b in
+            let pA = a.priority.lowercased() == "high" ? 0 : (a.priority.lowercased() == "medium" ? 1 : 2)
+            let pB = b.priority.lowercased() == "high" ? 0 : (b.priority.lowercased() == "medium" ? 1 : 2)
+            if pA != pB { return pA < pB }
+            return a.estimatedMinutes < b.estimatedMinutes
+        }
+        
+        // Also avoid overlapping already-timeboxed tasks today
+        var occupiedRanges: [(start: Date, end: Date)] = tasks
+            .filter { t in !t.isCompleted && t.isPlannedForToday && t.isTimeboxed && !sorted.contains(where: { s in s.id == t.id }) }
+            .compactMap { t in
+                guard let s = t.dueDate else { return nil }
+                return (start: s, end: s.addingTimeInterval(TimeInterval(max(5, t.estimatedMinutes) * 60)))
+            }
+        
+        var scheduledCount = 0
+        let cal = Calendar.current
+        
+        for item in sorted {
+            let durationSec = TimeInterval(max(5, item.estimatedMinutes) * 60)
+            var assignedStart: Date? = nil
+            
+            for slot in freeSlots {
+                var probe = slot.startDate
+                // Round probe up to next 5-minute mark
+                let mins = cal.component(.minute, from: probe)
+                let rem = mins % 5
+                if rem != 0 {
+                    probe = probe.addingTimeInterval(TimeInterval((5 - rem) * 60))
+                }
+                
+                while probe.addingTimeInterval(durationSec) <= slot.endDate {
+                    let probeEnd = probe.addingTimeInterval(durationSec)
+                    let overlapsTask = occupiedRanges.contains { range in
+                        probe < range.end && probeEnd > range.start
+                    }
+                    if !overlapsTask {
+                        assignedStart = probe
+                        occupiedRanges.append((start: probe, end: probeEnd))
+                        break
+                    }
+                    probe = probe.addingTimeInterval(5 * 60)
+                }
+                if assignedStart != nil { break }
+            }
+            
+            if let start = assignedStart {
+                await timeboxTask(item, at: start, createCalendarEvent: writeToCalendar)
+                scheduledCount += 1
+            }
+        }
+        
+        return scheduledCount
+    }
+    
+    /// Sunsama Evening Shutdown Ritual: rolls incomplete Today tasks to Tomorrow (or Backlog).
+    func shutdownDay(rolloverToTomorrow: Bool = true) async -> Int {
+        let incompleteToday = tasks.filter { !$0.isCompleted && $0.isPlannedForToday }
+        for item in incompleteToday {
+            if rolloverToTomorrow {
+                await planTaskForTomorrow(item)
+            } else {
+                await moveTaskToBacklog(item)
+            }
+        }
+        return incompleteToday.count
     }
     
     func createProjectFromTask(task: TaskItem, name: String, color: String, icon: String, keywords: [String]) async {

@@ -9,6 +9,8 @@ struct CreateTaskSheetView: View {
     
     @State private var title: String = ""
     @State private var selectedProjectName: String = "General"
+    @State private var selectedProjectTag: String = ""
+    @State private var selectedStage: String = "today" // "today" | "backlog" | "tomorrow"
     @State private var selectedPriority: String = "medium" // "high" | "medium" | "low"
     @State private var selectedDuration: Int = 15
     @State private var selectedSpaceTag: String = ""
@@ -38,21 +40,36 @@ struct CreateTaskSheetView: View {
         NavigationStack {
             Form {
                 // Section 1: Title
-                Section("Task Title") {
-                    TextField("What needs to be done?", text: $title)
+                Section("Task Title (Active Sentence)") {
+                    TextField("E.g. Email Jenn about transfer training", text: $title)
                         .font(.body)
                 }
                 
-                // Section 2: Project
-                Section("List / Project") {
-                    Picker("Assign to List", selection: $selectedProjectName) {
-                        Text("General (Default)").tag("General")
-                        ForEach(supabase.projects.filter { $0.name.lowercased() != "general" }) { proj in
-                            HStack {
-                                Label(proj.name, systemImage: proj.icon)
+                // Section 2: Sunsama Stage (Today vs Backlog vs Tomorrow)
+                Section("When to Schedule") {
+                    Picker("Stage", selection: $selectedStage) {
+                        Text("☀️ Today's Plan").tag("today")
+                        Text("📥 Backlog").tag("backlog")
+                        Text("🌅 Tomorrow").tag("tomorrow")
+                    }
+                    .pickerStyle(.segmented)
+                }
+                
+                // Section 3: Channel / Project Tag
+                Section("Channel / Project Tag (Optional)") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            tagChip(label: "None", isSelected: selectedProjectTag.isEmpty) {
+                                selectedProjectTag = ""
                             }
-                            .tag(proj.name)
+                            ForEach(taggingService.rules.projects) { proj in
+                                let clean = proj.tag.replacingOccurrences(of: "#", with: "")
+                                tagChip(label: "#\(clean)", isSelected: selectedProjectTag == clean) {
+                                    selectedProjectTag = (selectedProjectTag == clean) ? "" : clean
+                                }
+                            }
                         }
+                        .padding(.vertical, 4)
                     }
                 }
                 
@@ -281,7 +298,9 @@ struct CreateTaskSheetView: View {
     }
     
     private func saveTask() {
-        let finalTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalTitle = title
+            .replacingOccurrences(of: "!+", with: "", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !finalTitle.isEmpty else { return }
         
         let allSubtaskTitles: [String] = isBatchMode ? parsedBatchSubtasks : individualSteps
@@ -293,45 +312,56 @@ struct CreateTaskSheetView: View {
         let firstFiveOpt = firstFive.isEmpty ? nil : firstFive
 
         var finalTags: [String] = []
-        if !selectedSpaceTag.isEmpty { finalTags.append(selectedSpaceTag) }
-        if !selectedPersonTag.isEmpty { finalTags.append(selectedPersonTag) }
-        if selectedPriority == "high" { finalTags.append("high") }
-
-        var reminderTitle = finalTitle
-        for tag in finalTags {
-            if !reminderTitle.lowercased().contains("#\(tag.lowercased())") {
-                reminderTitle += " #\(tag)"
-            }
+        if !selectedProjectTag.isEmpty { finalTags.append(selectedProjectTag.replacingOccurrences(of: "#", with: "")) }
+        if !selectedSpaceTag.isEmpty { finalTags.append(selectedSpaceTag.replacingOccurrences(of: "#", with: "")) }
+        if !selectedPersonTag.isEmpty { finalTags.append(selectedPersonTag.replacingOccurrences(of: "#", with: "")) }
+        
+        let cal = Calendar.current
+        let resolvedDueDate: Date?
+        let isTodayQueue: Bool
+        if selectedStage == "today" {
+            resolvedDueDate = cal.startOfDay(for: Date())
+            isTodayQueue = true
+        } else if selectedStage == "tomorrow" {
+            resolvedDueDate = cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date()))
+            isTodayQueue = false
+        } else {
+            resolvedDueDate = nil
+            isTodayQueue = false
         }
         
         Task {
             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             
-            // Build notes with serialized metadata & subtasks
+            // Build notes with serialized metadata, tags & subtasks (keeping title 100% clean)
             let serializedNotes = TaskItem.buildDescription(
                 cleanNotes: "",
                 estimatedMinutes: selectedDuration,
-                inPlayQueue: false,
+                inPlayQueue: isTodayQueue,
                 firstFiveMinutes: firstFiveOpt,
-                subtasks: subtaskItems
+                subtasks: subtaskItems,
+                tags: finalTags
             )
             
-            // Sync to Apple Reminders with EventKit Priority and hashtags in title
+            // Sync to Apple Reminders ("General" list)
             let reminderId = try? await RemindersManager.shared.addReminder(
-                title: reminderTitle,
+                title: finalTitle,
                 notes: serializedNotes,
-                listName: selectedProjectName
+                listName: "General",
+                dueDate: resolvedDueDate
             )
             
             // Create in Supabase & local state
             await supabase.createTask(
-                title: reminderTitle,
+                title: finalTitle,
                 description: serializedNotes,
-                listName: selectedProjectName,
+                listName: "General",
                 projectId: matchedProj?.id,
+                dueDate: resolvedDueDate,
                 appleReminderId: reminderId,
                 estimatedMinutes: selectedDuration,
                 priority: selectedPriority,
+                inPlayQueue: isTodayQueue,
                 firstFiveMinutes: firstFiveOpt,
                 subtasks: subtaskItems,
                 tags: finalTags

@@ -72,7 +72,7 @@ class RemindersManager: ObservableObject {
         }
     }
     
-    func addReminder(title: String, notes: String? = nil, listName: String = "Personal", dueDate: Date? = nil) async throws -> String? {
+    func addReminder(title: String, notes: String? = nil, listName: String = "General", dueDate: Date? = nil) async throws -> String? {
         if !isAuthorized {
             let granted = await requestAccess()
             guard granted else { return nil }
@@ -102,8 +102,13 @@ class RemindersManager: ObservableObject {
         reminder.calendar = calendar
         
         if let dueDate = dueDate {
-            let calendarComponent = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: dueDate)
-            reminder.dueDateComponents = calendarComponent
+            let comps = Calendar.current.dateComponents([.hour, .minute], from: dueDate)
+            let hasExplicitTime = (comps.hour ?? 0) != 0 || (comps.minute ?? 0) != 0
+            if hasExplicitTime {
+                reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: dueDate)
+            } else {
+                reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day], from: dueDate)
+            }
         }
         
         try eventStore.save(reminder, commit: true)
@@ -140,7 +145,11 @@ class RemindersManager: ObservableObject {
                 reminder.completionDate = nil
             }
             if let dueDate = task.dueDate {
-                reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: dueDate)
+                if task.isTimeboxed {
+                    reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: dueDate)
+                } else {
+                    reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day], from: dueDate)
+                }
             } else {
                 reminder.dueDateComponents = nil
             }
@@ -247,171 +256,10 @@ class RemindersManager: ObservableObject {
     ]
     
     func migrateToNewPDFStructureIfNeeded() async {
-        let migrationKey = "did_migrate_pdf_structure_v6_clean"
-        guard !UserDefaults.standard.bool(forKey: migrationKey) else { return }
+        // Consolidated single-list ("General") architecture:
+        // Never wipe user's live iCloud reminders; just ensure the "General" list exists.
         guard isAuthorized else { return }
-        
-        // 1. Wipe all existing reminders on device once so any bogus v5 tasks ("Bunny", etc.) are completely purged
-        let allPred = eventStore.predicateForReminders(in: nil)
-        let allExisting: [EKReminder] = await withCheckedContinuation { cont in
-            eventStore.fetchReminders(matching: allPred) { items in
-                cont.resume(returning: items ?? [])
-            }
-        }
-        for item in allExisting {
-            try? eventStore.remove(item, commit: false)
-        }
-        try? eventStore.commit()
-        
-        // 2. Ensure the 6 target lists exist and remove any deprecated lists
-        let targetLists = ["General", "Turn90", "843FC", "Personal", "Nosa", "Book (Memoir) and Synapse"]
-        for name in targetLists {
-            _ = await createReminderList(named: name)
-        }
-        
-        let targetSet = Set(targetLists.map { $0.lowercased() })
-        for cal in eventStore.calendars(for: .reminder) {
-            let lower = cal.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if !targetSet.contains(lower) {
-                try? eventStore.removeCalendar(cal, commit: true)
-            }
-        }
-        
-        // 3. Seed the exact 56 tasks and subtasks from the PDF document
-        let seedStructure: [(list: String, tasks: [(title: String, subtasks: [String])])] = [
-            ("General", [
-                ("Create a workflow for the end of the day", []),
-                ("Add a failure of nerve to some of the ai engines", [])
-            ]),
-            ("Turn90", [
-                ("Start the day", [
-                    "Open Apricot",
-                    "Run Main Report and export",
-                    "Open T90 app",
-                    "Feed report into app",
-                    "Check CM and Class evaluations",
-                    "Message teammates any needed feedback"
-                ]),
-                ("Finish the lscmi’s", []),
-                ("Put in Lawrence's case plan and Notes, including job placement", []),
-                ("Ask Amy about moving stuff out of the drive", []),
-                ("Make an apricot report that tells me how many points everyone's earned to determine dollar amount", []),
-                ("Columbia jobs", [
-                    "Use the ai app to look for leads",
-                    "Email and call to set appointments",
-                    "Ask AI to cross check for indeed postings"
-                ]),
-                ("Create a feedback loop for class in case management feedback that informs training", [
-                    "Look at the feedback",
-                    "Download feedback",
-                    "Ask ai to create needed trainings based on feedback"
-                ]),
-                ("Schedule time for the transfer training with Jenn", []),
-                ("Reach out lashawn about VR funding and Anthony", []),
-                ("Set goals for reentry navigation as a mini project under Turn 90:", [
-                    "Decide whether to log goals in Apricot or T90 app",
-                    "Figure out reporting and tracking methods."
-                ]),
-                ("Identify assessments, tracks, and job placement opportunities for SkillCat tracks.", []),
-                ("Submit Walmart job applications for Arthur and Al.", []),
-                ("Add daily reminder to remove people from SkillCat.morning check class and cm scores, open these websites, skillcat progress. Flag issues.", []),
-                ("Define briefcase completion process and create relevant flags.", []),
-                ("Create a training log to track all training sessions (planned and ad hoc) and frequency of similar conversations.", []),
-                ("Provide Greg Miller (potential headhunter) with requested information.", []),
-                ("Purchase appreciation gifts for program staff.", []),
-                ("Use Tiimo-style checklists for program managers to track progress.", []),
-                ("Explore development of an Android/Apple app for direct session recording and upload.", []),
-                ("Define dashboard report requirements (e.g., weekly drug tests, case management) and automate reporting.", []),
-                ("Run last year’s case notes through AI to extract insights and evaluate program effectiveness.", []),
-                ("Fix employment check-in reporting in Apricot and update playbook with definitions", []),
-                ("Have the algo give an updated goals list. So process is first session is setting goals, goals are listed in each next session game plan, then updates to the goals are in the case notes.", []),
-                ("Write the todo brain. Ask slacks go here. Priority. Talk it out!!!", []),
-                ("Look up Zune? warehouse in Orangeburg for Lawrence", []),
-                ("Try to implement a feature where people can record their conversations and automatically link them to a person", []),
-                ("Just focus on the playbook and everything else stems from that. Talk/write out every process", []),
-                ("How are we holding case plans now?", [])
-            ]),
-            ("843FC", [
-                ("Invites for the synapse app.", []),
-                ("Christmas Initiative", [
-                    "Plan out the structure",
-                    "Look for products and costs",
-                    "Write a one pager",
-                    "Deliver to team and potential partners"
-                ]),
-                ("One Pager for holiday event", [
-                    "Identify full list of potential partners",
-                    "Go to Lloyd’s",
-                    "Kasi",
-                    "restaurants",
-                    "Pat",
-                    "Awaken church"
-                ]),
-                ("Switch away from fourth wall", [
-                    "Change the links on 843fc.org to crowded"
-                ]),
-                ("Set up recurring donations", []),
-                ("Launch a campaign (including app) on November 1st; 10 days remaining for preparation.", [
-                    "App may not be fully ready but campaign will proceed."
-                ]),
-                ("Use Google to recreate \"best version\" videos from existing transcripts.", []),
-                ("Email outreach to Casey Sexton, lawyers (including Brooke), and realtors:", [
-                    "Pitch nonprofit advertising benefits."
-                ]),
-                ("Focus on campaign timing to capitalize on seasonal giving.", []),
-                ("Meet with Coach Kevin to discuss:", [
-                    "App development for him.",
-                    "EFC Christmas shopping list.",
-                    "General catch-up and collaboration."
-                ]),
-                ("Plan to deliver mini sermons (inspired by Rob Bell) on topics like Albertine.", []),
-                ("London and Reece to help me", []),
-                ("Switch 4th wall to crowded. Use 4wall for swag crowded for 5k registration", [])
-            ]),
-            ("Personal", [
-                ("Ask antigravity to read richard rohr emails and text those instead of common prayer", []),
-                ("Administer flea treatments to cats.", []),
-                ("Pay Charleston water bill.", []),
-                ("Order Ninja transfers for shirts (finish designs first). T90 badges as well", []),
-                ("Incorporate cardio, yoga, meditation, and medication into a daily routine (using an app like Tiimo or one being developed).", []),
-                ("Make a training app for the boys to enable them to charge for soccer training.", [])
-            ]),
-            ("Nosa", [
-                ("Talk to Robert about Royvi $", []),
-                ("Get Royvi picture for ID", [
-                    "Finish ID",
-                    "Send to Claire"
-                ])
-            ]),
-            ("Book (Memoir) and Synapse", [
-                ("Set aside dedicated time to work on the book.", []),
-                ("Remember the book is a side income source with potential for further opportunities.", []),
-                ("Develop an app component for passive training income/certification:", [
-                    "Include CBT skills, interview skills, sales training (Sandler method), and Synapse content.",
-                    "Determine if this will be part of the Free and Forward app or a separate project."
-                ]),
-                ("Create viral videos for Synapse using analogies (e.g., grocery store, driving your own car). Add grocery store and driving into app", []),
-                ("Focus on developing the Synapse AI engine as a standalone, coachable app.", [])
-            ])
-        ]
-        
-        // Clear local task cache so only fresh tasks from the PDF structure exist
-        SupabaseService.shared.tasks.removeAll()
-        
-        for group in seedStructure {
-            for item in group.tasks {
-                let subtasks = item.subtasks.map { SubtaskItem(title: $0, isCompleted: false) }
-                let notes = TaskItem.buildDescription(
-                    cleanNotes: "",
-                    estimatedMinutes: 5,
-                    inPlayQueue: false,
-                    subtasks: subtasks
-                )
-                _ = try? await addReminder(title: item.title, notes: notes, listName: group.list)
-            }
-        }
-        
-        UserDefaults.standard.set(true, forKey: migrationKey)
+        _ = await createReminderList(named: "General")
     }
     
     func syncReminderListsToProjects() async {
@@ -516,7 +364,14 @@ class RemindersManager: ObservableObject {
             let listName = r.calendar?.title ?? "General"
             if deprecatedListNames.contains(listName.lowercased()) { continue }
             let reminderId = r.calendarItemIdentifier
-            let dueDate = r.dueDateComponents?.date
+            var dueDate: Date? = nil
+            if let comps = r.dueDateComponents, let parsedDate = Calendar.current.date(from: comps) {
+                if comps.hour == nil {
+                    dueDate = Calendar.current.startOfDay(for: parsedDate)
+                } else {
+                    dueDate = parsedDate
+                }
+            }
             let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
             let cleanTitleLower = cleanTitle.lowercased()
             
@@ -538,7 +393,7 @@ class RemindersManager: ObservableObject {
                 current.title = title
                 current.listName = listName
                 current.projectId = matchedProject?.id
-                if let due = dueDate { current.dueDate = due }
+                current.dueDate = dueDate
                 
                 // Resolve priority from reminder priority or notes
                 if r.priority >= 1 && r.priority <= 4 {
