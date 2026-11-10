@@ -1,13 +1,12 @@
 'use client';
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import {
   supabase,
   Task,
   Subtask,
   TaskPriority,
   SUNSAMA_CHANNELS,
-  SunsamaChannel,
   getChannelForTask,
   buildTaskDescription,
   extractCleanNotes,
@@ -26,7 +25,7 @@ import {
   RotateCcw,
   Clock,
   ChevronRight,
-  ChevronDown,
+  ChevronLeft,
   Hash,
   Trash2,
   X,
@@ -37,12 +36,22 @@ import {
   CheckCircle2,
   AlertTriangle,
   Flame,
+  GripHorizontal,
 } from 'lucide-react';
 
 type ActiveModal = 'none' | 'morning_plan' | 'evening_shutdown' | 'focus_mode';
 
-const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90];
-const TIMELINE_HOURS = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
+const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
+const TIMELINE_START_HOUR = 7; // 7:00 AM
+const TIMELINE_END_HOUR = 20; // 8:00 PM
+const TIMELINE_HOURS = Array.from(
+  { length: TIMELINE_END_HOUR - TIMELINE_START_HOUR + 1 },
+  (_, i) => TIMELINE_START_HOUR + i
+);
+const QUARTERS = [0, 15, 30, 45];
+const PX_PER_MINUTE = 2.4; // 144px per hour -> 36px per 15m interval, 12px per 5m
+const HOUR_HEIGHT_PX = 60 * PX_PER_MINUTE; // 144px
+const QUARTER_HEIGHT_PX = 15 * PX_PER_MINUTE; // 36px
 const DAILY_TARGET_MINUTES = 360; // 6 hours realistic daily capacity
 
 function startOfDay(date: Date): Date {
@@ -96,6 +105,12 @@ function formatHourLabel(hour: number): string {
   return hour > 12 ? `${hour - 12} PM` : `${hour} AM`;
 }
 
+function formatHourMinuteLabel(hour: number, minute: number): string {
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const h12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  return `${h12}:${String(minute).padStart(2, '0')} ${period}`;
+}
+
 function formatTimeRange(iso: string, durationMinutes: number): string {
   const start = new Date(iso);
   const end = new Date(start.getTime() + Math.max(5, durationMinutes) * 60000);
@@ -127,27 +142,28 @@ export default function SunsamaWorkspace() {
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [focusRunning, setFocusRunning] = useState<boolean>(false);
   const [focusElapsedSeconds, setFocusElapsedSeconds] = useState<number>(0);
+  const [focusSubtaskInput, setFocusSubtaskInput] = useState<string>('');
 
   // Drag & Drop State
   const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);
 
+  // Calendar Block Resize State (5-minute precision down to 5m)
+  const [resizingState, setResizingState] = useState<{
+    taskId: string;
+    startY: number;
+    initialMinutes: number;
+    previewMinutes: number;
+  } | null>(null);
+
   // Current Time for Timeline Red Line
   const [now, setNow] = useState<Date>(new Date());
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 60000);
+    const t = setInterval(() => setNow(new Date()), 30000);
     return () => clearInterval(t);
   }, []);
-
-  // Focus Mode Timer
-  useEffect(() => {
-    if (!focusRunning || !focusTaskId) return;
-    const interval = setInterval(() => {
-      setFocusElapsedSeconds((prev) => prev + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [focusRunning, focusTaskId]);
 
   const loadData = useCallback(async () => {
     setSyncStatus('syncing');
@@ -186,9 +202,30 @@ export default function SunsamaWorkspace() {
         return {
           ...t,
           ...updates,
-          dueDate: updates.due_date !== undefined ? updates.due_date : updates.dueDate !== undefined ? updates.dueDate : t.dueDate,
-          inPlayQueue: updates.in_play_queue !== undefined ? updates.in_play_queue : updates.inPlayQueue !== undefined ? updates.inPlayQueue : t.inPlayQueue,
-          estimatedMinutes: updates.estimated_minutes !== undefined ? updates.estimated_minutes : updates.estimatedMinutes !== undefined ? updates.estimatedMinutes : t.estimatedMinutes,
+          dueDate:
+            updates.due_date !== undefined
+              ? updates.due_date
+              : updates.dueDate !== undefined
+              ? updates.dueDate
+              : t.dueDate,
+          inPlayQueue:
+            updates.in_play_queue !== undefined
+              ? updates.in_play_queue
+              : updates.inPlayQueue !== undefined
+              ? updates.inPlayQueue
+              : t.inPlayQueue,
+          estimatedMinutes:
+            updates.estimated_minutes !== undefined
+              ? updates.estimated_minutes
+              : updates.estimatedMinutes !== undefined
+              ? updates.estimatedMinutes
+              : t.estimatedMinutes,
+          actualSeconds:
+            updates.actual_seconds !== undefined
+              ? updates.actual_seconds
+              : updates.actualSeconds !== undefined
+              ? updates.actualSeconds
+              : t.actualSeconds,
         };
       })
     );
@@ -203,6 +240,21 @@ export default function SunsamaWorkspace() {
       console.error('Failed to patch task:', err);
     }
   }, []);
+
+  // Focus Mode Timer Tick + Auto-Save Actual Seconds
+  useEffect(() => {
+    if (!focusRunning || !focusTaskId) return;
+    const interval = setInterval(() => {
+      setFocusElapsedSeconds((prev) => {
+        const next = prev + 1;
+        if (next % 10 === 0) {
+          patchTask(focusTaskId, { actual_seconds: next });
+        }
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [focusRunning, focusTaskId, patchTask]);
 
   // Channel Filtered Tasks
   const channelFilteredTasks = useMemo(() => {
@@ -326,7 +378,58 @@ export default function SunsamaWorkspace() {
     [laterTasks]
   );
 
-  // Actions: Move Task between Backlog / Today / Tomorrow / Later / Timebox Hour
+  // Change Duration (down to 5m)
+  const handleSetDuration = useCallback(
+    async (task: Task, mins: number) => {
+      const clamped = Math.max(5, mins);
+      const nextDesc = buildTaskDescription({
+        cleanNotes: extractCleanNotes(task.description),
+        estimatedMinutes: clamped,
+        inPlayQueue: task.inPlayQueue,
+        subtasks: task.subtasks,
+        tags: task.tags,
+      });
+      await patchTask(task.id, {
+        estimated_minutes: clamped,
+        description: nextDesc,
+      });
+    },
+    [patchTask]
+  );
+
+  // Global Mouse Move / Mouse Up Listeners for Calendar Block Drag-to-Resize
+  useEffect(() => {
+    if (!resizingState) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaY = e.clientY - resizingState.startY;
+      const deltaMinutes = deltaY / PX_PER_MINUTE;
+      const rawTarget = resizingState.initialMinutes + deltaMinutes;
+      // Snap to 5-minute increments, minimum 5 minutes!
+      const snapped = Math.max(5, Math.min(360, Math.round(rawTarget / 5) * 5));
+      setResizingState((prev) =>
+        prev ? { ...prev, previewMinutes: snapped } : null
+      );
+    };
+
+    const handleMouseUp = () => {
+      const task = tasks.find((t) => t.id === resizingState.taskId);
+      const finalMins = resizingState.previewMinutes;
+      setResizingState(null);
+      if (task && finalMins !== task.estimatedMinutes) {
+        handleSetDuration(task, finalMins);
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [resizingState, tasks, handleSetDuration]);
+
+  // Actions: Move Task between Backlog / Today / Tomorrow / Later / Timebox Hour+Minute
   const moveTaskToBucket = useCallback(
     async (task: Task, bucket: 'backlog' | 'today' | 'tomorrow' | 'later') => {
       let nextDue: string | null = null;
@@ -363,7 +466,7 @@ export default function SunsamaWorkspace() {
     [todayStart, tomorrowStart, dayAfterStart, patchTask]
   );
 
-  const scheduleTaskAtHour = useCallback(
+  const scheduleTaskAtSlot = useCallback(
     async (task: Task, hour: number, minute: number = 0) => {
       const slotDate = new Date(
         now.getFullYear(),
@@ -401,7 +504,7 @@ export default function SunsamaWorkspace() {
     [todayStart, patchTask]
   );
 
-  // Auto-Timebox Unslotted Today Tasks around Already Timeboxed Items
+  // Auto-Timebox Unslotted Today Tasks in 15-Minute / 5-Minute Increments
   const handleAutoTimeboxToday = useCallback(async () => {
     const unslotted = todayTasks.filter(
       (t) => t.status !== 'completed' && !isTimeboxedDate(t.dueDate)
@@ -420,12 +523,13 @@ export default function SunsamaWorkspace() {
       };
     });
 
+    const currentRoundedQuarter = Math.ceil(now.getMinutes() / 15) * 15;
     const startCursor = new Date(
       now.getFullYear(),
       now.getMonth(),
       now.getDate(),
       Math.max(8, now.getHours()),
-      0,
+      now.getHours() >= 8 ? currentRoundedQuarter : 0,
       0,
       0
     ).getTime();
@@ -434,7 +538,7 @@ export default function SunsamaWorkspace() {
       now.getMonth(),
       now.getDate(),
       20,
-      0,
+      30,
       0,
       0
     ).getTime();
@@ -451,14 +555,16 @@ export default function SunsamaWorkspace() {
         if (!conflict) {
           occupied.push({ start: probe, end: probeEnd });
           const d = new Date(probe);
-          await scheduleTaskAtHour(task, d.getHours(), d.getMinutes());
-          probe = probeEnd + 5 * 60000; // 5m buffer
+          await scheduleTaskAtSlot(task, d.getHours(), d.getMinutes());
+          // Snap next probe to next 5-minute mark
+          const nextMs = Math.ceil(probeEnd / (5 * 60000)) * (5 * 60000);
+          probe = nextMs;
           break;
         }
-        probe += 15 * 60000;
+        probe += 5 * 60000;
       }
     }
-  }, [todayTasks, now, scheduleTaskAtHour]);
+  }, [todayTasks, now, scheduleTaskAtSlot]);
 
   // Toggle Complete
   const handleToggleComplete = useCallback(
@@ -492,24 +598,6 @@ export default function SunsamaWorkspace() {
     [patchTask]
   );
 
-  // Change Duration
-  const handleSetDuration = useCallback(
-    async (task: Task, mins: number) => {
-      const nextDesc = buildTaskDescription({
-        cleanNotes: extractCleanNotes(task.description),
-        estimatedMinutes: mins,
-        inPlayQueue: task.inPlayQueue,
-        subtasks: task.subtasks,
-        tags: task.tags,
-      });
-      await patchTask(task.id, {
-        estimated_minutes: mins,
-        description: nextDesc,
-      });
-    },
-    [patchTask]
-  );
-
   // Inline Create Task in any Column
   const handleCreateTaskInBucket = useCallback(
     async (bucket: 'backlog' | 'today' | 'tomorrow' | 'later') => {
@@ -519,11 +607,10 @@ export default function SunsamaWorkspace() {
         return;
       }
 
-      // Parse inline #channel or 15m if typed (Sunsama quick-entry syntax)
       let duration = 15;
       const durMatch = raw.match(/\b(\d+)m\b/i);
       if (durMatch && durMatch[1]) {
-        duration = parseInt(durMatch[1], 10);
+        duration = Math.max(5, parseInt(durMatch[1], 10));
       }
 
       const inlineTags = (raw.match(/#([a-zA-Z0-9_\-]+)/g) || []).map((t) =>
@@ -681,10 +768,44 @@ export default function SunsamaWorkspace() {
     [tasks, inspectingTaskId]
   );
 
-  const activeFocusTask = useMemo(
-    () => tasks.find((t) => t.id === focusTaskId) || todayTasks.find((t) => t.status !== 'completed') || null,
-    [tasks, focusTaskId, todayTasks]
+  // Focus Mode Queue: Today's pending tasks first, then Backlog tasks so Focus Mode NEVER fails to open!
+  const focusQueue = useMemo(() => {
+    const todayPending = todayTasks.filter((t) => t.status !== 'completed');
+    if (todayPending.length > 0) return todayPending;
+    return backlogTasks;
+  }, [todayTasks, backlogTasks]);
+
+  const activeFocusTask = useMemo(() => {
+    if (focusTaskId) {
+      const explicit = tasks.find((t) => t.id === focusTaskId);
+      if (explicit) return explicit;
+    }
+    return focusQueue[0] || null;
+  }, [tasks, focusTaskId, focusQueue]);
+
+  const openFocusMode = useCallback(
+    (task?: Task) => {
+      const target = task || focusQueue[0] || null;
+      if (target) {
+        setFocusTaskId(target.id);
+        setFocusElapsedSeconds(target.actualSeconds || 0);
+        setFocusRunning(true);
+      } else {
+        setFocusTaskId(null);
+        setFocusElapsedSeconds(0);
+        setFocusRunning(false);
+      }
+      setActiveModal('focus_mode');
+    },
+    [focusQueue]
   );
+
+  // Timeboxed Tasks for Today's Calendar Timeline
+  const timeboxedTodayTasks = useMemo(() => {
+    return todayTasks.filter(
+      (t) => isTimeboxedDate(t.dueDate) && t.dueDate
+    );
+  }, [todayTasks]);
 
   // Render a Sunsama Task Card
   const renderTaskCard = (
@@ -696,6 +817,10 @@ export default function SunsamaWorkspace() {
     const timeboxed = isTimeboxedDate(task.dueDate);
     const completedSubs = (task.subtasks || []).filter((s) => s.isCompleted).length;
     const totalSubs = (task.subtasks || []).length;
+    const displayMinutes =
+      resizingState?.taskId === task.id
+        ? resizingState.previewMinutes
+        : task.estimatedMinutes || 15;
 
     return (
       <div
@@ -748,7 +873,7 @@ export default function SunsamaWorkspace() {
             className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0"
             onClick={(e) => e.stopPropagation()}
           >
-            {currentBucket === 'backlog' ? (
+            {currentBucket === 'backlog' && (
               <button
                 type="button"
                 title="Move to Today"
@@ -758,21 +883,16 @@ export default function SunsamaWorkspace() {
                 <Sun className="h-2.5 w-2.5" />
                 <span>Today</span>
               </button>
-            ) : (
-              <button
-                type="button"
-                title="Focus on this task"
-                onClick={() => {
-                  setFocusTaskId(task.id);
-                  setFocusElapsedSeconds(task.actualSeconds || 0);
-                  setFocusRunning(true);
-                  setActiveModal('focus_mode');
-                }}
-                className="p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
-              >
-                <Play className="h-3 w-3 fill-current" />
-              </button>
             )}
+
+            <button
+              type="button"
+              title="Enter Focus Mode on this task"
+              onClick={() => openFocusMode(task)}
+              className="p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
+            >
+              <Play className="h-3 w-3 fill-current" />
+            </button>
 
             {currentBucket === 'today' && (
               <button
@@ -808,7 +928,11 @@ export default function SunsamaWorkspace() {
                 >
                   {sub.isCompleted && <Check className="h-2 w-2 stroke-[3]" />}
                 </div>
-                <span className={`truncate ${sub.isCompleted ? 'line-through text-slate-600' : ''}`}>
+                <span
+                  className={`truncate ${
+                    sub.isCompleted ? 'line-through text-slate-600' : ''
+                  }`}
+                >
                   {sub.title}
                 </span>
               </div>
@@ -821,7 +945,7 @@ export default function SunsamaWorkspace() {
           </div>
         )}
 
-        {/* Sunsama Card Footer: Channel Tag + Timebox Badge + Planned Time */}
+        {/* Sunsama Card Footer: Channel Tag + Timebox Badge + Quick Duration Controls (down to 5m) */}
         <div
           className="mt-3 pl-6 flex items-center justify-between gap-2 text-[11px]"
           onClick={(e) => e.stopPropagation()}
@@ -836,7 +960,11 @@ export default function SunsamaWorkspace() {
                 className="appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 rounded-md pl-4 pr-2 py-0.5 text-[11px] font-medium cursor-pointer focus:outline-none border border-transparent hover:border-white/10"
               >
                 {SUNSAMA_CHANNELS.map((ch) => (
-                  <option key={ch.tag} value={ch.tag} className="bg-[#1B1E26] text-white">
+                  <option
+                    key={ch.tag}
+                    value={ch.tag}
+                    className="bg-[#1B1E26] text-white"
+                  >
                     #{ch.label}
                   </option>
                 ))}
@@ -859,25 +987,58 @@ export default function SunsamaWorkspace() {
             )}
 
             {task.priority === 'high' && (
-              <span className="inline-flex items-center text-rose-400" title="High Priority">
+              <span
+                className="inline-flex items-center text-rose-400"
+                title="High Priority"
+              >
                 <Flame className="h-3 w-3 fill-current" />
               </span>
             )}
           </div>
 
-          {/* Planned Time Dropdown (Sunsama 0:15 style) */}
-          <select
-            aria-label="Planned duration"
-            value={task.estimatedMinutes || 15}
-            onChange={(e) => handleSetDuration(task, parseInt(e.target.value, 10))}
-            className="appearance-none bg-transparent hover:bg-white/[0.06] text-slate-400 hover:text-slate-200 rounded px-1.5 py-0.5 text-[11px] font-mono cursor-pointer focus:outline-none text-right"
-          >
-            {DURATION_OPTIONS.map((m) => (
-              <option key={m} value={m} className="bg-[#1B1E26] text-white">
-                {formatDurationShort(m)}
-              </option>
-            ))}
-          </select>
+          {/* Stepper + Dropdown for Planned Duration (5m increments down to 5m) */}
+          <div className="flex items-center gap-0.5 bg-white/[0.03] rounded-md px-1 py-0.5 border border-white/[0.05]">
+            <button
+              type="button"
+              title="Shorten by 5 minutes (min 5m)"
+              onClick={() =>
+                handleSetDuration(task, Math.max(5, displayMinutes - 5))
+              }
+              className="px-1 text-[10px] text-slate-500 hover:text-white font-bold"
+            >
+              −
+            </button>
+            <select
+              aria-label="Planned duration"
+              value={displayMinutes}
+              onChange={(e) =>
+                handleSetDuration(task, parseInt(e.target.value, 10))
+              }
+              className="appearance-none bg-transparent text-slate-300 hover:text-white px-1 text-[11px] font-mono cursor-pointer focus:outline-none text-center"
+            >
+              {Array.from(
+                new Set([...DURATION_OPTIONS, displayMinutes])
+              )
+                .sort((a, b) => a - b)
+                .map((m) => (
+                  <option
+                    key={m}
+                    value={m}
+                    className="bg-[#1B1E26] text-white"
+                  >
+                    {formatDurationShort(m)}
+                  </option>
+                ))}
+            </select>
+            <button
+              type="button"
+              title="Extend by 5 minutes"
+              onClick={() => handleSetDuration(task, displayMinutes + 5)}
+              className="px-1 text-[10px] text-slate-500 hover:text-white font-bold"
+            >
+              +
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -954,24 +1115,18 @@ export default function SunsamaWorkspace() {
 
             <button
               type="button"
-              onClick={() => {
-                const first = todayTasks.find((t) => t.status !== 'completed');
-                if (first) {
-                  setFocusTaskId(first.id);
-                  setFocusElapsedSeconds(first.actualSeconds || 0);
-                }
-                setActiveModal('focus_mode');
-              }}
+              onClick={() => openFocusMode()}
               className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                 activeModal === 'focus_mode'
-                  ? 'bg-indigo-500/20 text-indigo-300'
+                  ? 'bg-emerald-500/20 text-emerald-300'
                   : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
               }`}
             >
               <span className="flex items-center gap-2">
-                <Play className="h-3.5 w-3.5 text-emerald-400" />
+                <Play className="h-3.5 w-3.5 text-emerald-400 fill-current" />
                 <span>Focus Mode</span>
               </span>
+              <span className="text-[10px] text-slate-500">F</span>
             </button>
 
             <button
@@ -1024,7 +1179,7 @@ export default function SunsamaWorkspace() {
             >
               <span className="flex items-center gap-2">
                 <CalendarIcon className="h-3.5 w-3.5" />
-                <span>Calendar Timeline</span>
+                <span>Calendar (15m Grid)</span>
               </span>
               <span className="text-[10px] text-slate-500">
                 {showCalendarPane ? 'On' : 'Off'}
@@ -1134,7 +1289,6 @@ export default function SunsamaWorkspace() {
               dragOverTarget === 'backlog' ? 'bg-indigo-950/20' : ''
             }`}
           >
-            {/* Column Header */}
             <div className="p-4 border-b border-white/[0.06] space-y-2.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -1154,7 +1308,6 @@ export default function SunsamaWorkspace() {
                 </button>
               </div>
 
-              {/* Search Backlog */}
               <div className="relative">
                 <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-2" />
                 <input
@@ -1167,7 +1320,6 @@ export default function SunsamaWorkspace() {
               </div>
             </div>
 
-            {/* Inline Add Task to Backlog */}
             <div className="px-3.5 pt-3">
               {addingInColumn === 'backlog' ? (
                 <div className="rounded-xl bg-[#1B1E26] border border-indigo-500/50 p-2.5">
@@ -1221,7 +1373,6 @@ export default function SunsamaWorkspace() {
               )}
             </div>
 
-            {/* Backlog Cards List */}
             <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5">
               {backlogTasks.map((t) => renderTaskCard(t, 'backlog'))}
               {backlogTasks.length === 0 && (
@@ -1251,7 +1402,6 @@ export default function SunsamaWorkspace() {
             dragOverTarget === 'today' ? 'bg-indigo-950/15' : ''
           }`}
         >
-          {/* Sunsama Day Column Header + Workload Bar */}
           <div className="p-4 border-b border-white/[0.06] space-y-2">
             <div className="flex items-baseline justify-between">
               <div>
@@ -1288,14 +1438,19 @@ export default function SunsamaWorkspace() {
               </div>
             </div>
 
-            {/* Sunsama Thin Workload Capacity Bar */}
             <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden flex">
               <div
                 className="bg-emerald-500 transition-all"
                 style={{
                   width: `${Math.min(
                     100,
-                    (todayCompletedMinutes / Math.max(DAILY_TARGET_MINUTES, todayTotalPlannedMinutes, 60)) * 100
+                    (todayCompletedMinutes /
+                      Math.max(
+                        DAILY_TARGET_MINUTES,
+                        todayTotalPlannedMinutes,
+                        60
+                      )) *
+                      100
                   )}%`,
                 }}
               />
@@ -1308,14 +1463,19 @@ export default function SunsamaWorkspace() {
                 style={{
                   width: `${Math.min(
                     100,
-                    (todayPendingMinutes / Math.max(DAILY_TARGET_MINUTES, todayTotalPlannedMinutes, 60)) * 100
+                    (todayPendingMinutes /
+                      Math.max(
+                        DAILY_TARGET_MINUTES,
+                        todayTotalPlannedMinutes,
+                        60
+                      )) *
+                      100
                   )}%`,
                 }}
               />
             </div>
           </div>
 
-          {/* Inline "+ Add task" for Today */}
           <div className="px-4 pt-3">
             {addingInColumn === 'today' ? (
               <div className="rounded-xl bg-[#1B1E26] border border-indigo-500/50 p-2.5">
@@ -1369,7 +1529,6 @@ export default function SunsamaWorkspace() {
             )}
           </div>
 
-          {/* Today's Task Cards */}
           <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
             {todayTasks.map((t) => renderTaskCard(t, 'today'))}
             {todayTasks.length === 0 && (
@@ -1379,7 +1538,7 @@ export default function SunsamaWorkspace() {
                   Your Today board is light
                 </p>
                 <p className="text-[11px] text-slate-500">
-                  Drag tasks from your Backlog or click Plan My Day to build a realistic schedule.
+                  Drag tasks from your Backlog onto Today or directly onto any 15-minute calendar slot on the right.
                 </p>
                 <button
                   type="button"
@@ -1408,7 +1567,7 @@ export default function SunsamaWorkspace() {
             const task = tasks.find((t) => t.id === id);
             if (task) moveTaskToBucket(task, 'tomorrow');
           }}
-          className={`flex-1 min-w-[300px] max-w-[380px] border-r border-white/[0.06] flex flex-col transition-colors ${
+          className={`flex-1 min-w-[290px] max-w-[360px] border-r border-white/[0.06] flex flex-col transition-colors ${
             dragOverTarget === 'tomorrow' ? 'bg-indigo-950/15' : ''
           }`}
         >
@@ -1494,7 +1653,7 @@ export default function SunsamaWorkspace() {
             const task = tasks.find((t) => t.id === id);
             if (task) moveTaskToBucket(task, 'later');
           }}
-          className={`flex-1 min-w-[280px] max-w-[360px] flex flex-col transition-colors ${
+          className={`flex-1 min-w-[270px] max-w-[340px] flex flex-col transition-colors ${
             dragOverTarget === 'later' ? 'bg-indigo-950/15' : ''
           }`}
         >
@@ -1570,149 +1729,275 @@ export default function SunsamaWorkspace() {
         </section>
       </main>
 
-      {/* 3. RIGHT SUNSAMA 24-HOUR CALENDAR & TIMEBOX TIMELINE */}
+      {/* 3. RIGHT SUNSAMA 15-MINUTE INTERVAL CALENDAR & RESIZABLE TIMEBOX TIMELINE */}
       {showCalendarPane && (
-        <aside className="w-80 bg-[#151820] border-l border-white/[0.06] flex flex-col shrink-0 select-none">
+        <aside className="w-[340px] bg-[#151820] border-l border-white/[0.06] flex flex-col shrink-0 select-none">
           {/* Calendar Header */}
           <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
             <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
                 <CalendarIcon className="h-3.5 w-3.5 text-indigo-400" />
-                <span>Calendar</span>
+                <span>Calendar (15m Grid)</span>
               </h3>
-              <p className="text-[11px] text-slate-500 mt-0.5">
-                Drag tasks onto any hour to timebox
+              <p className="text-[10px] text-slate-500 mt-0.5">
+                Drop on any 15m slot • Drag bottom edge to resize (down to 5m)
               </p>
             </div>
 
             <button
               type="button"
               onClick={handleAutoTimeboxToday}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 text-[11px] font-semibold transition-colors"
-              title="Automatically slot un-timeboxed Today tasks into free calendar hours"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 text-[11px] font-semibold transition-colors shrink-0"
+              title="Automatically slot un-timeboxed Today tasks into free calendar gaps"
             >
               <Sparkles className="h-3 w-3" />
               <span>Auto-Slot</span>
             </button>
           </div>
 
-          {/* Hourly Grid (7 AM - 8 PM) */}
-          <div className="flex-1 overflow-y-auto px-3 py-2 divide-y divide-white/[0.05]">
-            {TIMELINE_HOURS.map((hour) => {
-              const isCurrentHour = now.getHours() === hour;
-              const slottedHere = todayTasks.filter((t) => {
-                if (!isTimeboxedDate(t.dueDate) || !t.dueDate) return false;
-                return new Date(t.dueDate).getHours() === hour;
-              });
-
-              const dropKey = `hour-${hour}`;
-
-              return (
+          {/* Scrollable 15-Minute Precision Timeline Canvas */}
+          <div
+            ref={timelineScrollRef}
+            className="flex-1 overflow-y-auto relative px-2 py-3"
+          >
+            <div
+              className="relative"
+              style={{
+                height: `${TIMELINE_HOURS.length * HOUR_HEIGHT_PX}px`,
+              }}
+            >
+              {/* Background 15-Minute Interval Grid & Drop Zones */}
+              {TIMELINE_HOURS.map((hour, hIdx) => (
                 <div
                   key={hour}
-                  onDragOver={(e) => {
-                    e.preventDefault();
-                    setDragOverTarget(dropKey);
-                  }}
-                  onDragLeave={() => setDragOverTarget(null)}
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    setDragOverTarget(null);
-                    const id =
-                      e.dataTransfer.getData('text/plain') || draggedTaskId;
-                    const task = tasks.find((t) => t.id === id);
-                    if (task) scheduleTaskAtHour(task, hour, 0);
-                  }}
-                  className={`relative min-h-[60px] py-2 flex items-start gap-2.5 transition-colors ${
-                    dragOverTarget === dropKey ? 'bg-indigo-500/15 rounded-lg' : ''
-                  }`}
+                  className="relative"
+                  style={{ height: `${HOUR_HEIGHT_PX}px` }}
                 >
-                  {/* Hour Label */}
-                  <div className="w-12 text-right pr-1 shrink-0">
-                    <span
-                      className={`text-[10px] font-mono ${
-                        isCurrentHour
-                          ? 'text-rose-400 font-bold'
-                          : 'text-slate-500'
-                      }`}
-                    >
-                      {formatHourLabel(hour)}
-                    </span>
-                  </div>
-
-                  {/* Current Time Red Line */}
-                  {isCurrentHour && (
-                    <div
-                      className="absolute left-12 right-1 h-[1.5px] bg-rose-500 z-10 pointer-events-none flex items-center"
-                      style={{
-                        top: `${Math.min(95, Math.max(5, (now.getMinutes() / 60) * 100))}%`,
-                      }}
-                    >
-                      <span className="h-2 w-2 rounded-full bg-rose-500 -ml-1" />
-                    </div>
-                  )}
-
-                  {/* Slotted Events & Timeboxed Tasks */}
-                  <div className="flex-1 space-y-1.5 min-w-0">
-                    {slottedHere.map((t) => {
-                      const ch = getChannelForTask(t);
-                      const isMeeting = isCalendarMeetingTask(t);
-                      return (
-                        <div
-                          key={t.id}
-                          onClick={() => setInspectingTaskId(t.id)}
-                          className={`group rounded-lg px-2.5 py-1.5 border text-xs cursor-pointer flex items-center justify-between gap-2 ${
-                            isMeeting
-                              ? 'bg-sky-500/15 border-sky-500/30 text-sky-100'
-                              : 'bg-indigo-500/15 border-indigo-500/30 text-slate-100'
-                          }`}
-                          style={
-                            !isMeeting
-                              ? {
-                                  borderLeftWidth: '3px',
-                                  borderLeftColor: ch.color,
-                                }
-                              : undefined
-                          }
-                        >
-                          <div className="min-w-0 flex-1">
-                            <p
-                              className={`text-[11px] font-semibold truncate ${
-                                t.status === 'completed'
-                                  ? 'line-through opacity-60'
-                                  : ''
+                  {QUARTERS.map((minute) => {
+                    const dropKey = `slot-${hour}-${minute}`;
+                    const isHovered = dragOverTarget === dropKey;
+                    return (
+                      <div
+                        key={minute}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          setDragOverTarget(dropKey);
+                        }}
+                        onDragLeave={() => setDragOverTarget(null)}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          setDragOverTarget(null);
+                          const id =
+                            e.dataTransfer.getData('text/plain') ||
+                            draggedTaskId;
+                          const task = tasks.find((t) => t.id === id);
+                          if (task) scheduleTaskAtSlot(task, hour, minute);
+                        }}
+                        style={{ height: `${QUARTER_HEIGHT_PX}px` }}
+                        className={`group/slot relative flex items-start pl-14 pr-2 transition-colors ${
+                          minute === 0
+                            ? 'border-t border-white/[0.09]'
+                            : minute === 30
+                            ? 'border-t border-dashed border-white/[0.05]'
+                            : 'border-t border-dotted border-white/[0.03]'
+                        } ${isHovered ? 'bg-indigo-500/20' : 'hover:bg-white/[0.015]'}`}
+                      >
+                        {/* Left Rail Time Labels (:00, :15, :30, :45) */}
+                        <div className="absolute left-0 top-0 -translate-y-2 w-12 text-right pr-2 pointer-events-none">
+                          {minute === 0 ? (
+                            <span className="text-[10px] font-mono font-semibold text-slate-400">
+                              {formatHourLabel(hour)}
+                            </span>
+                          ) : (
+                            <span
+                              className={`text-[9px] font-mono transition-opacity ${
+                                isHovered
+                                  ? 'opacity-100 text-indigo-300 font-bold'
+                                  : 'opacity-40 group-hover/slot:opacity-90 text-slate-600'
                               }`}
                             >
-                              {t.title}
-                            </p>
-                            {t.dueDate && (
-                              <p className="text-[10px] text-slate-400 font-mono">
-                                {formatTimeRange(
-                                  t.dueDate,
-                                  t.estimatedMinutes || 15
-                                )}
-                              </p>
-                            )}
-                          </div>
-
-                          <button
-                            type="button"
-                            title="Remove from timeline"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              clearTaskTimebox(t);
-                            }}
-                            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-white p-0.5"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
+                              :{String(minute).padStart(2, '0')}
+                            </span>
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
+
+                        {/* Drop Preview Badge */}
+                        {isHovered && (
+                          <span className="text-[10px] font-mono text-indigo-300 px-1.5 py-0.5 rounded bg-indigo-950/90 border border-indigo-500/40">
+                            Drop at {formatHourMinuteLabel(hour, minute)}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              ))}
+
+              {/* Current Time Red Indicator Line */}
+              {now.getHours() >= TIMELINE_START_HOUR &&
+                now.getHours() <= TIMELINE_END_HOUR && (
+                  <div
+                    className="absolute left-12 right-1 h-[1.5px] bg-rose-500 z-20 pointer-events-none flex items-center"
+                    style={{
+                      top: `${
+                        ((now.getHours() - TIMELINE_START_HOUR) * 60 +
+                          now.getMinutes()) *
+                        PX_PER_MINUTE
+                      }px`,
+                    }}
+                  >
+                    <span className="h-2 w-2 rounded-full bg-rose-500 -ml-1" />
+                  </div>
+                )}
+
+              {/* Positioned & Resizable Timeboxed Task Blocks */}
+              {timeboxedTodayTasks.map((t) => {
+                if (!t.dueDate) return null;
+                const d = new Date(t.dueDate);
+                const startHour = d.getHours();
+                const startMin = d.getMinutes();
+                if (
+                  startHour < TIMELINE_START_HOUR ||
+                  startHour > TIMELINE_END_HOUR
+                ) {
+                  return null;
+                }
+
+                const minutesFromTimelineStart =
+                  (startHour - TIMELINE_START_HOUR) * 60 + startMin;
+                const topPx = minutesFromTimelineStart * PX_PER_MINUTE;
+
+                const effectiveMinutes =
+                  resizingState?.taskId === t.id
+                    ? resizingState.previewMinutes
+                    : Math.max(5, t.estimatedMinutes || 15);
+                const heightPx = Math.max(
+                  14,
+                  effectiveMinutes * PX_PER_MINUTE
+                );
+
+                const ch = getChannelForTask(t);
+                const isMeeting = isCalendarMeetingTask(t);
+                const isBeingResized = resizingState?.taskId === t.id;
+
+                return (
+                  <div
+                    key={t.id}
+                    draggable={!resizingState}
+                    onDragStart={(e) => {
+                      if (resizingState) {
+                        e.preventDefault();
+                        return;
+                      }
+                      setDraggedTaskId(t.id);
+                      e.dataTransfer.setData('text/plain', t.id);
+                    }}
+                    onClick={() => {
+                      if (!isBeingResized) setInspectingTaskId(t.id);
+                    }}
+                    style={{
+                      top: `${topPx}px`,
+                      height: `${heightPx}px`,
+                      borderLeftWidth: '3px',
+                      borderLeftColor: isMeeting ? '#38BDF8' : ch.color,
+                    }}
+                    className={`group/block absolute left-14 right-2 z-10 rounded-lg border px-2.5 flex flex-col justify-between overflow-hidden transition-shadow ${
+                      isMeeting
+                        ? 'bg-sky-950/90 border-sky-500/40 text-sky-100'
+                        : 'bg-[#1E2230]/95 hover:bg-[#252A3B] border-indigo-500/35 text-slate-100 shadow-md'
+                    } ${
+                      isBeingResized
+                        ? 'ring-2 ring-indigo-400 z-30 shadow-xl'
+                        : ''
+                    }`}
+                  >
+                    {/* Compact vs Multi-line layout depending on block height */}
+                    <div className="flex items-center justify-between gap-1.5 min-w-0 pt-0.5">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleComplete(t);
+                          }}
+                          className={`h-3 w-3 rounded-full border flex items-center justify-center shrink-0 ${
+                            t.status === 'completed'
+                              ? 'bg-emerald-500 border-emerald-500 text-slate-950'
+                              : 'border-slate-400 hover:border-white'
+                          }`}
+                        >
+                          {t.status === 'completed' && (
+                            <Check className="h-2 w-2 stroke-[3]" />
+                          )}
+                        </button>
+                        <span
+                          className={`text-[11px] font-semibold truncate ${
+                            t.status === 'completed'
+                              ? 'line-through opacity-60'
+                              : ''
+                          }`}
+                        >
+                          {t.title}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className="text-[9px] font-mono text-indigo-300 bg-black/30 px-1 rounded">
+                          {effectiveMinutes}m
+                        </span>
+                        <button
+                          type="button"
+                          title="Focus on this task"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openFocusMode(t);
+                          }}
+                          className="opacity-0 group-hover/block:opacity-100 text-slate-300 hover:text-emerald-300 p-0.5"
+                        >
+                          <Play className="h-2.5 w-2.5 fill-current" />
+                        </button>
+                        <button
+                          type="button"
+                          title="Un-slot from timeline"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            clearTaskTimebox(t);
+                          }}
+                          className="opacity-0 group-hover/block:opacity-100 text-slate-400 hover:text-white p-0.5"
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {effectiveMinutes >= 20 && (
+                      <div className="text-[9px] font-mono text-slate-400 pb-1 truncate">
+                        {formatTimeRange(t.dueDate, effectiveMinutes)} • #
+                        {ch.label}
+                      </div>
+                    )}
+
+                    {/* BOTTOM RESIZE HANDLE (Drag up/down in 5-minute increments down to 5m) */}
+                    <div
+                      title="Drag up or down to resize duration (down to 5m)"
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        setResizingState({
+                          taskId: t.id,
+                          startY: e.clientY,
+                          initialMinutes: Math.max(5, t.estimatedMinutes || 15),
+                          previewMinutes: Math.max(5, t.estimatedMinutes || 15),
+                        });
+                      }}
+                      className="absolute bottom-0 left-0 right-0 h-2.5 cursor-ns-resize flex items-center justify-center bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover/block:opacity-100 hover:!opacity-100"
+                    >
+                      <div className="w-8 h-[2px] rounded-full bg-indigo-300/80" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </aside>
       )}
@@ -1727,7 +2012,6 @@ export default function SunsamaWorkspace() {
             className="w-full max-w-lg rounded-2xl bg-[#181B23] border border-white/10 shadow-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Top Bar */}
             <div className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <select
@@ -1765,6 +2049,18 @@ export default function SunsamaWorkspace() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  onClick={() => {
+                    const target = inspectingTask;
+                    setInspectingTaskId(null);
+                    openFocusMode(target);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-1"
+                >
+                  <Play className="h-3 w-3 fill-current" />
+                  <span>Focus</span>
+                </button>
+                <button
+                  type="button"
                   onClick={() => handleDeleteTask(inspectingTask.id)}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10"
                   title="Delete Task"
@@ -1781,9 +2077,7 @@ export default function SunsamaWorkspace() {
               </div>
             </div>
 
-            {/* Body */}
             <div className="p-5 space-y-5 max-h-[75vh] overflow-y-auto">
-              {/* Editable Title */}
               <div className="flex items-start gap-3">
                 <button
                   type="button"
@@ -1808,7 +2102,7 @@ export default function SunsamaWorkspace() {
                 />
               </div>
 
-              {/* Stage / Timebox Controls */}
+              {/* Stage & 15-Minute Slot Picker */}
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 {(['backlog', 'today', 'tomorrow', 'later'] as const).map(
                   (b) => {
@@ -1834,7 +2128,11 @@ export default function SunsamaWorkspace() {
                   value={
                     isTimeboxedDate(inspectingTask.dueDate) &&
                     inspectingTask.dueDate
-                      ? new Date(inspectingTask.dueDate).getHours()
+                      ? `${new Date(inspectingTask.dueDate).getHours()}:${
+                          Math.floor(
+                            new Date(inspectingTask.dueDate).getMinutes() / 15
+                          ) * 15
+                        }`
                       : ''
                   }
                   onChange={(e) => {
@@ -1842,19 +2140,26 @@ export default function SunsamaWorkspace() {
                     if (!val) {
                       clearTaskTimebox(inspectingTask);
                     } else {
-                      scheduleTaskAtHour(inspectingTask, parseInt(val, 10), 0);
+                      const [h, m] = val.split(':').map(Number);
+                      scheduleTaskAtSlot(inspectingTask, h, m);
                     }
                   }}
                   className="bg-white/[0.05] text-xs text-slate-300 rounded-lg px-2.5 py-1 focus:outline-none"
                 >
                   <option value="" className="bg-[#181B23]">
-                    🕒 Timebox hour...
+                    🕒 Timebox (15m slot)...
                   </option>
-                  {TIMELINE_HOURS.map((h) => (
-                    <option key={h} value={h} className="bg-[#181B23]">
-                      {formatHourLabel(h)}
-                    </option>
-                  ))}
+                  {TIMELINE_HOURS.flatMap((h) =>
+                    QUARTERS.map((m) => (
+                      <option
+                        key={`${h}:${m}`}
+                        value={`${h}:${m}`}
+                        className="bg-[#181B23]"
+                      >
+                        {formatHourMinuteLabel(h, m)}
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
 
@@ -1978,7 +2283,6 @@ export default function SunsamaWorkspace() {
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Left: Unplanned Backlog */}
               <div className="space-y-3">
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
                   Backlog ({backlogTasks.length})
@@ -2009,7 +2313,6 @@ export default function SunsamaWorkspace() {
                 </div>
               </div>
 
-              {/* Right: Today's Lineup */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400">
@@ -2151,103 +2454,281 @@ export default function SunsamaWorkspace() {
         </div>
       )}
 
-      {/* 7. SUNSAMA FOCUS MODE OVERLAY */}
-      {activeModal === 'focus_mode' && activeFocusTask && (
-        <div className="fixed inset-0 z-50 bg-[#0D0F14] flex flex-col items-center justify-center p-6">
-          <button
-            type="button"
-            onClick={() => {
-              setFocusRunning(false);
-              setActiveModal('none');
-            }}
-            className="absolute top-6 right-6 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-xs text-slate-300"
-          >
-            <X className="h-4 w-4" />
-            <span>Exit Focus</span>
-          </button>
-
-          <div className="w-full max-w-xl text-center space-y-6">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] text-xs text-indigo-300 font-medium">
-              #{getChannelForTask(activeFocusTask).label}
-            </span>
-
-            <h1 className="text-2xl font-bold text-white leading-snug">
-              {activeFocusTask.title}
-            </h1>
-
-            {/* Giant Zen Timer */}
-            <div className="text-6xl font-mono font-bold tracking-tight text-indigo-400">
-              {formatTimerClock(focusElapsedSeconds)}
-              <span className="text-lg text-slate-500 font-normal ml-3">
-                / {activeFocusTask.estimatedMinutes || 15}m
+      {/* 7. SUNSAMA FOCUS MODE OVERLAY (ALWAYS OPENS + FULL QUEUE SWITCHER) */}
+      {activeModal === 'focus_mode' && (
+        <div className="fixed inset-0 z-50 bg-[#0D0F14] flex overflow-hidden">
+          {/* Left Focus Queue Sidebar so user can pick or switch any task in Focus Mode */}
+          <aside className="w-72 bg-[#13161E] border-r border-white/[0.06] flex flex-col shrink-0">
+            <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
+                  Focus Queue
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  {todayTasks.filter((t) => t.status !== 'completed').length > 0
+                    ? "Today's Planned Tasks"
+                    : 'Showing Backlog Tasks'}
+                </p>
+              </div>
+              <span className="text-xs font-mono text-slate-400">
+                {focusQueue.length}
               </span>
             </div>
 
-            {/* Timer Controls */}
-            <div className="flex items-center justify-center gap-3">
-              <button
-                type="button"
-                onClick={() => setFocusRunning((r) => !r)}
-                className="flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold shadow-lg shadow-indigo-600/30"
-              >
-                {focusRunning ? (
-                  <>
-                    <Pause className="h-4 w-4" />
-                    <span>Pause</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-4 w-4 fill-current" />
-                    <span>Start Timer</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                type="button"
-                onClick={async () => {
-                  setFocusRunning(false);
-                  await handleToggleComplete(activeFocusTask);
-                  setActiveModal('none');
-                }}
-                className="flex items-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                <span>Complete Task</span>
-              </button>
-            </div>
-
-            {/* Subtasks in Focus Mode */}
-            {(activeFocusTask.subtasks || []).length > 0 && (
-              <div className="mt-6 text-left bg-[#151821] border border-white/[0.07] rounded-2xl p-4 space-y-2">
-                {activeFocusTask.subtasks.map((sub) => (
-                  <div
-                    key={sub.id}
-                    onClick={() => handleToggleSubtask(activeFocusTask, sub.id)}
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/[0.04] cursor-pointer text-sm"
-                  >
-                    <div
-                      className={`h-4 w-4 rounded border flex items-center justify-center ${
-                        sub.isCompleted
-                          ? 'bg-indigo-500 border-indigo-500 text-white'
-                          : 'border-slate-500'
-                      }`}
-                    >
-                      {sub.isCompleted && (
-                        <Check className="h-3 w-3 stroke-[3]" />
-                      )}
-                    </div>
-                    <span
-                      className={
-                        sub.isCompleted
-                          ? 'line-through text-slate-500'
-                          : 'text-slate-200'
+            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+              {focusQueue.map((item, idx) => {
+                const isSelected = activeFocusTask?.id === item.id;
+                const ch = getChannelForTask(item);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      if (focusTaskId) {
+                        patchTask(focusTaskId, {
+                          actual_seconds: focusElapsedSeconds,
+                        });
                       }
-                    >
-                      {sub.title}
+                      setFocusTaskId(item.id);
+                      setFocusElapsedSeconds(item.actualSeconds || 0);
+                      setFocusRunning(true);
+                    }}
+                    className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-start gap-2.5 ${
+                      isSelected
+                        ? 'bg-indigo-500/20 border-indigo-500/40 text-white'
+                        : 'bg-[#191D27] hover:bg-[#202532] border-white/[0.05] text-slate-300'
+                    }`}
+                  >
+                    <span className="text-[10px] font-mono text-slate-500 mt-0.5">
+                      {idx + 1}.
                     </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium truncate">
+                        {item.title}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
+                        <span style={{ color: ch.color }}>#{ch.label}</span>
+                        <span>•</span>
+                        <span>{item.estimatedMinutes || 15}m</span>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+
+              {focusQueue.length === 0 && (
+                <div className="text-center py-12 px-4 text-xs text-slate-500">
+                  No open tasks found. Add a task on the board to start focusing.
+                </div>
+              )}
+            </div>
+          </aside>
+
+          {/* Center Zen Focus Canvas */}
+          <div className="flex-1 flex flex-col items-center justify-center p-8 relative overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => {
+                if (activeFocusTask) {
+                  patchTask(activeFocusTask.id, {
+                    actual_seconds: focusElapsedSeconds,
+                  });
+                }
+                setFocusRunning(false);
+                setActiveModal('none');
+              }}
+              className="absolute top-6 right-6 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-semibold text-slate-200"
+            >
+              <X className="h-4 w-4" />
+              <span>Exit Focus Mode</span>
+            </button>
+
+            {activeFocusTask ? (
+              <div className="w-full max-w-xl text-center space-y-6">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] text-xs text-indigo-300 font-medium">
+                    #{getChannelForTask(activeFocusTask).label}
+                  </span>
+
+                  {/* Duration Adjuster right inside Focus Mode (down to 5m) */}
+                  <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.05] text-xs text-slate-300 font-mono">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSetDuration(
+                          activeFocusTask,
+                          Math.max(5, (activeFocusTask.estimatedMinutes || 15) - 5)
+                        )
+                      }
+                      className="px-1 hover:text-white"
+                    >
+                      −5m
+                    </button>
+                    <span>
+                      Target: {activeFocusTask.estimatedMinutes || 15}m
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSetDuration(
+                          activeFocusTask,
+                          (activeFocusTask.estimatedMinutes || 15) + 5
+                        )
+                      }
+                      className="px-1 hover:text-white"
+                    >
+                      +5m
+                    </button>
                   </div>
-                ))}
+                </div>
+
+                <h1 className="text-2xl md:text-3xl font-bold text-white leading-snug">
+                  {activeFocusTask.title}
+                </h1>
+
+                {/* Giant Zen Timer */}
+                <div className="py-2">
+                  <div className="text-6xl md:text-7xl font-mono font-bold tracking-tight text-indigo-400">
+                    {formatTimerClock(focusElapsedSeconds)}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2">
+                    {focusRunning ? 'Timer running...' : 'Timer paused'} • Planned{' '}
+                    {activeFocusTask.estimatedMinutes || 15} minutes
+                  </p>
+                </div>
+
+                {/* Timer Controls */}
+                <div className="flex items-center justify-center gap-3 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setFocusRunning((r) => !r)}
+                    className="flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold shadow-lg shadow-indigo-600/30"
+                  >
+                    {focusRunning ? (
+                      <>
+                        <Pause className="h-4 w-4" />
+                        <span>Pause</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4 fill-current" />
+                        <span>Start Timer</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFocusElapsedSeconds(0);
+                      patchTask(activeFocusTask.id, { actual_seconds: 0 });
+                    }}
+                    className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-sm font-semibold"
+                    title="Reset Timer"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    <span>Reset</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setFocusRunning(false);
+                      const nextIdx =
+                        focusQueue.findIndex(
+                          (t) => t.id === activeFocusTask.id
+                        ) + 1;
+                      const nextTask = focusQueue[nextIdx] || null;
+                      await handleToggleComplete(activeFocusTask);
+                      if (nextTask) {
+                        setFocusTaskId(nextTask.id);
+                        setFocusElapsedSeconds(nextTask.actualSeconds || 0);
+                        setFocusRunning(true);
+                      } else {
+                        setActiveModal('none');
+                      }
+                    }}
+                    className="flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-600/25"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Complete & Next</span>
+                  </button>
+                </div>
+
+                {/* Subtasks Checklist + Quick Add in Focus Mode */}
+                <div className="mt-6 text-left bg-[#151821] border border-white/[0.07] rounded-2xl p-4 space-y-2.5">
+                  <div className="text-xs font-semibold text-slate-400">
+                    Steps & Subtasks
+                  </div>
+                  {(activeFocusTask.subtasks || []).map((sub) => (
+                    <div
+                      key={sub.id}
+                      onClick={() =>
+                        handleToggleSubtask(activeFocusTask, sub.id)
+                      }
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/[0.04] cursor-pointer text-sm"
+                    >
+                      <div
+                        className={`h-4 w-4 rounded border flex items-center justify-center ${
+                          sub.isCompleted
+                            ? 'bg-indigo-500 border-indigo-500 text-white'
+                            : 'border-slate-500'
+                        }`}
+                      >
+                        {sub.isCompleted && (
+                          <Check className="h-3 w-3 stroke-[3]" />
+                        )}
+                      </div>
+                      <span
+                        className={
+                          sub.isCompleted
+                            ? 'line-through text-slate-500'
+                            : 'text-slate-200'
+                        }
+                      >
+                        {sub.title}
+                      </span>
+                    </div>
+                  ))}
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={focusSubtaskInput}
+                      onChange={(e) => setFocusSubtaskInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && focusSubtaskInput.trim()) {
+                          handleAddSubtask(activeFocusTask, focusSubtaskInput);
+                          setFocusSubtaskInput('');
+                        }
+                      }}
+                      placeholder="Add a step while focusing..."
+                      className="flex-1 bg-[#101218] border border-white/[0.07] rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (focusSubtaskInput.trim()) {
+                          handleAddSubtask(activeFocusTask, focusSubtaskInput);
+                          setFocusSubtaskInput('');
+                        }
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] text-xs font-medium"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center space-y-3 max-w-md">
+                <CheckCircle2 className="h-12 w-12 text-emerald-400 mx-auto" />
+                <h2 className="text-xl font-bold text-white">
+                  All tasks completed!
+                </h2>
+                <p className="text-xs text-slate-400">
+                  Add a new task on your Daily Kanban board to start a focus session.
+                </p>
               </div>
             )}
           </div>
