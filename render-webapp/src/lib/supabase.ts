@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import fallbackRaw from './fallback-todos.json';
+import fallbackCalendarRaw from './fallback-calendar.json';
 import taggingRules from './tagging-rules.json';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://huwattmqwiqhcfhtqely.supabase.co';
@@ -163,6 +164,16 @@ export function cleanTaskTitle(title: string): string {
     .trim() || title;
 }
 
+export type CalendarTimelineEvent = {
+  id: string;
+  title: string;
+  start: string;
+  end?: string;
+  durationMinutes: number;
+  location?: string;
+  calendarName?: string;
+};
+
 export function getChannelForTask(task: Task): SunsamaChannel {
   const tags = [
     ...(task.tags || []),
@@ -176,16 +187,7 @@ export function getChannelForTask(task: Task): SunsamaChannel {
     }
   }
 
-  // Fallback to listName if not General
-  const lowerList = (task.listName || '').toLowerCase();
-  if (lowerList && lowerList !== 'general') {
-    const byList = SUNSAMA_CHANNELS.find(
-      (c) => lowerList.includes(c.tag) || c.label.toLowerCase().includes(lowerList)
-    );
-    if (byList) return byList;
-  }
-
-  return SUNSAMA_CHANNELS[0]; // #general
+  return SUNSAMA_CHANNELS[0]; // #general (manual tagging only)
 }
 
 export function buildTaskDescription(params: {
@@ -273,46 +275,59 @@ export function matchTaskToProject(
   return general || projects[0] || DEFAULT_PROJECTS[0];
 }
 
+export function getFallbackCalendarEvents(): CalendarTimelineEvent[] {
+  return (fallbackCalendarRaw as any[]).map((ev, idx) => ({
+    id: ev.id || `cal-${idx}`,
+    title: ev.title || ev.summary || 'Calendar Event',
+    start: ev.start,
+    end: ev.end,
+    durationMinutes: ev.durationMinutes || 30,
+    location: ev.location || '',
+    calendarName: ev.calendarName || 'Calendar',
+  }));
+}
+
 export function getFallbackTasks(projects: Project[]): Task[] {
-  return (fallbackRaw as any[]).map((item, idx) => {
-    const id = item.appleReminderId || `fallback-${idx}`;
-    const subtasks = extractSubtasks(item.notes);
+  return (fallbackRaw as any[])
+    .filter((item) => !(item.notes || '').includes('[Calendar Event]'))
+    .map((item, idx) => {
+      const id = item.appleReminderId || `fallback-${idx}`;
+      const subtasks = extractSubtasks(item.notes);
 
-    let estimatedMinutes = 15;
-    const durMatch = (item.notes || '').match(/\[⏱\s*(\d+)m\]/);
-    if (durMatch && durMatch[1]) {
-      estimatedMinutes = parseInt(durMatch[1], 10);
-    }
+      let estimatedMinutes = 15;
+      const durMatch = (item.notes || '').match(/\[⏱\s*(\d+)m\]/);
+      if (durMatch && durMatch[1]) {
+        estimatedMinutes = parseInt(durMatch[1], 10);
+      }
 
-    let priority: TaskPriority = 'medium';
-    const notesLower = (item.notes || '').toLowerCase();
-    if (notesLower.includes('[🔥 high]') || notesLower.includes('priority: high')) {
-      priority = 'high';
-    } else if (notesLower.includes('[🌱 low]') || notesLower.includes('priority: low')) {
-      priority = 'low';
-    }
+      let priority: TaskPriority = 'medium';
+      const notesLower = (item.notes || '').toLowerCase();
+      if (notesLower.includes('[🔥 high]') || notesLower.includes('priority: high')) {
+        priority = 'high';
+      } else if (notesLower.includes('[🌱 low]') || notesLower.includes('priority: low')) {
+        priority = 'low';
+      }
 
-    const fullText = `${item.title || ''} ${item.notes || ''}`;
-    const extractedTags = extractHashtags(fullText);
-    const inPlayQueue = (item.notes || '').includes('[▶️ Queue]');
+      const fullText = `${item.title || ''} ${item.notes || ''}`;
+      const extractedTags = extractHashtags(fullText);
+      const inPlayQueue = (item.notes || '').includes('[▶️ Queue]');
 
-    const task: Task = {
-      id,
-      title: cleanTaskTitle(item.title),
-      description: item.notes || '',
-      listName: item.listName || 'General',
-      status: 'pending',
-      dueDate: item.dueDate || null,
-      appleReminderId: item.appleReminderId || id,
-      estimatedMinutes,
-      priority,
-      inPlayQueue,
-      subtasks,
-      tags: extractedTags,
-      createdAt: new Date().toISOString(),
-    };
-    const matched = matchTaskToProject(task, projects);
-    task.projectId = matched.id;
-    return task;
-  });
+      const task: Task = {
+        id,
+        projectId: null,
+        title: cleanTaskTitle(item.title),
+        description: item.notes || '',
+        listName: 'General',
+        status: 'pending',
+        dueDate: item.dueDate || null,
+        appleReminderId: item.appleReminderId || id,
+        estimatedMinutes,
+        priority,
+        inPlayQueue,
+        subtasks,
+        tags: extractedTags,
+        createdAt: new Date().toISOString(),
+      };
+      return task;
+    });
 }

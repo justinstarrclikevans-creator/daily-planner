@@ -1,25 +1,6 @@
 const { callGeminiWithRetry } = require('./gemini-helper');
-const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
-
-function getTaggingRules() {
-    try {
-        const rulesPath = path.join(__dirname, 'tagging-rules.json');
-        if (fs.existsSync(rulesPath)) {
-            return JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
-        }
-    } catch (e) {
-        console.error("Failed to read tagging-rules.json:", e.message);
-    }
-    return {
-        defaultList: "General",
-        spaces: [],
-        people: [],
-        projects: [],
-        priorityRules: { high: [], low: [] }
-    };
-}
 
 async function extractTodos(slackMessages = [], emails = [], existingTodos = [], completedTodos = [], letterlyNotes = []) {
     // Handle both argument styles (if someone passes object or positional)
@@ -38,8 +19,6 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
         return [];
     }
 
-    const rules = getTaggingRules();
-    
     const prompt = `
     You are an intelligent executive assistant for Justin Evans (with a sharp eye for detecting any "failure of nerve"—hesitation on high-leverage moves).
     Justin's Slack User ID is U02AGGN2E1Z (username: jevans).
@@ -59,10 +38,9 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
     - If a task or action item is ALREADY an active todo, DO NOT extract it.
     - If Justin already took care of an email or Slack request, or finished it previously, DO NOT create a task for it.
 
-    CRITICAL UNIFIED "GENERAL" LIST ARCHITECTURE:
-    - ALL tasks belong to listName: "${rules.defaultList || 'General'}".
-    - DO NOT generate hashtags (#tag) in the title or anywhere else. Justin will add tags himself.
-    - DO NOT generate time estimates or durations (e.g. [⏱ 15m] or estimatedMinutes). Justin will add times himself.
+    NO PROJECT OR TAG ASSIGNMENTS:
+    - DO NOT assign projects, categories, channels, or hashtags (#tag) to any task. Justin will tag and assign tasks manually when he needs to.
+    - DO NOT generate time estimates or durations (e.g. [⏱ 15m] or estimatedMinutes).
     - DO NOT generate microsteps, checklist items, or subtasks. Keep it to a single clean actionable task.
 
     CRITICAL ACTIVE SENTENCE RULE (IMPERATIVE ACTION VOICE):
@@ -80,18 +58,17 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
     Output MUST be a raw JSON array of objects (no markdown fences):
     [
       {
-        "title": "Active imperative task title starting with action verb (NO hashtags, NO time estimates, NO exclamation marks)",
+        "title": "Active imperative task title starting with action verb (NO hashtags, NO project names, NO time estimates, NO exclamation marks)",
         "description": "Short 1-2 sentence context or quote from the source if helpful, NO checklist steps, subtasks, or exclamation marks",
-        "source": "slack" | "email" | "letterly",
-        "listName": "${rules.defaultList || 'General'}"
+        "source": "slack" | "email" | "letterly"
       }
     ]
 
     Recently Completed Todos (NEVER re-extract or duplicate any of these):
-    ${JSON.stringify((completedTodos || []).slice(0, 100).map(t => ({ title: t.title || t.name, listName: t.listName })))}
+    ${JSON.stringify((completedTodos || []).slice(0, 100).map(t => ({ title: t.title || t.name })))}
 
     Existing Active Todos (NEVER duplicate any of these):
-    ${JSON.stringify((existingTodos || []).map(t => ({ title: t.title || t.name, listName: t.listName })))}
+    ${JSON.stringify((existingTodos || []).map(t => ({ title: t.title || t.name })))}
 
     Slack Messages & Huddle Summaries/Transcripts:
     ${JSON.stringify(slackMessages)}
@@ -129,6 +106,7 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
                 .trim();
             const cleanDesc = (item.description || '')
                 .replace(/!+/g, '.')
+                .replace(/#\w[\w-]*/g, '')
                 .replace(/\[⏱\s*\d+m\]/g, '')
                 .split('\n')
                 .filter(line => !line.trim().startsWith('- [ ]') && !line.trim().startsWith('- [x]'))
@@ -137,7 +115,8 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
             return {
                 title: cleanTitle,
                 description: cleanDesc,
-                listName: rules.defaultList || 'General',
+                listName: 'General',
+                projectId: null,
                 tags: [],
                 subtasks: [],
                 estimatedMinutes: null,
@@ -186,16 +165,13 @@ async function getMostImportantTask(tasks) {
     const numberedTasks = tasks.map((t, index) => ({
         index,
         title: t.title,
-        listName: t.listName,
         description: t.description,
         dueDate: t.dueDate
     }));
     
     const prompt = `
     You are an executive assistant for a user with ADHD. Pick the single most important task to attack right now—especially any task where stalling would be a failure of nerve.
-    Prioritize:
-    1. Past due or due today.
-    2. Project priority: "Turn90" > "843FC" > "Book (Memoir) and Synapse" > "Personal" > "Nosa" > "General".
+    Prioritize past due or due today tasks.
     
     Return ONLY raw JSON: { "index": number }
     
@@ -226,7 +202,6 @@ async function getMeetingRelatedTasks(event, tasks) {
     const numberedTasks = tasks.map((t, index) => ({
         index,
         title: t.title,
-        listName: t.listName,
         description: t.description
     }));
     
@@ -253,79 +228,9 @@ async function getMeetingRelatedTasks(event, tasks) {
     }
 }
 
-function fallbackFormatCalendarEvent(ev) {
-    let summary = (ev.summary || '').trim();
-    if (!summary) return null;
-
-    let title = summary;
-    title = title.replace(/^(hold\s*[-:]?\s*|meeting\s*[-:]?\s*)/i, '').trim();
-
-    const low = title.toLowerCase();
-    const actionVerbs = ['attend', 'join', 'lead', 'host', 'tour', 'call', 'review', 'prepare', 'conduct', 'drive', 'meet', 'visit', 'present', 'work on', 'process', 'organize', 'teach', 'pick up', 'shop'];
-    const startsWithVerb = actionVerbs.some(v => low.startsWith(v + ' ') || low === v);
-
-    if (!startsWithVerb) {
-        if (low.includes('standing meeting') && low.includes('matt')) {
-            title = 'Meet with Matt for standing meeting';
-        } else if (low.includes('standing meeting') && low.includes('jenn')) {
-            title = 'Meet with Jenn for standing meeting';
-        } else if (low.includes('l10') || low.includes('meeting') || low.includes('huddle') || low.includes('sync')) {
-            title = low.endsWith('meeting') ? `Attend ${title}` : `Attend ${title} meeting`;
-        } else if (low.includes('tour')) {
-            title = `Lead ${title.toLowerCase()}`;
-        } else if (low.includes('training') || low.includes('workshop') || low.includes('practice')) {
-            title = `Attend ${title}`;
-        } else if (low.includes('application') || low.includes('review') || low.includes('audit')) {
-            title = `Process ${title}`;
-        } else if (low === 'publix') {
-            title = 'Shop at Publix';
-        } else {
-            title = `Attend ${title}`;
-        }
-    }
-
-    title = title.replace(/!+/g, '').trim();
-    title = title.charAt(0).toUpperCase() + title.slice(1);
-
-    let durationMinutes = ev.durationMinutes || 30;
-    if (ev.start && ev.end) {
-        const diff = Math.round((new Date(ev.end).getTime() - new Date(ev.start).getTime()) / 60000);
-        if (diff > 0) durationMinutes = Math.max(5, diff);
-    }
-
-    let cleanDesc = (ev.description || '').replace(/!+/g, '.').trim();
-    if (cleanDesc.includes('Notice: This message may contain confidential')) {
-        cleanDesc = cleanDesc.split('Notice: This message may contain confidential')[0].trim();
-    }
-    if (ev.location) {
-        cleanDesc = cleanDesc ? `Location: ${ev.location}\n\n${cleanDesc}` : `Location: ${ev.location}`;
-    }
-
-    const headerTag = `[⏱ ${durationMinutes}m] [Calendar Event]`;
-    const notes = cleanDesc ? `${headerTag}\n${cleanDesc}` : headerTag;
-
-    return {
-        id: ev.id,
-        title,
-        rawSummary: summary,
-        notes,
-        start: ev.start,
-        end: ev.end,
-        durationMinutes,
-        priority: 'none'
-    };
-}
-
-async function convertCalendarEventsToReminders(events = []) {
-    if (!Array.isArray(events) || events.length === 0) return [];
-    const validEvents = events.filter(e => e && e.summary && e.start);
-    return validEvents.map(fallbackFormatCalendarEvent).filter(Boolean);
-}
-
 module.exports = {
     extractTodos,
     generateDailySummary,
     getMostImportantTask,
-    getMeetingRelatedTasks,
-    convertCalendarEventsToReminders
+    getMeetingRelatedTasks
 };

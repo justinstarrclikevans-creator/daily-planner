@@ -6,6 +6,7 @@ import {
   Task,
   Subtask,
   TaskPriority,
+  CalendarTimelineEvent,
   SUNSAMA_CHANNELS,
   getChannelForTask,
   buildTaskDescription,
@@ -121,6 +122,7 @@ function formatTimeRange(iso: string, durationMinutes: number): string {
 
 export default function SunsamaWorkspace() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarTimelineEvent[]>([]);
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'error'>('syncing');
 
   // Sunsama Panel Toggles & Filters
@@ -174,6 +176,9 @@ export default function SunsamaWorkspace() {
       const json = await res.json();
       if (json.tasks && Array.isArray(json.tasks)) {
         setTasks(json.tasks);
+      }
+      if (json.calendarEvents && Array.isArray(json.calendarEvents)) {
+        setCalendarEvents(json.calendarEvents);
       }
       setSyncStatus('connected');
     } catch (err) {
@@ -523,13 +528,24 @@ export default function SunsamaWorkspace() {
       (t) => t.status !== 'completed' && isTimeboxedDate(t.dueDate) && t.dueDate
     );
 
-    const occupied: { start: number; end: number }[] = slotted.map((t) => {
-      const s = new Date(t.dueDate!).getTime();
-      return {
-        start: s,
-        end: s + Math.max(5, t.estimatedMinutes || 15) * 60000,
-      };
-    });
+    const occupied: { start: number; end: number }[] = [
+      ...slotted.map((t) => {
+        const s = new Date(t.dueDate!).getTime();
+        return {
+          start: s,
+          end: s + Math.max(5, t.estimatedMinutes || 15) * 60000,
+        };
+      }),
+      ...calendarEvents
+        .filter((ev) => isSameCalendarDay(new Date(ev.start), todayStart))
+        .map((ev) => {
+          const s = new Date(ev.start).getTime();
+          return {
+            start: s,
+            end: s + Math.max(5, ev.durationMinutes || 30) * 60000,
+          };
+        }),
+    ];
 
     const currentRoundedQuarter = Math.ceil(now.getMinutes() / 15) * 15;
     const startCursor = new Date(
@@ -572,7 +588,7 @@ export default function SunsamaWorkspace() {
         probe += 5 * 60000;
       }
     }
-  }, [todayTasks, now, scheduleTaskAtSlot]);
+  }, [todayTasks, calendarEvents, todayStart, now, scheduleTaskAtSlot]);
 
   // Toggle Complete
   const handleToggleComplete = useCallback(
@@ -810,19 +826,41 @@ export default function SunsamaWorkspace() {
 
   // Timeboxed Tasks & Calendar Appointments for Selected Day's Calendar Timeline (with side-by-side overlap layout)
   const timeboxedTodayTasks = useMemo(() => {
-    const raw = tasks.filter((t) => {
+    const taskBlocks = tasks.filter((t) => {
       if (!t.dueDate || !isTimeboxedDate(t.dueDate)) return false;
       const d = new Date(t.dueDate);
       if (isNaN(d.getTime())) return false;
       if (!isSameCalendarDay(d, activeTimelineDate)) return false;
 
-      // Always display Calendar Appointments on the timeline regardless of active channel filter
-      if (isCalendarMeetingTask(t)) return true;
-
       if (selectedChannelTag === 'all') return true;
       const ch = getChannelForTask(t);
       return ch.tag === selectedChannelTag;
     });
+
+    const calendarBlocks: Task[] = calendarEvents
+      .filter((ev) => {
+        if (!ev.start) return false;
+        const d = new Date(ev.start);
+        if (isNaN(d.getTime())) return false;
+        return isSameCalendarDay(d, activeTimelineDate);
+      })
+      .map((ev) => ({
+        id: `cal-event-${ev.id}`,
+        projectId: null,
+        title: ev.title,
+        description: `[Calendar Event] ${ev.location ? `Location: ${ev.location}` : ''}`.trim(),
+        listName: 'General',
+        status: 'pending',
+        dueDate: ev.start,
+        source: 'calendar',
+        estimatedMinutes: Math.max(5, ev.durationMinutes || 30),
+        priority: 'medium',
+        inPlayQueue: false,
+        subtasks: [],
+        tags: [],
+      }));
+
+    const raw = [...calendarBlocks, ...taskBlocks];
 
     // Sort by start time, then longest duration first
     const sorted = [...raw].sort((a, b) => {
@@ -880,7 +918,7 @@ export default function SunsamaWorkspace() {
     flushCluster();
 
     return positioned;
-  }, [tasks, activeTimelineDate, selectedChannelTag]);
+  }, [tasks, calendarEvents, activeTimelineDate, selectedChannelTag]);
 
   // Render a Sunsama Task Card
   const renderTaskCard = (

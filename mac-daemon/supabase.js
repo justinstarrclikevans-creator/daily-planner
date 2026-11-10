@@ -53,17 +53,7 @@ async function syncTaskToSupabase(task, appleReminderId = null) {
     if (!supabase || supabaseDisabled) return null;
 
     try {
-        // Resolve project ID by list name if possible
-        let projectId = null;
-        if (task.listName) {
-            const listLower = task.listName.toLowerCase();
-            const projects = await getProjects();
-            if (projects && projects.length > 0) {
-                const matched = projects.find(p => listLower.includes(p.name.toLowerCase()) || p.name.toLowerCase().includes(listLower));
-                if (matched) projectId = matched.id;
-            }
-        }
-
+        const projectId = task.projectId || null;
         const rawDesc = task.description || '';
         
         // Extract Tiimo metadata from description if present

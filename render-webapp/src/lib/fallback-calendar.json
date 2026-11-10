@@ -1,0 +1,119 @@
+[
+  {
+    "id": "30hnn7kcbbq4jr7ppcsutfg8k3",
+    "title": "Tour",
+    "start": "2026-11-10T09:00:00-05:00",
+    "end": "2026-11-10T10:00:00-05:00",
+    "durationMinutes": 60,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
+    "id": "6llik836pqrplchecg5k0gi6i4_20261110T140000Z",
+    "title": "Standing Meeting (Matt)",
+    "start": "2026-11-10T09:00:00-05:00",
+    "end": "2026-11-10T09:30:00-05:00",
+    "durationMinutes": 30,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
+    "id": "1sm5ndjpob4frnfg19c60peu48",
+    "title": "Exhibit Tour",
+    "start": "2026-11-10T10:00:00-05:00",
+    "end": "2026-11-10T11:00:00-05:00",
+    "durationMinutes": 60,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
+    "id": "_6so48gq664pk4b9j6h244b9k8h0k4ba18op36ba48p23ad9j8op4ac1n6s_20261110T201500Z",
+    "title": "Program Manager L10 Meeting",
+    "start": "2026-11-10T15:15:00-05:00",
+    "end": "2026-11-10T16:15:00-05:00",
+    "durationMinutes": 60,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
+    "id": "_8kok8c9i8gq32b9o89234b9k6933aba16p346ba66kok2e2588r3ed9h8k_20261111T123000Z",
+    "title": "Publix",
+    "start": "2026-11-11T07:30:00-05:00",
+    "end": "2026-11-11T08:00:00-05:00",
+    "durationMinutes": 30,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
+    "id": "_6sp32cq28gpk8b9j8p0kcb9k6gr48ba16l348b9o64pk2dpo6cr3gda568",
+    "title": "Teach class",
+    "start": "2026-11-11T09:00:00-05:00",
+    "end": "2026-11-11T10:30:00-05:00",
+    "durationMinutes": 90,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
+    "id": "397a4chlgl6oa23la9hr1mionc_20261111T170000Z",
+    "title": "Leadership L10",
+    "start": "2026-11-11T12:00:00-05:00",
+    "end": "2026-11-11T13:30:00-05:00",
+    "durationMinutes": 90,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
+    "id": "2qb7bii018arq3jl7ekrngql5t_20261111T201500Z",
+    "title": "Jenn Standing Meeting",
+    "start": "2026-11-11T15:15:00-05:00",
+    "end": "2026-11-11T15:45:00-05:00",
+    "durationMinutes": 30,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
+    "id": "_8goj8d266gp48b9j6krjgb9k8cskcb9p6t34cb9j70s4cci16kr42g9g6o_20261111T211000Z",
+    "title": "Practice ",
+    "start": "2026-11-11T16:10:00-05:00",
+    "end": "2026-11-11T17:40:00-05:00",
+    "durationMinutes": 90,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
+    "id": "0dn812b5u6cao3pp94dllfkdi4",
+    "title": "Exhibit Tour",
+    "start": "2026-11-12T13:00:00-05:00",
+    "end": "2026-11-12T14:00:00-05:00",
+    "durationMinutes": 60,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
+    "id": "1r9os74ijdmh3lf54t3taj7ssf_20261112T180500Z",
+    "title": "HOLD - SCThrive Applications",
+    "start": "2026-11-12T13:05:00-05:00",
+    "end": "2026-11-12T13:50:00-05:00",
+    "durationMinutes": 45,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
+    "id": "4tubvbv55lu90qh9f1n18594mp_20261112T190000Z",
+    "title": "Recruitment / Community Engagement L10",
+    "start": "2026-11-12T14:00:00-05:00",
+    "end": "2026-11-12T15:00:00-05:00",
+    "durationMinutes": 60,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
+    "id": "_60p4agq46orjcba56h338b9k64pkcba1712j4b9p60sj4da388ok6gi660",
+    "title": "Pick up at Costco Travel",
+    "start": "2026-11-12T16:00:00-05:00",
+    "end": "2026-11-12T17:00:00-05:00",
+    "durationMinutes": 60,
+    "location": "Budget\n6258 Rivers Ave North Charleston, SC 29406, US",
+    "calendarName": "justin@turnninety.com"
+  }
+]

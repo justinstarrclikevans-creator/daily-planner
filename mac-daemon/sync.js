@@ -2,82 +2,15 @@ const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
-const { getIncompleteReminders, getRecentCompletedReminders, addReminder, updateReminderNotes } = require('./reminders');
+const { getIncompleteReminders, getRecentCompletedReminders, addReminder } = require('./reminders');
 const { exec } = require('child_process');
 const { getRecentSlackMessages } = require('./slack');
 const { getRecentEmails, getTodaysCalendarEvents } = require('./google');
 const { getRecentLetterlyNotes } = require('./letterly');
-const { extractTodos, convertCalendarEventsToReminders } = require('./ai');
-const { checkUpcomingMeetings, triggerStalePurgeOffer, checkAggressiveMotivationNudges } = require('./sms-handler');
+const { extractTodos } = require('./ai');
 const { syncTaskToSupabase } = require('./supabase');
 
 const STATE_FILE = path.join(__dirname, 'state.json');
-
-const VALID_LISTS = [
-    'General',
-    'Turn90',
-    '843FC',
-    'Personal',
-    'Nosa',
-    'Book (Memoir) and Synapse'
-];
-
-function normalizeListName(rawName, source) {
-    // All Slack & Huddle todos strictly go to Turn90 (T90)
-    if (source === 'slack') return 'Turn90';
-
-    const lower = (rawName || '').trim().toLowerCase();
-    if (!lower) return 'General';
-    if (lower.includes('turn90') || lower.includes('turn 90') || lower === 't90' || lower.includes('first shift') || lower.includes('reentry')) {
-        return 'Turn90';
-    }
-    if (lower.includes('843') || lower.includes('football')) {
-        return '843FC';
-    }
-    if (lower.includes('nosa') || lower.includes('royvi')) {
-        return 'Nosa';
-    }
-    if (lower.includes('book') || lower.includes('memoir') || lower.includes('synapse')) {
-        return 'Book (Memoir) and Synapse';
-    }
-    if (lower.includes('personal')) {
-        return 'Personal';
-    }
-    if (lower.includes('general')) {
-        return 'General';
-    }
-    // Default to General if not sure what project
-    return 'General';
-}
-
-function matchProjectForTask(title, description, rawListName, source, customProjects = []) {
-    if (source === 'slack') return 'Turn90';
-
-    const direct = normalizeListName(rawListName, source);
-    if (direct !== 'General') return direct;
-
-    const combined = `${title || ''} ${description || ''}`.toLowerCase();
-
-    if (Array.isArray(customProjects)) {
-        for (const proj of customProjects) {
-            if (Array.isArray(proj.keywords)) {
-                for (const kw of proj.keywords) {
-                    if (kw && combined.includes(kw.toLowerCase())) {
-                        return proj.name;
-                    }
-                }
-            }
-        }
-    }
-
-    if (/turn90|turn 90|\bt90\b|first shift|reentry|apricot|skillcat/i.test(combined)) return 'Turn90';
-    if (/843|843fc|football|soccer|fourth wall|crowded/i.test(combined)) return '843FC';
-    if (/nosa|royvi|claire/i.test(combined)) return 'Nosa';
-    if (/book|memoir|synapse|draft|chapter/i.test(combined)) return 'Book (Memoir) and Synapse';
-    if (/groceries|vet|apartment|family|bills|health/i.test(combined)) return 'Personal';
-
-    return 'General';
-}
 
 function normalizeTitle(str) {
     return (str || '')
@@ -92,128 +25,18 @@ function loadState() {
         if (fs.existsSync(STATE_FILE)) {
             const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
             data.completedTaskTitles = data.completedTaskTitles || [];
-            data.syncedCalendarEventIds = data.syncedCalendarEventIds || [];
             return data;
         }
     } catch (e) {}
-    return { completedTaskTitles: [], syncedCalendarEventIds: [] };
+    return { completedTaskTitles: [] };
 }
 
 function saveState(state) {
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
-function isSameLocalCalendarDay(aIso, bIso) {
-    if (!aIso || !bIso) return false;
-    const a = new Date(aIso);
-    const b = new Date(bIso);
-    if (isNaN(a.getTime()) || isNaN(b.getTime())) return false;
-    return (
-        a.getFullYear() === b.getFullYear() &&
-        a.getMonth() === b.getMonth() &&
-        a.getDate() === b.getDate()
-    );
-}
-
-async function syncCalendarEventsAsReminders(events, incompleteTodos, completedTodos, state) {
-    if (!Array.isArray(events) || events.length === 0) return;
-
-    state.syncedCalendarEventIds = state.syncedCalendarEventIds || [];
-    const now = Date.now();
-    const startOfToday = new Date();
-    startOfToday.setHours(0, 0, 0, 0);
-
-    // Filter events: timed events from today onward
-    const candidateEvents = events.filter(ev => {
-        if (!ev.summary || !ev.start) return false;
-        if (ev.isAllDay) return false;
-        const startMs = new Date(ev.start).getTime();
-        if (isNaN(startMs)) return false;
-        if (startMs < startOfToday.getTime()) return false;
-        return true;
-    });
-
-    if (candidateEvents.length === 0) {
-        return;
-    }
-
-    const reminderItems = await convertCalendarEventsToReminders(candidateEvents);
-
-    let targetList = 'General';
-    try {
-        const rulesPath = path.join(__dirname, 'tagging-rules.json');
-        if (fs.existsSync(rulesPath)) {
-            const r = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
-            targetList = r.defaultList || 'General';
-        }
-    } catch (e) {}
-
-    let addedCount = 0;
-    for (const item of reminderItems) {
-        const normTitle = normalizeTitle(item.title);
-        const normRaw = normalizeTitle(item.rawSummary || '');
-        if (!normTitle) continue;
-
-        // Check if already an active reminder on the SAME calendar day
-        const existingSameDay = incompleteTodos.find(t => {
-            if (!isSameLocalCalendarDay(t.dueDate, item.start)) return false;
-            const nt = normalizeTitle(t.title);
-            return nt === normTitle || (normRaw && nt === normRaw) || nt.includes(normTitle) || normTitle.includes(nt);
-        });
-
-        if (existingSameDay) {
-            // Upgrade notes with [⏱ durationm] [Calendar Event] if missing
-            if (existingSameDay.id && item.notes && !(existingSameDay.description || '').includes('[Calendar Event]')) {
-                await updateReminderNotes(existingSameDay.id, item.notes);
-                existingSameDay.description = item.notes;
-                console.log(`[Calendar] Upgraded metadata for "${existingSameDay.title}" -> ${item.notes.split('\n')[0]}`);
-            }
-            if (item.id && !state.syncedCalendarEventIds.includes(item.id)) {
-                state.syncedCalendarEventIds.push(item.id);
-            }
-            continue;
-        }
-
-        // Skip if this specific event ID was already synced and completed
-        if (item.id && state.syncedCalendarEventIds.includes(item.id)) {
-            continue;
-        }
-
-        const cleanItemTitle = (item.title || '').replace(/!+/g, '').trim();
-        const ok = await addReminder(targetList, cleanItemTitle, item.notes || '', 'none', item.start);
-        if (ok) {
-            console.log(`[Calendar Scheduled] Added to [${targetList}]: "${cleanItemTitle}" scheduled for ${new Date(item.start).toLocaleString()} (${item.durationMinutes || 30}m)`);
-            incompleteTodos.push({
-                title: cleanItemTitle,
-                description: item.notes || '',
-                listName: targetList,
-                dueDate: item.start
-            });
-            if (item.id) state.syncedCalendarEventIds.push(item.id);
-            addedCount++;
-
-            await syncTaskToSupabase({
-                title: cleanItemTitle,
-                listName: targetList,
-                description: item.notes || '',
-                dueDate: item.start,
-                estimatedMinutes: item.durationMinutes || 30,
-                priority: 'none'
-            });
-        }
-    }
-
-    if (state.syncedCalendarEventIds.length > 500) {
-        state.syncedCalendarEventIds = state.syncedCalendarEventIds.slice(-500);
-    }
-    saveState(state);
-    if (addedCount > 0) {
-        console.log(`[Calendar] Successfully synced ${addedCount} scheduled reminders to Apple Reminders.`);
-    }
-}
-
 async function runHourlySync() {
-    console.log(`[${new Date().toLocaleString()}] Starting Hourly Sync (Emails, Slack/Huddles, Calendar, Letterly MCP)...`);
+    console.log(`[${new Date().toLocaleString()}] Starting Hourly Sync (Emails, Slack/Huddles, Letterly MCP)...`);
     const state = loadState();
     state.completedTaskTitles = state.completedTaskTitles || [];
     
@@ -239,13 +62,10 @@ async function runHourlySync() {
         }
         saveState(state);
 
-        // 1. Sync Calendar Events to Apple Reminders as Scheduled Reminders
-        await syncCalendarEventsAsReminders(events, incompleteTodos, completedTodos, state);
-
         if (slack.length > 0 || emails.length > 0 || letterlyNotes.length > 0) {
             console.log(`New inputs found (Slack: ${slack.length}, Emails: ${emails.length}, Letterly: ${letterlyNotes.length}). Active Apple Reminders: ${incompleteTodos.length}, Completed: ${completedTodos.length}.`);
             
-            console.log("Extracting todos, ideas & brainstorming via Gemini (with strict completed deduplication)...");
+            console.log("Extracting todos via Gemini (no project assignments, no calendar todos)...");
             const combinedCompleted = [
                 ...completedTodos,
                 ...state.completedTaskTitles.map(t => ({ title: t, listName: '' }))
@@ -296,30 +116,22 @@ async function runHourlySync() {
                         continue;
                     }
 
-                    let targetList = 'General';
-                    try {
-                        const rulesPath = path.join(__dirname, 'tagging-rules.json');
-                        if (fs.existsSync(rulesPath)) {
-                            const r = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
-                            targetList = r.defaultList || 'General';
-                        }
-                    } catch (e) {}
-
+                    const targetList = 'General';
                     const priority = 'none';
 
-                    // Clean title without hashtags, time brackets, or exclamation points
+                    // Clean title without hashtags, project names, time brackets, or exclamation points
                     const cleanTitle = (item.title || '')
                         .replace(/!+/g, '')
                         .replace(/#\w[\w-]*/g, '')
                         .replace(/\[⏱\s*\d+m\]/g, '')
                         .trim();
 
-                    // Clean notes: brief context only, NO time estimates, NO subtasks / microsteps, NO exclamation points
+                    // Clean notes: brief context only, NO hashtags, NO time estimates, NO subtasks, NO exclamation points
                     let cleanNotes = (item.description || '')
                         .replace(/!+/g, '.')
+                        .replace(/#\w[\w-]*/g, '')
                         .replace(/\[⏱\s*\d+m\]/g, '')
                         .trim();
-                    // Remove any microstep checklist lines if present
                     cleanNotes = cleanNotes
                         .split('\n')
                         .filter(line => !line.trim().startsWith('- [ ]') && !line.trim().startsWith('- [x]'))
@@ -336,6 +148,7 @@ async function runHourlySync() {
 
                     item.title = cleanTitle;
                     item.listName = targetList;
+                    item.projectId = null;
                     item.tags = [];
                     item.description = cleanNotes;
                     item.estimatedMinutes = null;
@@ -366,12 +179,8 @@ async function runHourlySync() {
             console.log("No new Slack messages, emails, or Letterly recordings since last hourly check.");
         }
 
-        // Sync open Apple Reminders to cloud if configured
-        await syncAllRemindersToCloud();
-
-        // Check meeting context & motivation criteria (paused per user request)
-        // await checkUpcomingMeetings();
-        // await checkAggressiveMotivationNudges();
+        // Sync open Apple Reminders + Calendar timeline feed to Render webapp & cloud
+        await syncAllRemindersToCloud(events);
 
         console.log(`[${new Date().toLocaleString()}] Hourly Sync cycle completed.`);
     } catch (e) {
@@ -379,32 +188,53 @@ async function runHourlySync() {
     }
 }
 
-async function syncAllRemindersToCloud() {
+async function syncAllRemindersToCloud(events = []) {
     try {
         const reminders = await getIncompleteReminders();
 
-        // Keep webapp fallback dataset fresh with current active incomplete reminders (including newly synced Calendar Events)
         try {
             const fallbackPath = path.join(__dirname, '../render-webapp/src/lib/fallback-todos.json');
-            const fallbackPayload = reminders.map(r => ({
-                title: r.title,
-                notes: r.description || '',
-                listName: r.listName || 'General',
-                priority: r.priority || 'medium',
-                dueDate: r.dueDate || null,
-                appleReminderId: r.id
-            }));
-            const nextJson = JSON.stringify(fallbackPayload, null, 2);
-            const prevJson = fs.existsSync(fallbackPath) ? fs.readFileSync(fallbackPath, 'utf8') : '';
-            if (nextJson !== prevJson) {
-                fs.writeFileSync(fallbackPath, nextJson);
+            const calendarFallbackPath = path.join(__dirname, '../render-webapp/src/lib/fallback-calendar.json');
+
+            const fallbackPayload = reminders
+                .filter(r => !(r.description || '').includes('[Calendar Event]'))
+                .map(r => ({
+                    title: r.title,
+                    notes: r.description || '',
+                    listName: 'General',
+                    priority: r.priority || 'medium',
+                    dueDate: r.dueDate || null,
+                    appleReminderId: r.id
+                }));
+
+            const calendarPayload = (events || [])
+                .filter(ev => ev && ev.summary && ev.start && !ev.isAllDay)
+                .map(ev => ({
+                    id: ev.id,
+                    title: ev.summary,
+                    start: ev.start,
+                    end: ev.end,
+                    durationMinutes: ev.durationMinutes || 30,
+                    location: ev.location || '',
+                    calendarName: ev.calendarName || 'Calendar'
+                }));
+
+            const nextTodosJson = JSON.stringify(fallbackPayload, null, 2);
+            const prevTodosJson = fs.existsSync(fallbackPath) ? fs.readFileSync(fallbackPath, 'utf8') : '';
+
+            const nextCalJson = JSON.stringify(calendarPayload, null, 2);
+            const prevCalJson = fs.existsSync(calendarFallbackPath) ? fs.readFileSync(calendarFallbackPath, 'utf8') : '';
+
+            if (nextTodosJson !== prevTodosJson || nextCalJson !== prevCalJson) {
+                fs.writeFileSync(fallbackPath, nextTodosJson);
+                fs.writeFileSync(calendarFallbackPath, nextCalJson);
                 const repoRoot = path.join(__dirname, '..');
                 exec(
-                    'git add render-webapp/src/lib/fallback-todos.json && git commit -m "chore(sync): auto-sync live calendar appointments & reminders" && git push origin HEAD:main && git push origin feat/ios-companion-app',
+                    'git add render-webapp/src/lib/fallback-todos.json render-webapp/src/lib/fallback-calendar.json && git commit -m "chore(sync): auto-sync reminders and calendar timeline feed" && git push origin HEAD:main && git push origin feat/ios-companion-app',
                     { cwd: repoRoot },
                     (err) => {
                         if (!err) {
-                            console.log("[Git Sync] Pushed updated fallback-todos.json to Render (origin/main).");
+                            console.log("[Git Sync] Pushed updated reminders & calendar feed to Render (origin/main).");
                         }
                     }
                 );
@@ -424,12 +254,8 @@ async function syncAllRemindersToCloud() {
 // Check everything once an hour at the top of every hour
 cron.schedule('0 * * * *', () => runHourlySync());
 
-// Nudges and stale purge offer paused per user request
-// cron.schedule('*/15 * * * *', () => checkAggressiveMotivationNudges());
-// cron.schedule('0 16 * * 5', triggerStalePurgeOffer);
-
 console.log("Sync daemon started (v2 Hourly Architecture).");
-console.log("- Checking Emails (fallback: General), Slack & Huddle Summaries (target: Turn90), and Letterly MCP once an hour");
+console.log("- Checking Emails, Slack & Huddle Summaries, and Letterly MCP once an hour (no AI project assignments; no calendar todos)");
 console.log("- Inbound and outbound iMessage texts paused per user request");
 
 module.exports = {

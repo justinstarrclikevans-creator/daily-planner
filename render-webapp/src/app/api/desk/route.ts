@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
   DEFAULT_PROJECTS,
   getFallbackTasks,
+  getFallbackCalendarEvents,
   extractSubtasks,
   extractHashtags,
   cleanTaskTitle,
@@ -60,61 +61,65 @@ export async function GET() {
       }
     }
 
+    const calendarEvents = getFallbackCalendarEvents();
+
     let tasks: Task[] = [];
     if (taskRes && taskRes.ok) {
       const data = await taskRes.json();
       if (Array.isArray(data) && data.length > 0) {
-        tasks = data.map((row: any) => {
-          let subs = row.subtasks;
-          if (!subs || !Array.isArray(subs) || subs.length === 0) {
-            subs = extractSubtasks(row.description);
-          }
-          let prio: TaskPriority = 'medium';
-          if (row.priority === 'high' || row.priority === 'low') {
-            prio = row.priority;
-          } else if ((row.description || '').toLowerCase().includes('[🔥 high]')) {
-            prio = 'high';
-          } else if ((row.description || '').toLowerCase().includes('[🌱 low]')) {
-            prio = 'low';
-          }
+        tasks = data
+          .filter((row: any) => !(row.description || '').includes('[Calendar Event]'))
+          .map((row: any) => {
+            let subs = row.subtasks;
+            if (!subs || !Array.isArray(subs) || subs.length === 0) {
+              subs = extractSubtasks(row.description);
+            }
+            let prio: TaskPriority = 'medium';
+            if (row.priority === 'high' || row.priority === 'low') {
+              prio = row.priority;
+            } else if ((row.description || '').toLowerCase().includes('[🔥 high]')) {
+              prio = 'high';
+            } else if ((row.description || '').toLowerCase().includes('[🌱 low]')) {
+              prio = 'low';
+            }
 
-          let estMins = row.estimated_minutes || 15;
-          const durMatch = (row.description || '').match(/\[⏱\s*(\d+)m\]/);
-          if (durMatch && durMatch[1]) {
-            estMins = parseInt(durMatch[1], 10);
-          }
+            let estMins = row.estimated_minutes || 15;
+            const durMatch = (row.description || '').match(/\[⏱\s*(\d+)m\]/);
+            if (durMatch && durMatch[1]) {
+              estMins = parseInt(durMatch[1], 10);
+            }
 
-          const extractedTags = Array.from(
-            new Set([
-              ...(Array.isArray(row.tags) ? row.tags : []),
-              ...extractHashtags(row.title),
-              ...extractHashtags(row.description),
-            ])
-          );
+            const extractedTags = Array.from(
+              new Set([
+                ...(Array.isArray(row.tags) ? row.tags : []),
+                ...extractHashtags(row.title),
+                ...extractHashtags(row.description),
+              ])
+            );
 
-          const inQueue =
-            Boolean(row.in_play_queue) || (row.description || '').includes('[▶️ Queue]');
+            const inQueue =
+              Boolean(row.in_play_queue) || (row.description || '').includes('[▶️ Queue]');
 
-          return {
-            id: row.id,
-            projectId: row.project_id,
-            title: cleanTaskTitle(row.title),
-            description: row.description || '',
-            listName: row.list_name || 'General',
-            status: row.status === 'completed' ? 'completed' : 'pending',
-            dueDate: row.due_date || null,
-            source: row.source || 'daemon',
-            appleReminderId: row.apple_reminder_id,
-            estimatedMinutes: estMins,
-            actualSeconds: row.actual_seconds || 0,
-            priority: prio,
-            inPlayQueue: inQueue,
-            subtasks: subs,
-            tags: extractedTags,
-            createdAt: row.created_at,
-            completedAt: row.updated_at || null,
-          };
-        });
+            return {
+              id: row.id,
+              projectId: null,
+              title: cleanTaskTitle(row.title),
+              description: row.description || '',
+              listName: 'General',
+              status: row.status === 'completed' ? 'completed' : 'pending',
+              dueDate: row.due_date || null,
+              source: row.source || 'daemon',
+              appleReminderId: row.apple_reminder_id,
+              estimatedMinutes: estMins,
+              actualSeconds: row.actual_seconds || 0,
+              priority: prio,
+              inPlayQueue: inQueue,
+              subtasks: subs,
+              tags: extractedTags,
+              createdAt: row.created_at,
+              completedAt: row.updated_at || null,
+            };
+          });
         inMemoryTasks = tasks;
       }
     }
@@ -123,10 +128,15 @@ export async function GET() {
       if (!inMemoryTasks) {
         inMemoryTasks = getFallbackTasks(projects);
       }
-      return NextResponse.json({ projects, tasks: inMemoryTasks, source: 'fallback' });
+      return NextResponse.json({
+        projects,
+        tasks: inMemoryTasks,
+        calendarEvents,
+        source: 'fallback',
+      });
     }
 
-    return NextResponse.json({ projects, tasks, source: 'supabase' });
+    return NextResponse.json({ projects, tasks, calendarEvents, source: 'supabase' });
   } catch (error: any) {
     console.error('Error in /api/desk GET:', error);
     if (!inMemoryTasks) {
@@ -135,6 +145,7 @@ export async function GET() {
     return NextResponse.json({
       projects: inMemoryProjects || DEFAULT_PROJECTS,
       tasks: inMemoryTasks,
+      calendarEvents: getFallbackCalendarEvents(),
       source: 'fallback_error',
       error: error.message,
     });
