@@ -510,5 +510,13 @@
     "priority": "none",
     "dueDate": "2026-11-12T21:00:00Z",
     "appleReminderId": "AE2A762B-B458-4486-888C-6A9883D4FECB"
+  },
+  {
+    "title": "Review North Charleston housing referrals forwarded by Kim",
+    "notes": "Kim Huey forwarded details on North Charleston housing referrals with move-ins beginning November 16.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "83538C77-9567-45C2-AF60-F1DE34F9CD38"
   }
 ]
