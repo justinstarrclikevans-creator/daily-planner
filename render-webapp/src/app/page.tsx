@@ -159,6 +159,15 @@ export default function SunsamaWorkspace() {
     previewMinutes: number;
   } | null>(null);
 
+  // Calendar Block Move State (Drag up/down to any 5-minute / 15-minute slot)
+  const [movingState, setMovingState] = useState<{
+    taskId: string;
+    startY: number;
+    initialStartMs: number;
+    previewStartMs: number;
+    moved: boolean;
+  } | null>(null);
+
   // Current Time for Timeline Red Line
   const [now, setNow] = useState<Date>(new Date());
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
@@ -200,41 +209,76 @@ export default function SunsamaWorkspace() {
     };
   }, [loadData]);
 
-  // Core API Patch Helper
+  // Core API Patch Helper (handles both Tasks and Calendar Timeline Events)
   const patchTask = useCallback(async (taskId: string, updates: Partial<Task> & Record<string, any>) => {
-    setTasks((prev) =>
-      prev.map((t) => {
-        if (t.id !== taskId) return t;
-        return {
-          ...t,
-          ...updates,
-          dueDate:
-            updates.due_date !== undefined
-              ? updates.due_date
-              : updates.dueDate !== undefined
-              ? updates.dueDate
-              : t.dueDate,
-          inPlayQueue:
-            updates.in_play_queue !== undefined
-              ? updates.in_play_queue
-              : updates.inPlayQueue !== undefined
-              ? updates.inPlayQueue
-              : t.inPlayQueue,
-          estimatedMinutes:
+    if (String(taskId).startsWith('cal-event-')) {
+      const rawCalId = String(taskId).replace(/^cal-event-/, '');
+      setCalendarEvents((prev) => {
+        const nextDue =
+          updates.due_date !== undefined
+            ? updates.due_date
+            : updates.dueDate !== undefined
+            ? updates.dueDate
+            : undefined;
+        if (nextDue === null) {
+          return prev.filter((ev) => ev.id !== rawCalId && `cal-event-${ev.id}` !== taskId);
+        }
+        return prev.map((ev) => {
+          if (ev.id !== rawCalId && `cal-event-${ev.id}` !== taskId) return ev;
+          const nextStart = nextDue !== undefined ? nextDue : ev.start;
+          const nextMins =
             updates.estimated_minutes !== undefined
               ? updates.estimated_minutes
               : updates.estimatedMinutes !== undefined
               ? updates.estimatedMinutes
-              : t.estimatedMinutes,
-          actualSeconds:
-            updates.actual_seconds !== undefined
-              ? updates.actual_seconds
-              : updates.actualSeconds !== undefined
-              ? updates.actualSeconds
-              : t.actualSeconds,
-        };
-      })
-    );
+              : ev.durationMinutes;
+          const nextEnd = new Date(
+            new Date(nextStart).getTime() + Math.max(5, nextMins) * 60000
+          ).toISOString();
+          return {
+            ...ev,
+            title: updates.title !== undefined ? updates.title : ev.title,
+            start: nextStart,
+            end: nextEnd,
+            durationMinutes: Math.max(5, nextMins),
+          };
+        });
+      });
+    } else {
+      setTasks((prev) =>
+        prev.map((t) => {
+          if (t.id !== taskId) return t;
+          return {
+            ...t,
+            ...updates,
+            dueDate:
+              updates.due_date !== undefined
+                ? updates.due_date
+                : updates.dueDate !== undefined
+                ? updates.dueDate
+                : t.dueDate,
+            inPlayQueue:
+              updates.in_play_queue !== undefined
+                ? updates.in_play_queue
+                : updates.inPlayQueue !== undefined
+                ? updates.inPlayQueue
+                : t.inPlayQueue,
+            estimatedMinutes:
+              updates.estimated_minutes !== undefined
+                ? updates.estimated_minutes
+                : updates.estimatedMinutes !== undefined
+                ? updates.estimatedMinutes
+                : t.estimatedMinutes,
+            actualSeconds:
+              updates.actual_seconds !== undefined
+                ? updates.actual_seconds
+                : updates.actualSeconds !== undefined
+                ? updates.actualSeconds
+                : t.actualSeconds,
+          };
+        })
+      );
+    }
 
     try {
       await fetch('/api/desk', {
@@ -421,9 +465,12 @@ export default function SunsamaWorkspace() {
     const handleMouseUp = () => {
       const task = tasks.find((t) => t.id === resizingState.taskId);
       const finalMins = resizingState.previewMinutes;
+      const targetId = resizingState.taskId;
       setResizingState(null);
       if (task && finalMins !== task.estimatedMinutes) {
         handleSetDuration(task, finalMins);
+      } else if (String(targetId).startsWith('cal-event-')) {
+        patchTask(targetId, { estimated_minutes: finalMins });
       }
     };
 
@@ -433,7 +480,7 @@ export default function SunsamaWorkspace() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [resizingState, tasks, handleSetDuration]);
+  }, [resizingState, tasks, handleSetDuration, patchTask]);
 
   // Actions: Move Task between Backlog / Today / Tomorrow / Later / Timebox Hour+Minute
   const moveTaskToBucket = useCallback(
@@ -508,6 +555,10 @@ export default function SunsamaWorkspace() {
 
   const clearTaskTimebox = useCallback(
     async (task: Task) => {
+      if (String(task.id).startsWith('cal-event-')) {
+        await patchTask(task.id, { due_date: null });
+        return;
+      }
       const nextDue = activeTimelineDate.toISOString();
       await patchTask(task.id, {
         due_date: nextDue,
@@ -516,6 +567,68 @@ export default function SunsamaWorkspace() {
     },
     [activeTimelineDate, timelineDayBucket, patchTask]
   );
+
+  // Global Mouse Move / Mouse Up Listeners for Calendar Block Drag-to-Move
+  useEffect(() => {
+    if (!movingState) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaY = e.clientY - movingState.startY;
+      if (Math.abs(deltaY) < 4 && !movingState.moved) return;
+
+      const deltaMinutes = Math.round(deltaY / PX_PER_MINUTE / 5) * 5;
+      const candidateDate = new Date(movingState.initialStartMs + deltaMinutes * 60000);
+      const minStart = new Date(
+        activeTimelineDate.getFullYear(),
+        activeTimelineDate.getMonth(),
+        activeTimelineDate.getDate(),
+        TIMELINE_START_HOUR,
+        0,
+        0,
+        0
+      ).getTime();
+      const maxStart = new Date(
+        activeTimelineDate.getFullYear(),
+        activeTimelineDate.getMonth(),
+        activeTimelineDate.getDate(),
+        TIMELINE_END_HOUR,
+        45,
+        0,
+        0
+      ).getTime();
+      const clampedMs = Math.max(minStart, Math.min(maxStart, candidateDate.getTime()));
+
+      setMovingState((prev) =>
+        prev ? { ...prev, previewStartMs: clampedMs, moved: true } : null
+      );
+    };
+
+    const handleMouseUp = () => {
+      const currentMove = movingState;
+      setMovingState(null);
+      if (!currentMove) return;
+
+      if (!currentMove.moved) {
+        setInspectingTaskId(currentMove.taskId);
+        return;
+      }
+
+      const d = new Date(currentMove.previewStartMs);
+      const existingTask = tasks.find((t) => t.id === currentMove.taskId);
+      if (existingTask) {
+        scheduleTaskAtSlot(existingTask, d.getHours(), d.getMinutes());
+      } else if (String(currentMove.taskId).startsWith('cal-event-')) {
+        patchTask(currentMove.taskId, { due_date: d.toISOString() });
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [movingState, activeTimelineDate, tasks, scheduleTaskAtSlot, patchTask]);
 
   // Auto-Timebox Unslotted Today Tasks in 15-Minute / 5-Minute Increments
   const handleAutoTimeboxToday = useCallback(async () => {
@@ -718,9 +831,85 @@ export default function SunsamaWorkspace() {
     ]
   );
 
-  // Delete Task
+  // Click any 15-Minute Calendar Slot to Create a Timeboxed Task at that Slot
+  const handleQuickAddAtSlot = useCallback(
+    async (hour: number, minute: number) => {
+      const slotDate = new Date(
+        activeTimelineDate.getFullYear(),
+        activeTimelineDate.getMonth(),
+        activeTimelineDate.getDate(),
+        hour,
+        minute,
+        0,
+        0
+      );
+      const due = slotDate.toISOString();
+      const inQueue = timelineDayBucket === 'today';
+      const inlineTags =
+        selectedChannelTag !== 'all' && selectedChannelTag !== 'general'
+          ? [selectedChannelTag]
+          : [];
+      const desc = buildTaskDescription({
+        cleanNotes: '',
+        estimatedMinutes: 15,
+        inPlayQueue: inQueue,
+        subtasks: [],
+        tags: inlineTags,
+      });
+
+      const tempId = crypto.randomUUID();
+      const created: Task = {
+        id: tempId,
+        title: 'New scheduled task',
+        description: desc,
+        listName: 'General',
+        status: 'pending',
+        dueDate: due,
+        estimatedMinutes: 15,
+        priority: 'medium',
+        inPlayQueue: inQueue,
+        subtasks: [],
+        tags: inlineTags,
+        createdAt: new Date().toISOString(),
+      };
+
+      setTasks((prev) => [created, ...prev]);
+      setInspectingTaskId(tempId);
+
+      try {
+        await fetch('/api/desk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: tempId,
+            title: created.title,
+            description: desc,
+            list_name: 'General',
+            status: 'pending',
+            due_date: due,
+            estimated_minutes: 15,
+            priority: 'medium',
+            in_play_queue: inQueue,
+            tags: inlineTags,
+          }),
+        });
+      } catch (err) {
+        console.error('Error creating slot task:', err);
+      }
+    },
+    [activeTimelineDate, timelineDayBucket, selectedChannelTag]
+  );
+
+  // Delete Task or Calendar Event
   const handleDeleteTask = useCallback(async (taskId: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    if (String(taskId).startsWith('cal-event-')) {
+      const rawCalId = String(taskId).replace(/^cal-event-/, '');
+      setCalendarEvents((prev) =>
+        prev.filter((ev) => ev.id !== rawCalId && `cal-event-${ev.id}` !== taskId)
+      );
+    } else {
+      setTasks((prev) => prev.filter((t) => t.id !== taskId));
+    }
     setInspectingTaskId(null);
     try {
       await fetch(`/api/desk?id=${encodeURIComponent(taskId)}`, {
@@ -787,10 +976,33 @@ export default function SunsamaWorkspace() {
     [todayTasks, moveTaskToBucket]
   );
 
-  const inspectingTask = useMemo(
-    () => tasks.find((t) => t.id === inspectingTaskId) || null,
-    [tasks, inspectingTaskId]
-  );
+  const inspectingTask = useMemo(() => {
+    if (!inspectingTaskId) return null;
+    const fromTasks = tasks.find((t) => t.id === inspectingTaskId);
+    if (fromTasks) return fromTasks;
+    const rawCalId = String(inspectingTaskId).replace(/^cal-event-/, '');
+    const ev = calendarEvents.find(
+      (c) => c.id === rawCalId || `cal-event-${c.id}` === inspectingTaskId
+    );
+    if (ev) {
+      return {
+        id: `cal-event-${ev.id}`,
+        projectId: null,
+        title: ev.title,
+        description: `[Calendar Event] ${ev.location ? `Location: ${ev.location}` : ''}`.trim(),
+        listName: 'General',
+        status: 'pending' as const,
+        dueDate: ev.start,
+        source: 'calendar',
+        estimatedMinutes: Math.max(5, ev.durationMinutes || 30),
+        priority: 'medium' as const,
+        inPlayQueue: false,
+        subtasks: [],
+        tags: [],
+      };
+    }
+    return null;
+  }, [tasks, calendarEvents, inspectingTaskId]);
 
   // Focus Mode Queue: Today's pending tasks first, then Backlog tasks so Focus Mode NEVER fails to open!
   const focusQueue = useMemo(() => {
@@ -1947,16 +2159,34 @@ export default function SunsamaWorkspace() {
                             e.dataTransfer.getData('text/plain') ||
                             draggedTaskId;
                           const task = tasks.find((t) => t.id === id);
-                          if (task) scheduleTaskAtSlot(task, hour, minute);
+                          if (task) {
+                            scheduleTaskAtSlot(task, hour, minute);
+                          } else if (id && String(id).startsWith('cal-event-')) {
+                            const slotDate = new Date(
+                              activeTimelineDate.getFullYear(),
+                              activeTimelineDate.getMonth(),
+                              activeTimelineDate.getDate(),
+                              hour,
+                              minute,
+                              0,
+                              0
+                            );
+                            patchTask(id, { due_date: slotDate.toISOString() });
+                          }
+                        }}
+                        onClick={() => {
+                          if (!movingState && !resizingState) {
+                            handleQuickAddAtSlot(hour, minute);
+                          }
                         }}
                         style={{ height: `${QUARTER_HEIGHT_PX}px` }}
-                        className={`group/slot relative flex items-start pl-14 pr-2 transition-colors ${
+                        className={`group/slot relative flex items-center pl-14 pr-2 transition-colors cursor-pointer ${
                           minute === 0
                             ? 'border-t border-white/[0.09]'
                             : minute === 30
                             ? 'border-t border-dashed border-white/[0.05]'
                             : 'border-t border-dotted border-white/[0.03]'
-                        } ${isHovered ? 'bg-indigo-500/20' : 'hover:bg-white/[0.015]'}`}
+                        } ${isHovered ? 'bg-indigo-500/20' : 'hover:bg-white/[0.03]'}`}
                       >
                         {/* Left Rail Time Labels (:00, :15, :30, :45) */}
                         <div className="absolute left-0 top-0 -translate-y-2 w-12 text-right pr-2 pointer-events-none">
@@ -1977,10 +2207,14 @@ export default function SunsamaWorkspace() {
                           )}
                         </div>
 
-                        {/* Drop Preview Badge */}
-                        {isHovered && (
+                        {/* Drop Preview Badge or Hover Quick-Add Hint */}
+                        {isHovered ? (
                           <span className="text-[10px] font-mono text-indigo-300 px-1.5 py-0.5 rounded bg-indigo-950/90 border border-indigo-500/40">
                             Drop at {formatHourMinuteLabel(hour, minute)}
+                          </span>
+                        ) : (
+                          <span className="opacity-0 group-hover/slot:opacity-100 text-[10px] text-slate-500 font-mono transition-opacity pointer-events-none">
+                            + Add at {formatHourMinuteLabel(hour, minute)}
                           </span>
                         )}
                       </div>
@@ -2009,7 +2243,11 @@ export default function SunsamaWorkspace() {
               {/* Positioned & Resizable Timeboxed Task Blocks */}
               {timeboxedTodayTasks.map((t) => {
                 if (!t.dueDate) return null;
-                const d = new Date(t.dueDate);
+                const isBeingMoved = movingState?.taskId === t.id;
+                const effectiveDueIso = isBeingMoved
+                  ? new Date(movingState.previewStartMs).toISOString()
+                  : t.dueDate;
+                const d = new Date(effectiveDueIso);
                 const startHour = d.getHours();
                 const startMin = d.getMinutes();
                 if (
@@ -2043,17 +2281,20 @@ export default function SunsamaWorkspace() {
                 return (
                   <div
                     key={t.id}
-                    draggable={!resizingState}
-                    onDragStart={(e) => {
-                      if (resizingState) {
-                        e.preventDefault();
-                        return;
-                      }
-                      setDraggedTaskId(t.id);
-                      e.dataTransfer.setData('text/plain', t.id);
-                    }}
-                    onClick={() => {
-                      if (!isBeingResized) setInspectingTaskId(t.id);
+                    onMouseDown={(e) => {
+                      if (e.button !== 0 || resizingState) return;
+                      const targetEl = e.target as HTMLElement;
+                      if (targetEl.closest('button')) return;
+                      e.stopPropagation();
+                      e.preventDefault();
+                      const initialMs = new Date(t.dueDate!).getTime();
+                      setMovingState({
+                        taskId: t.id,
+                        startY: e.clientY,
+                        initialStartMs: initialMs,
+                        previewStartMs: initialMs,
+                        moved: false,
+                      });
                     }}
                     style={{
                       top: `${topPx}px`,
@@ -2063,13 +2304,17 @@ export default function SunsamaWorkspace() {
                       borderLeftWidth: '3px',
                       borderLeftColor: isMeeting ? '#38BDF8' : ch.color,
                     }}
-                    className={`group/block absolute z-10 hover:z-40 rounded-lg border px-2 flex flex-col justify-between overflow-hidden transition-shadow ${
+                    className={`group/block absolute z-10 hover:z-40 rounded-lg border px-2 flex flex-col justify-between overflow-hidden transition-shadow cursor-grab active:cursor-grabbing ${
+                      draggedTaskId && draggedTaskId !== t.id
+                        ? 'pointer-events-none opacity-80'
+                        : ''
+                    } ${
                       isMeeting
                         ? 'bg-sky-950/90 hover:bg-sky-900/95 border-sky-500/40 text-sky-100 shadow-md'
                         : 'bg-[#1E2230]/95 hover:bg-[#252A3B] border-indigo-500/35 text-slate-100 shadow-md'
                     } ${
-                      isBeingResized
-                        ? 'ring-2 ring-indigo-400 z-40 shadow-xl'
+                      isBeingResized || isBeingMoved
+                        ? 'ring-2 ring-indigo-400 z-50 shadow-2xl'
                         : ''
                     }`}
                   >
@@ -2080,7 +2325,11 @@ export default function SunsamaWorkspace() {
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleToggleComplete(t);
+                            if (isMeeting) {
+                              handleDeleteTask(t.id);
+                            } else {
+                              handleToggleComplete(t);
+                            }
                           }}
                           className={`h-3 w-3 rounded-full border flex items-center justify-center shrink-0 ${
                             t.status === 'completed'
@@ -2105,7 +2354,9 @@ export default function SunsamaWorkspace() {
 
                       <div className="flex items-center gap-1 shrink-0">
                         <span className="text-[9px] font-mono text-indigo-300 bg-black/30 px-1 rounded">
-                          {effectiveMinutes}m
+                          {isBeingMoved
+                            ? formatHourMinuteLabel(startHour, startMin)
+                            : `${effectiveMinutes}m`}
                         </span>
                         <button
                           type="button"
@@ -2134,7 +2385,7 @@ export default function SunsamaWorkspace() {
 
                     {effectiveMinutes >= 20 && (
                       <div className="text-[9px] font-mono text-slate-400 pb-1 truncate">
-                        {formatTimeRange(t.dueDate, effectiveMinutes)} • #
+                        {formatTimeRange(effectiveDueIso, effectiveMinutes)} • #
                         {ch.label}
                       </div>
                     )}

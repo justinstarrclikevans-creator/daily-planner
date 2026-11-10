@@ -10,6 +10,7 @@ import {
   cleanTaskTitle,
   Task,
   TaskPriority,
+  CalendarTimelineEvent,
 } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -24,6 +25,7 @@ const SUPABASE_KEY =
 
 let inMemoryTasks: Task[] | null = null;
 let inMemoryProjects: any[] | null = null;
+let inMemoryCalendarEvents: CalendarTimelineEvent[] | null = null;
 
 async function getSheetDoc() {
   if (
@@ -138,7 +140,10 @@ export async function GET() {
       }
     }
 
-    const calendarEvents = getFallbackCalendarEvents();
+    if (!inMemoryCalendarEvents) {
+      inMemoryCalendarEvents = getFallbackCalendarEvents();
+    }
+    const calendarEvents = inMemoryCalendarEvents;
 
     let tasks: Task[] = [];
     if (taskRes && taskRes.ok) {
@@ -222,7 +227,7 @@ export async function GET() {
     return NextResponse.json({
       projects: inMemoryProjects || DEFAULT_PROJECTS,
       tasks: inMemoryTasks,
-      calendarEvents: getFallbackCalendarEvents(),
+      calendarEvents: inMemoryCalendarEvents || getFallbackCalendarEvents(),
       source: 'fallback_error',
       error: error.message,
     });
@@ -235,6 +240,48 @@ export async function PATCH(req: NextRequest) {
     const { id, ...updates } = body;
     if (!id) {
       return NextResponse.json({ error: 'Missing task id' }, { status: 400 });
+    }
+
+    // Handle Calendar Timeline Event updates (move, resize, rename, unslot)
+    if (String(id).startsWith('cal-event-')) {
+      if (!inMemoryCalendarEvents) {
+        inMemoryCalendarEvents = getFallbackCalendarEvents();
+      }
+      const rawCalId = String(id).replace(/^cal-event-/, '');
+      const calIdx = inMemoryCalendarEvents.findIndex(
+        (ev) => ev.id === rawCalId || `cal-event-${ev.id}` === id
+      );
+      if (calIdx !== -1) {
+        const currentEv = inMemoryCalendarEvents[calIdx];
+        const nextStart =
+          updates.due_date !== undefined
+            ? updates.due_date
+            : updates.dueDate !== undefined
+            ? updates.dueDate
+            : currentEv.start;
+        const nextMins =
+          updates.estimated_minutes !== undefined
+            ? updates.estimated_minutes
+            : updates.estimatedMinutes !== undefined
+            ? updates.estimatedMinutes
+            : currentEv.durationMinutes;
+
+        if (!nextStart) {
+          inMemoryCalendarEvents = inMemoryCalendarEvents.filter((_, i) => i !== calIdx);
+        } else {
+          const endIso = new Date(
+            new Date(nextStart).getTime() + Math.max(5, nextMins) * 60000
+          ).toISOString();
+          inMemoryCalendarEvents[calIdx] = {
+            ...currentEv,
+            title: updates.title !== undefined ? cleanTaskTitle(updates.title) : currentEv.title,
+            start: nextStart,
+            end: endIso,
+            durationMinutes: Math.max(5, nextMins),
+          };
+        }
+      }
+      return NextResponse.json({ success: true });
     }
 
     const dbPayload: Record<string, any> = {
@@ -392,6 +439,17 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get('id');
     if (!id) {
       return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+    }
+
+    if (String(id).startsWith('cal-event-')) {
+      if (!inMemoryCalendarEvents) {
+        inMemoryCalendarEvents = getFallbackCalendarEvents();
+      }
+      const rawCalId = String(id).replace(/^cal-event-/, '');
+      inMemoryCalendarEvents = inMemoryCalendarEvents.filter(
+        (ev) => ev.id !== rawCalId && `cal-event-${ev.id}` !== id
+      );
+      return NextResponse.json({ success: true });
     }
 
     supabaseFetch(`/tasks?id=eq.${id}`, {
