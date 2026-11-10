@@ -1,15 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
+import fs from 'fs';
+import path from 'path';
 
 export const dynamic = 'force-dynamic';
 
-const SUPABASE_URL = process.env.SUPABASE_URL || 'https://huwattmqwiqhcfhtqely.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || 'sb_secret_21i-I_QCc5xA_dPeVQPKsg_iV7ZzjQm';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || Buffer.from('QVEuQWI4Uk42SVhCUU85RUc5RE1BV2NDa282M19nWFh5b2lNZmNxcE9Ka21jeWNPWVF6WkE=', 'base64').toString('utf-8');
+function loadSkillPrompt(skillName: string, variables: Record<string, string>): string {
+  const candidates = [
+    path.join(process.cwd(), 'skills', skillName, 'SKILL.md'),
+    path.join(/*turbopackIgnore: true*/ process.cwd(), '..', 'skills', skillName, 'SKILL.md'),
+  ];
+  const resolvedPath = candidates.find(p => fs.existsSync(p));
+  if (!resolvedPath) {
+    throw new Error(`Skill template not found: skills/${skillName}/SKILL.md`);
+  }
+  const raw = fs.readFileSync(resolvedPath, 'utf-8');
+  let template = raw.replace(/^---[\s\S]*?---\s*/, '').trim();
+  for (const [key, value] of Object.entries(variables)) {
+    template = template.replaceAll(`{{${key}}}`, value);
+  }
+  return template;
+}
+
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
 // Helper for Supabase PostgREST queries
 async function supabaseFetch(path: string, options: RequestInit = {}) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error('Missing required environment variables: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY)');
+  }
   const url = `${SUPABASE_URL}/rest/v1${path}`;
   const headers = {
     'apikey': SUPABASE_KEY,
@@ -331,28 +353,20 @@ export async function POST(req: NextRequest) {
 
     // --- GEMINI AI BREAKDOWN ---
     if (action === 'ai_breakdown') {
+      if (!GEMINI_API_KEY) {
+        return NextResponse.json({ error: 'Missing required environment variable: GEMINI_API_KEY' }, { status: 500 });
+      }
       const { title, context, detailLevel } = body;
       
       let stepGuide = "4 to 5 clear, sequential steps";
       if (detailLevel === 'quick') stepGuide = "exactly 3 high-level, punchy steps";
       if (detailLevel === 'micro') stepGuide = "6 to 8 tiny, zero-friction physical micro-steps (under 2 minutes each) for ADHD paralysis";
 
-      const prompt = `You are an expert ADHD executive coach helping Justin start and finish a task.
-Task Title: "${title}"
-Context: "${context || 'None'}"
-Requested Granularity: ${stepGuide}
-
-Generate:
-1. firstFiveMinutes: A single, ultra-specific, low-barrier physical action Justin can do in the next 60 seconds to break initiation paralysis.
-2. estimatedMinutes: Realistic total duration in minutes (5, 10, 15, 25, 30, 45, or 60).
-3. steps: An array of ${stepGuide} walking from start to finish. Keep each step concise (under 10 words).
-
-Respond with ONLY valid JSON:
-{
-  "firstFiveMinutes": "Smallest immediate physical starter action",
-  "estimatedMinutes": 15,
-  "steps": ["Step 1", "Step 2", "Step 3"]
-}`;
+      const prompt = loadSkillPrompt('adhd-task-breakdown', {
+        title: String(title ?? ''),
+        context: String(context || 'None'),
+        stepGuide,
+      });
 
       const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST',
@@ -377,6 +391,9 @@ Respond with ONLY valid JSON:
 
     // --- GEMINI PROMOTE IDEA TO TASKS ---
     if (action === 'promote_idea') {
+      if (!GEMINI_API_KEY) {
+        return NextResponse.json({ error: 'Missing required environment variable: GEMINI_API_KEY' }, { status: 500 });
+      }
       const { idea, project, detailLevel } = body;
       const projectName = project?.name || 'Personal';
       
@@ -384,33 +401,20 @@ Respond with ONLY valid JSON:
       if (detailLevel === 'quick') stepGuide = "exactly 3 quick steps";
       if (detailLevel === 'micro') stepGuide = "6 to 8 micro-steps";
 
-      const prompt = `You are Justin's ADHD executive assistant. Convert the following saved voice brainstorm idea into concrete actionable tasks for project "${projectName}" (${project?.goal || ''}).
+      const listName = projectName.includes('First Shift')
+        ? 'First shift'
+        : projectName.includes('Football')
+          ? 'Football'
+          : 'Personal';
 
-Idea Summary: "${idea.summary}"
-Original Transcript: "${idea.rawTranscript || idea.raw_transcript || ''}"
-Granularity Mode: ${stepGuide}
-
-Create 1 to 4 actionable tasks. For each task include:
-- title: Clear action-verb title
-- description: Brief context
-- listName: "${projectName.includes('First Shift') ? 'First shift' : (projectName.includes('Football') ? 'Football' : 'Personal')}"
-- estimatedMinutes: Realistic duration in minutes (5, 10, 15, 30)
-- firstFiveMinutes: 1-sentence immediate physical action to start
-- subtasks: Array of ${stepGuide}
-
-Respond with ONLY valid JSON:
-{
-  "tasks": [
-    {
-      "title": "Action title",
-      "description": "Context",
-      "listName": "List Name",
-      "estimatedMinutes": 15,
-      "firstFiveMinutes": "First 5-minute starter action",
-      "subtasks": ["Subtask 1", "Subtask 2"]
-    }
-  ]
-}`;
+      const prompt = loadSkillPrompt('voice-note-triage', {
+        projectName: String(projectName),
+        projectGoal: String(project?.goal || ''),
+        ideaSummary: String(idea.summary ?? ''),
+        rawTranscript: String(idea.rawTranscript || idea.raw_transcript || ''),
+        stepGuide,
+        listName,
+      });
 
       const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST',
@@ -517,6 +521,22 @@ Respond with ONLY valid JSON:
             return NextResponse.json({ success: true });
           }
         }
+      }
+      if (action === 'update_project_name') {
+        let sheet = doc.sheetsByTitle['Settings'];
+        if (!sheet) {
+          sheet = await doc.addSheet({ title: 'Settings', headerValues: ['Key', 'Value'] });
+        }
+        const { key, value } = body;
+        const rows = await sheet.getRows();
+        const row = rows.find(r => r.get('Key') === key);
+        if (row) {
+          row.set('Value', value);
+          await row.save();
+        } else {
+          await sheet.addRow({ Key: key, Value: value });
+        }
+        return NextResponse.json({ success: true });
       }
     }
 

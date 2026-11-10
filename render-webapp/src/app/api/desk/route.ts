@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { GoogleSpreadsheet } from 'google-spreadsheet';
+import { JWT } from 'google-auth-library';
 import {
   DEFAULT_PROJECTS,
   getFallbackTasks,
@@ -14,24 +16,99 @@ export const dynamic = 'force-dynamic';
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL ||
-  'https://huwattmqwiqhcfhtqely.supabase.co';
+  process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-  'sb_secret_21i-I_QCc5xA_dPeVQPKsg_iV7ZzjQm';
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 let inMemoryTasks: Task[] | null = null;
 let inMemoryProjects: any[] | null = null;
 
+async function getSheetDoc() {
+  if (
+    !process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
+    !process.env.GOOGLE_PRIVATE_KEY ||
+    !process.env.GOOGLE_SHEET_ID
+  ) {
+    return null;
+  }
+
+  const rawKey = process.env.GOOGLE_PRIVATE_KEY || '';
+  let sanitizedKey = rawKey.trim();
+  if (
+    (sanitizedKey.startsWith('"') && sanitizedKey.endsWith('"')) ||
+    (sanitizedKey.startsWith("'") && sanitizedKey.endsWith("'"))
+  ) {
+    sanitizedKey = sanitizedKey.slice(1, -1);
+  }
+  sanitizedKey = sanitizedKey.replace(/\\n/g, '\n');
+
+  const serviceAccountAuth = new JWT({
+    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+    key: sanitizedKey,
+    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  });
+
+  const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, serviceAccountAuth);
+  await doc.loadInfo();
+  return doc;
+}
+
+async function enqueueCompletedInGoogleSheets(item: {
+  id: string;
+  appleReminderId?: string | null;
+  title?: string;
+}) {
+  try {
+    const doc = await getSheetDoc();
+    if (!doc) return;
+
+    let settingsSheet = doc.sheetsByTitle['Settings'];
+    if (!settingsSheet) {
+      settingsSheet = await doc.addSheet({
+        title: 'Settings',
+        headerValues: ['Key', 'Value'],
+      });
+    }
+
+    const rows = await settingsSheet.getRows();
+    const qRow = rows.find((r) => r.get('Key') === 'web_completed_queue');
+    let queue: any[] = [];
+    if (qRow && qRow.get('Value')) {
+      try {
+        const parsed = JSON.parse(qRow.get('Value'));
+        if (Array.isArray(parsed)) queue = parsed;
+      } catch {}
+    }
+
+    queue.push({
+      id: item.id,
+      appleReminderId: item.appleReminderId || item.id,
+      title: item.title || '',
+      completedAt: new Date().toISOString(),
+    });
+
+    const serialized = JSON.stringify(queue.slice(-200));
+    if (qRow) {
+      qRow.set('Value', serialized);
+      await qRow.save();
+    } else {
+      await settingsSheet.addRow({ Key: 'web_completed_queue', Value: serialized });
+    }
+  } catch (err) {
+    console.warn('Failed to enqueue completion in Google Sheets:', err);
+  }
+}
+
 async function supabaseFetch(path: string, options: RequestInit = {}) {
+  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
   const url = `${SUPABASE_URL}/rest/v1${path}`;
-  const headers = {
+  const headers: Record<string, string> = {
     apikey: SUPABASE_KEY,
     Authorization: `Bearer ${SUPABASE_KEY}`,
     'Content-Type': 'application/json',
-    ...(options.headers || {}),
+    ...((options.headers as Record<string, string>) || {}),
   };
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 3000);
@@ -228,6 +305,20 @@ export async function PATCH(req: NextRequest) {
         actualSeconds:
           updates.actual_seconds !== undefined ? updates.actual_seconds : current.actualSeconds,
       };
+
+      if (updates.status === 'completed') {
+        await enqueueCompletedInGoogleSheets({
+          id: current.id,
+          appleReminderId: current.appleReminderId || current.id,
+          title: current.title,
+        });
+      }
+    } else if (updates.status === 'completed') {
+      await enqueueCompletedInGoogleSheets({
+        id,
+        appleReminderId: id,
+        title: updates.title || '',
+      });
     }
 
     return NextResponse.json({ success: true, task: idx !== -1 ? inMemoryTasks[idx] : null });
@@ -307,9 +398,17 @@ export async function DELETE(req: NextRequest) {
       method: 'DELETE',
     }).catch(() => null);
 
-    if (inMemoryTasks) {
-      inMemoryTasks = inMemoryTasks.filter((t) => t.id !== id);
+    if (!inMemoryTasks) {
+      inMemoryTasks = getFallbackTasks(inMemoryProjects || DEFAULT_PROJECTS);
     }
+    const targetTask = inMemoryTasks.find((t) => t.id === id);
+    inMemoryTasks = inMemoryTasks.filter((t) => t.id !== id);
+
+    await enqueueCompletedInGoogleSheets({
+      id,
+      appleReminderId: targetTask?.appleReminderId || id,
+      title: targetTask?.title || '',
+    });
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

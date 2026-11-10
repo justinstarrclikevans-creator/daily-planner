@@ -2,13 +2,14 @@ const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
-const { getIncompleteReminders, getRecentCompletedReminders, addReminder } = require('./reminders');
+const { getIncompleteReminders, getRecentCompletedReminders, addReminder, completeReminder } = require('./reminders');
 const { exec } = require('child_process');
 const { getRecentSlackMessages } = require('./slack');
 const { getRecentEmails, getTodaysCalendarEvents } = require('./google');
 const { getRecentLetterlyNotes } = require('./letterly');
 const { extractTodos } = require('./ai');
-const { syncTaskToSupabase } = require('./supabase');
+const { syncTaskToSupabase, getCompletedTasksFromSupabase } = require('./supabase');
+const { getWebCompletedQueue, clearWebCompletedQueue } = require('./sheets');
 
 const STATE_FILE = path.join(__dirname, 'state.json');
 
@@ -35,8 +36,72 @@ function saveState(state) {
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
+async function syncWebCompletionsToAppleReminders() {
+    try {
+        const [sheetCompleted, supaCompleted, openReminders] = await Promise.all([
+            getWebCompletedQueue(),
+            getCompletedTasksFromSupabase(),
+            getIncompleteReminders()
+        ]);
+
+        const webCompleted = [...sheetCompleted, ...supaCompleted];
+        if (webCompleted.length === 0 || openReminders.length === 0) {
+            if (sheetCompleted.length > 0) {
+                await clearWebCompletedQueue();
+            }
+            return 0;
+        }
+
+        const state = loadState();
+        state.completedTaskTitles = state.completedTaskTitles || [];
+        let completedCount = 0;
+
+        for (const webItem of webCompleted) {
+            const targetId = webItem.appleReminderId || webItem.id;
+            const normTargetTitle = normalizeTitle(webItem.title);
+
+            if (normTargetTitle && !state.completedTaskTitles.includes(normTargetTitle)) {
+                state.completedTaskTitles.push(normTargetTitle);
+            }
+
+            const matchingReminders = openReminders.filter(r =>
+                (targetId && r.id === targetId) ||
+                (normTargetTitle && normalizeTitle(r.title) === normTargetTitle)
+            );
+
+            for (const rem of matchingReminders) {
+                const res = await completeReminder(rem.id);
+                if (res && res.success) {
+                    console.log(`[Two-Way Sync] Completed in Apple Reminders: "${rem.title}" (${rem.id})`);
+                    completedCount++;
+                }
+            }
+        }
+
+        if (state.completedTaskTitles.length > 500) {
+            state.completedTaskTitles = state.completedTaskTitles.slice(-500);
+        }
+        saveState(state);
+
+        if (sheetCompleted.length > 0) {
+            await clearWebCompletedQueue();
+        }
+
+        if (completedCount > 0) {
+            const events = await getTodaysCalendarEvents().catch(() => []);
+            await syncAllRemindersToCloud(events);
+        }
+
+        return completedCount;
+    } catch (e) {
+        console.error("[Two-Way Sync] Error syncing web completions to Apple Reminders:", e.message);
+        return 0;
+    }
+}
+
 async function runHourlySync() {
     console.log(`[${new Date().toLocaleString()}] Starting Hourly Sync (Emails, Slack/Huddles, Letterly MCP)...`);
+    await syncWebCompletionsToAppleReminders();
     const state = loadState();
     state.completedTaskTitles = state.completedTaskTitles || [];
     
@@ -251,13 +316,18 @@ async function syncAllRemindersToCloud(events = []) {
     }
 }
 
+// Poll web app completions every 2 minutes so completing a task in Render marks it complete in Apple Reminders
+cron.schedule('*/2 * * * *', () => syncWebCompletionsToAppleReminders());
+
 // Check everything once an hour at the top of every hour
 cron.schedule('0 * * * *', () => runHourlySync());
 
-console.log("Sync daemon started (v2 Hourly Architecture).");
+console.log("Sync daemon started (v2 Hourly Architecture + 2-Minute Two-Way Completion Sync).");
 console.log("- Checking Emails, Slack & Huddle Summaries, and Letterly MCP once an hour (no AI project assignments; no calendar todos)");
+console.log("- Syncing web completions back to Apple Reminders every 2 minutes");
 console.log("- Inbound and outbound iMessage texts paused per user request");
 
 module.exports = {
-    runHourlySync
+    runHourlySync,
+    syncWebCompletionsToAppleReminders
 };

@@ -169,10 +169,30 @@ async function markTaskCompletedInSupabase(appleReminderId) {
     return true;
 }
 
+async function getCompletedTasksFromSupabase() {
+    if (!supabase || supabaseDisabled) return [];
+    try {
+        const { data, error } = await supabase
+            .from('tasks')
+            .select('id, title, apple_reminder_id, status')
+            .eq('status', 'completed')
+            .limit(200);
+        if (error) return [];
+        return (data || []).map(row => ({
+            id: row.id,
+            appleReminderId: row.apple_reminder_id || row.id,
+            title: row.title
+        }));
+    } catch (e) {
+        return [];
+    }
+}
+
 module.exports = {
     supabase,
     getProjects,
     getRoutines,
     syncTaskToSupabase,
-    markTaskCompletedInSupabase
+    markTaskCompletedInSupabase,
+    getCompletedTasksFromSupabase
 };

@@ -89,9 +89,66 @@ async function getAllPendingTodos() {
     }));
 }
 
+async function getWebCompletedQueue() {
+    try {
+        const doc = await getSheetDoc();
+        const items = [];
+
+        const settingsSheet = doc.sheetsByTitle['Settings'];
+        if (settingsSheet) {
+            const rows = await settingsSheet.getRows();
+            const qRow = rows.find(r => r.get('Key') === 'web_completed_queue');
+            if (qRow && qRow.get('Value')) {
+                try {
+                    const parsed = JSON.parse(qRow.get('Value'));
+                    if (Array.isArray(parsed)) {
+                        items.push(...parsed);
+                    }
+                } catch (e) {}
+            }
+        }
+
+        const remSheet = doc.sheetsByTitle['Reminders'];
+        if (remSheet) {
+            const rows = await remSheet.getRows();
+            for (const r of rows) {
+                const status = (r.get('Status') || '').toLowerCase();
+                if (status === 'completed' || status === 'done') {
+                    items.push({
+                        id: r.get('ID'),
+                        appleReminderId: r.get('ID'),
+                        title: r.get('Title')
+                    });
+                }
+            }
+        }
+
+        return items;
+    } catch (e) {
+        return [];
+    }
+}
+
+async function clearWebCompletedQueue() {
+    try {
+        const doc = await getSheetDoc();
+        const settingsSheet = doc.sheetsByTitle['Settings'];
+        if (settingsSheet) {
+            const rows = await settingsSheet.getRows();
+            const qRow = rows.find(r => r.get('Key') === 'web_completed_queue');
+            if (qRow && qRow.get('Value') && qRow.get('Value') !== '[]') {
+                qRow.set('Value', '[]');
+                await qRow.save();
+            }
+        }
+    } catch (e) {}
+}
+
 module.exports = {
     addTodosToSheet,
     addLetterlySummariesToSheet,
     addDailySummaryToSheet,
-    getAllPendingTodos
+    getAllPendingTodos,
+    getWebCompletedQueue,
+    clearWebCompletedQueue
 };
