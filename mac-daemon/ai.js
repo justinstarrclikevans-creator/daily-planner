@@ -261,18 +261,24 @@ function fallbackFormatCalendarEvent(ev) {
     title = title.replace(/^(hold\s*[-:]?\s*|meeting\s*[-:]?\s*)/i, '').trim();
 
     const low = title.toLowerCase();
-    const actionVerbs = ['attend', 'join', 'lead', 'host', 'tour', 'call', 'review', 'prepare', 'conduct', 'drive', 'meet', 'visit', 'present', 'work on', 'process', 'organize'];
+    const actionVerbs = ['attend', 'join', 'lead', 'host', 'tour', 'call', 'review', 'prepare', 'conduct', 'drive', 'meet', 'visit', 'present', 'work on', 'process', 'organize', 'teach', 'pick up', 'shop'];
     const startsWithVerb = actionVerbs.some(v => low.startsWith(v + ' ') || low === v);
 
     if (!startsWithVerb) {
-        if (low.includes('l10') || low.includes('meeting') || low.includes('huddle') || low.includes('sync')) {
-            title = `Attend ${title} meeting`;
+        if (low.includes('standing meeting') && low.includes('matt')) {
+            title = 'Meet with Matt for standing meeting';
+        } else if (low.includes('standing meeting') && low.includes('jenn')) {
+            title = 'Meet with Jenn for standing meeting';
+        } else if (low.includes('l10') || low.includes('meeting') || low.includes('huddle') || low.includes('sync')) {
+            title = low.endsWith('meeting') ? `Attend ${title}` : `Attend ${title} meeting`;
         } else if (low.includes('tour')) {
-            title = `Host ${title}`;
-        } else if (low.includes('training') || low.includes('workshop')) {
+            title = `Lead ${title.toLowerCase()}`;
+        } else if (low.includes('training') || low.includes('workshop') || low.includes('practice')) {
             title = `Attend ${title}`;
         } else if (low.includes('application') || low.includes('review') || low.includes('audit')) {
             title = `Process ${title}`;
+        } else if (low === 'publix') {
+            title = 'Shop at Publix';
         } else {
             title = `Attend ${title}`;
         }
@@ -281,91 +287,38 @@ function fallbackFormatCalendarEvent(ev) {
     title = title.replace(/!+/g, '').trim();
     title = title.charAt(0).toUpperCase() + title.slice(1);
 
-    let notes = (ev.description || '').replace(/!+/g, '.').trim();
-    if (notes.includes('Notice: This message may contain confidential')) {
-        notes = notes.split('Notice: This message may contain confidential')[0].trim();
+    let durationMinutes = ev.durationMinutes || 30;
+    if (ev.start && ev.end) {
+        const diff = Math.round((new Date(ev.end).getTime() - new Date(ev.start).getTime()) / 60000);
+        if (diff > 0) durationMinutes = Math.max(5, diff);
+    }
+
+    let cleanDesc = (ev.description || '').replace(/!+/g, '.').trim();
+    if (cleanDesc.includes('Notice: This message may contain confidential')) {
+        cleanDesc = cleanDesc.split('Notice: This message may contain confidential')[0].trim();
     }
     if (ev.location) {
-        notes = notes ? `Location: ${ev.location}\n\n${notes}` : `Location: ${ev.location}`;
+        cleanDesc = cleanDesc ? `Location: ${ev.location}\n\n${cleanDesc}` : `Location: ${ev.location}`;
     }
+
+    const headerTag = `[⏱ ${durationMinutes}m] [Calendar Event]`;
+    const notes = cleanDesc ? `${headerTag}\n${cleanDesc}` : headerTag;
 
     return {
         id: ev.id,
         title,
+        rawSummary: summary,
         notes,
         start: ev.start,
+        end: ev.end,
+        durationMinutes,
         priority: 'none'
     };
 }
 
 async function convertCalendarEventsToReminders(events = []) {
     if (!Array.isArray(events) || events.length === 0) return [];
-
     const validEvents = events.filter(e => e && e.summary && e.start);
-    if (validEvents.length === 0) return [];
-
-    if (!process.env.GEMINI_API_KEY) {
-        return validEvents.map(fallbackFormatCalendarEvent).filter(Boolean);
-    }
-
-    const prompt = `
-    You are Justin's executive assistant.
-    Convert the following calendar events into scheduled reminder tasks for Justin's to-do list.
-
-    CRITICAL ACTIVE SENTENCE RULE:
-    - Every reminder title MUST be an active, imperative action sentence starting with a strong action verb (e.g. "Attend...", "Host...", "Lead...", "Conduct...", "Process...", "Meet with...", "Deliver...").
-    - NEVER leave it as a passive topic or noun phrase.
-      - "Charleston School of Law Tour" -> "Host Charleston School of Law tour"
-      - "HOLD - SCThrive Applications" -> "Process SCThrive applications (SNAP, TANF, Medicaid)"
-      - "Recruitment / Community Engagement L10" -> "Attend Recruitment / Community Engagement L10 meeting"
-      - "Program Training" -> "Attend Program Training session"
-      - "Tour Turn90" -> "Lead Turn90 tour" (or "Attend Turn90 tour")
-    - Keep the title clean: NO hashtags, NO durations, NO bracketed times, NO exclamation points (!).
-    - Keep notes clean: include relevant details (location, attendees, or agenda), but STRIP any boilerplate email confidentiality footers, legal notices, or exclamation points.
-
-    Calendar Events:
-    ${JSON.stringify(validEvents.map(e => ({ id: e.id, summary: e.summary, start: e.start, description: e.description, location: e.location })))}
-
-    OUTPUT SCHEMA:
-    Output MUST be a raw JSON array of objects (no markdown fences):
-    [
-      {
-        "id": "event_id",
-        "title": "Active imperative title starting with a verb (NO exclamation points)",
-        "notes": "Clean description/location context, without disclaimer boilerplate or exclamation points",
-        "start": "ISO start time"
-      }
-    ]
-    `;
-
-    try {
-        const response = await callGeminiWithRetry({
-            model: 'gemini-3.8-flash',
-            contents: prompt,
-            config: { temperature: 0.1 }
-        });
-
-        let text = response.text.trim();
-        if (text.startsWith('```json')) {
-            text = text.replace(/^```json\n?/, '').replace(/\n?```$/, '');
-        } else if (text.startsWith('```')) {
-            text = text.replace(/^```\n?/, '').replace(/\n?```$/, '');
-        }
-
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-            return parsed.map(item => ({
-                id: item.id,
-                title: (item.title || '').replace(/!+/g, '').replace(/#\w[\w-]*/g, '').replace(/\[⏱\s*\d+m\]/g, '').trim(),
-                notes: (item.notes || '').replace(/!+/g, '.').trim(),
-                start: item.start,
-                priority: 'none'
-            }));
-        }
-    } catch (err) {
-        console.warn("[Calendar Sync] Gemini conversion warning, using fallback formatter:", err.message);
-    }
-
     return validEvents.map(fallbackFormatCalendarEvent).filter(Boolean);
 }
 

@@ -73,6 +73,7 @@ struct ProjectsHubView: View {
     private var contextFilteredTasks: [TaskItem] {
         let pool = supabase.tasks.filter { task in
             guard !task.isCompleted else { return false }
+            if task.isCalendarEvent { return true }
             guard isTaskVisibleNow(task) else { return false }
             guard task.matchesSpace(selectedSpace) else { return false }
             guard task.matchesPerson(selectedPerson) else { return false }
@@ -129,14 +130,16 @@ struct ProjectsHubView: View {
     
     // MARK: - Sunsama Workload Metrics
     private var todayTaskMinutes: Int {
-        todayTasks.reduce(0) { $0 + max(5, $1.estimatedMinutes) }
+        todayTasks.filter { !$0.isCalendarEvent }.reduce(0) { $0 + max(5, $1.estimatedMinutes) }
     }
     
     private var todayMeetingMinutes: Int {
-        calendarManager.todaysEvents.filter { !$0.isAllDay }.reduce(0) { sum, ev in
+        let ekMinutes = calendarManager.todaysEvents.filter { !$0.isAllDay }.reduce(0) { sum, ev in
             let mins = Int(ev.endDate.timeIntervalSince(ev.startDate) / 60)
             return sum + max(0, mins)
         }
+        let syncedCalMinutes = todayTasks.filter { $0.isCalendarEvent }.reduce(0) { $0 + max(5, $1.estimatedMinutes) }
+        return ekMinutes + syncedCalMinutes
     }
     
     private var totalTodayWorkloadMinutes: Int {
@@ -847,7 +850,8 @@ struct ProjectsHubView: View {
             return startH == hour
         }
         let tasksInHour = supabase.tasks.filter { t in
-            guard !t.isCompleted, t.isPlannedForToday, t.isTimeboxed, let due = t.dueDate else { return false }
+            guard !t.isCompleted, t.isTimeboxed, let due = t.dueDate else { return false }
+            guard Calendar.current.isDateInToday(due) else { return false }
             return Calendar.current.component(.hour, from: due) == hour
         }
         

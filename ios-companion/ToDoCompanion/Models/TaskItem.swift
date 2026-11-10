@@ -183,6 +183,12 @@ struct TaskItem: Identifiable, Codable, Hashable {
         return true
     }
     
+    /// True when the task was synced from a Calendar Event / Scheduled Appointment
+    var isCalendarEvent: Bool {
+        guard let desc = description else { return false }
+        return desc.localizedCaseInsensitiveContains("calendar event") || desc.localizedCaseInsensitiveContains("[calendar]")
+    }
+
     var timeboxString: String? {
         guard isTimeboxed, let due = dueDate else { return nil }
         let formatter = DateFormatter()

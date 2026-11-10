@@ -84,40 +84,93 @@ async function getRecentEmails(sinceMap = {}) {
     return allEmails;
 }
 
-async function getTodaysCalendarEvents() {
+const JUSTIN_CALENDAR_NAMES = new Set([
+    'task management',
+    'justin',
+    'justin@turnninety.com',
+    'justinstarrclikevans@gmail.com',
+    'justinscevans@gmail.com',
+    '843 fc u16',
+    'u16 north charleston rec',
+    'family'
+]);
+
+async function getTodaysCalendarEvents(daysAhead = 3) {
     const auths = await getAllGoogleAuths();
     if (auths.length === 0) return [];
     
     const eventsData = [];
+    const seenKeys = new Set();
+    
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).toISOString();
+    const endWindow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + (daysAhead - 1), 23, 59, 59, 999).toISOString();
     
     for (const authObj of auths) {
         const calendar = getCalendarClient({version: 'v3', auth: authObj.client});
         
         try {
-            const now = new Date();
-            const startOfDay = new Date(now.setHours(0, 0, 0, 0)).toISOString();
-            const endOfDay = new Date(now.setHours(23, 59, 59, 999)).toISOString();
-            
-            const res = await calendar.events.list({
-                calendarId: 'primary',
-                timeMin: startOfDay,
-                timeMax: endOfDay,
-                singleEvents: true,
-                orderBy: 'startTime',
-            });
-            
-            const events = res.data.items || [];
-            events.forEach(event => {
-                eventsData.push({
-                    id: event.id,
-                    summary: event.summary,
-                    start: event.start.dateTime || event.start.date,
-                    end: event.end?.dateTime || event.end?.date,
-                    isAllDay: !event.start.dateTime,
-                    description: event.description || '',
-                    location: event.location || ''
+            let targetCalendars = [{ id: 'primary', summary: 'Primary' }];
+            try {
+                const listRes = await calendar.calendarList.list();
+                const allCals = listRes.data.items || [];
+                const matched = allCals.filter(c => {
+                    if (!c || !c.id) return false;
+                    if (c.id.includes('holiday@group')) return false;
+                    if (c.primary) return true;
+                    const sumLower = (c.summary || '').trim().toLowerCase();
+                    return JUSTIN_CALENDAR_NAMES.has(sumLower);
                 });
-            });
+                if (matched.length > 0) {
+                    targetCalendars = matched;
+                }
+            } catch (e) {
+                // fallback to primary
+            }
+
+            for (const calInfo of targetCalendars) {
+                try {
+                    const res = await calendar.events.list({
+                        calendarId: calInfo.id,
+                        timeMin: startOfDay,
+                        timeMax: endWindow,
+                        singleEvents: true,
+                        orderBy: 'startTime',
+                    });
+                    
+                    const events = res.data.items || [];
+                    for (const event of events) {
+                        if (event.status === 'cancelled') continue;
+                        const startStr = event.start?.dateTime || event.start?.date;
+                        const endStr = event.end?.dateTime || event.end?.date;
+                        if (!startStr || !event.summary) continue;
+
+                        const dedupeKey = `${event.id || ''}::${(event.summary || '').trim().toLowerCase()}::${startStr}`;
+                        if (seenKeys.has(dedupeKey)) continue;
+                        seenKeys.add(dedupeKey);
+
+                        let durationMinutes = 30;
+                        if (event.start?.dateTime && event.end?.dateTime) {
+                            const diffMins = Math.round((new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime()) / 60000);
+                            if (diffMins > 0) durationMinutes = Math.max(5, diffMins);
+                        }
+
+                        eventsData.push({
+                            id: event.id,
+                            summary: event.summary,
+                            start: startStr,
+                            end: endStr,
+                            durationMinutes,
+                            calendarName: calInfo.summary || 'Calendar',
+                            isAllDay: !event.start.dateTime,
+                            description: event.description || '',
+                            location: event.location || ''
+                        });
+                    }
+                } catch (calErr) {
+                    // skip inaccessible calendar
+                }
+            }
         } catch (e) {
             console.error(`Calendar error for ${authObj.account}:`, e);
         }

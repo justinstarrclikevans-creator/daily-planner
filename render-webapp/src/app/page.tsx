@@ -42,8 +42,8 @@ import {
 type ActiveModal = 'none' | 'morning_plan' | 'evening_shutdown' | 'focus_mode';
 
 const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
-const TIMELINE_START_HOUR = 7; // 7:00 AM
-const TIMELINE_END_HOUR = 20; // 8:00 PM
+const TIMELINE_START_HOUR = 6; // 6:00 AM
+const TIMELINE_END_HOUR = 21; // 9:00 PM
 const TIMELINE_HOURS = Array.from(
   { length: TIMELINE_END_HOUR - TIMELINE_START_HOUR + 1 },
   (_, i) => TIMELINE_START_HOUR + i
@@ -126,6 +126,7 @@ export default function SunsamaWorkspace() {
   // Sunsama Panel Toggles & Filters
   const [showBacklogDrawer, setShowBacklogDrawer] = useState<boolean>(true);
   const [showCalendarPane, setShowCalendarPane] = useState<boolean>(true);
+  const [timelineDayBucket, setTimelineDayBucket] = useState<'today' | 'tomorrow' | 'later'>('today');
   const [selectedChannelTag, setSelectedChannelTag] = useState<string>('all');
   const [backlogSearch, setBacklogSearch] = useState<string>('');
 
@@ -466,42 +467,49 @@ export default function SunsamaWorkspace() {
     [todayStart, tomorrowStart, dayAfterStart, patchTask]
   );
 
+  const activeTimelineDate = useMemo(() => {
+    if (timelineDayBucket === 'tomorrow') return tomorrowStart;
+    if (timelineDayBucket === 'later') return dayAfterStart;
+    return todayStart;
+  }, [timelineDayBucket, todayStart, tomorrowStart, dayAfterStart]);
+
   const scheduleTaskAtSlot = useCallback(
     async (task: Task, hour: number, minute: number = 0) => {
       const slotDate = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
+        activeTimelineDate.getFullYear(),
+        activeTimelineDate.getMonth(),
+        activeTimelineDate.getDate(),
         hour,
         minute,
         0,
         0
       );
+      const isTodayTarget = timelineDayBucket === 'today';
       const nextDesc = buildTaskDescription({
         cleanNotes: extractCleanNotes(task.description),
         estimatedMinutes: task.estimatedMinutes || 15,
-        inPlayQueue: true,
+        inPlayQueue: isTodayTarget,
         subtasks: task.subtasks,
         tags: task.tags,
       });
       await patchTask(task.id, {
         due_date: slotDate.toISOString(),
-        in_play_queue: true,
+        in_play_queue: isTodayTarget,
         description: nextDesc,
       });
     },
-    [now, patchTask]
+    [activeTimelineDate, timelineDayBucket, patchTask]
   );
 
   const clearTaskTimebox = useCallback(
     async (task: Task) => {
-      const nextDue = todayStart.toISOString();
+      const nextDue = activeTimelineDate.toISOString();
       await patchTask(task.id, {
         due_date: nextDue,
-        in_play_queue: true,
+        in_play_queue: timelineDayBucket === 'today',
       });
     },
-    [todayStart, patchTask]
+    [activeTimelineDate, timelineDayBucket, patchTask]
   );
 
   // Auto-Timebox Unslotted Today Tasks in 15-Minute / 5-Minute Increments
@@ -800,12 +808,79 @@ export default function SunsamaWorkspace() {
     [focusQueue]
   );
 
-  // Timeboxed Tasks for Today's Calendar Timeline
+  // Timeboxed Tasks & Calendar Appointments for Selected Day's Calendar Timeline (with side-by-side overlap layout)
   const timeboxedTodayTasks = useMemo(() => {
-    return todayTasks.filter(
-      (t) => isTimeboxedDate(t.dueDate) && t.dueDate
-    );
-  }, [todayTasks]);
+    const raw = tasks.filter((t) => {
+      if (!t.dueDate || !isTimeboxedDate(t.dueDate)) return false;
+      const d = new Date(t.dueDate);
+      if (isNaN(d.getTime())) return false;
+      if (!isSameCalendarDay(d, activeTimelineDate)) return false;
+
+      // Always display Calendar Appointments on the timeline regardless of active channel filter
+      if (isCalendarMeetingTask(t)) return true;
+
+      if (selectedChannelTag === 'all') return true;
+      const ch = getChannelForTask(t);
+      return ch.tag === selectedChannelTag;
+    });
+
+    // Sort by start time, then longest duration first
+    const sorted = [...raw].sort((a, b) => {
+      const sA = new Date(a.dueDate!).getTime();
+      const sB = new Date(b.dueDate!).getTime();
+      if (sA !== sB) return sA - sB;
+      return (b.estimatedMinutes || 15) - (a.estimatedMinutes || 15);
+    });
+
+    // Compute overlapping columns so concurrent appointments render side-by-side instead of covering each other
+    type PositionedTask = Task & { colIndex: number; totalCols: number };
+    const positioned: PositionedTask[] = [];
+    const columnsEndMs: number[] = [];
+
+    // Group into connected overlap clusters
+    let cluster: { task: Task; startMs: number; endMs: number; colIndex: number }[] = [];
+    let clusterMaxEnd = -1;
+
+    const flushCluster = () => {
+      if (cluster.length === 0) return;
+      const maxCols = Math.max(...cluster.map((c) => c.colIndex)) + 1;
+      for (const item of cluster) {
+        positioned.push({
+          ...item.task,
+          colIndex: item.colIndex,
+          totalCols: maxCols,
+        });
+      }
+      cluster = [];
+      columnsEndMs.length = 0;
+      clusterMaxEnd = -1;
+    };
+
+    for (const t of sorted) {
+      const d = new Date(t.dueDate!);
+      const startMs = d.getTime();
+      const durMins = Math.max(5, t.estimatedMinutes || 15);
+      const endMs = startMs + durMins * 60000;
+
+      if (cluster.length > 0 && startMs >= clusterMaxEnd) {
+        flushCluster();
+      }
+
+      let assignedCol = columnsEndMs.findIndex((colEnd) => colEnd <= startMs);
+      if (assignedCol === -1) {
+        assignedCol = columnsEndMs.length;
+        columnsEndMs.push(endMs);
+      } else {
+        columnsEndMs[assignedCol] = endMs;
+      }
+
+      cluster.push({ task: t, startMs, endMs, colIndex: assignedCol });
+      if (endMs > clusterMaxEnd) clusterMaxEnd = endMs;
+    }
+    flushCluster();
+
+    return positioned;
+  }, [tasks, activeTimelineDate, selectedChannelTag]);
 
   // Render a Sunsama Task Card
   const renderTaskCard = (
@@ -975,14 +1050,21 @@ export default function SunsamaWorkspace() {
               />
             </div>
 
-            {/* Timeboxed Clock Badge */}
+            {/* Timeboxed Clock / Calendar Appointment Badge */}
             {timeboxed && task.dueDate && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 text-[10px] font-medium">
-                <Clock className="h-2.5 w-2.5" />
-                {new Date(task.dueDate).toLocaleTimeString([], {
-                  hour: 'numeric',
-                  minute: '2-digit',
-                })}
+              <span
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                  isCalendarMeetingTask(task)
+                    ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
+                    : 'bg-indigo-500/15 text-indigo-300'
+                }`}
+              >
+                {isCalendarMeetingTask(task) ? (
+                  <CalendarIcon className="h-2.5 w-2.5" />
+                ) : (
+                  <Clock className="h-2.5 w-2.5" />
+                )}
+                {formatTimeRange(task.dueDate, displayMinutes)}
               </span>
             )}
 
@@ -1731,28 +1813,64 @@ export default function SunsamaWorkspace() {
 
       {/* 3. RIGHT SUNSAMA 15-MINUTE INTERVAL CALENDAR & RESIZABLE TIMEBOX TIMELINE */}
       {showCalendarPane && (
-        <aside className="w-[340px] bg-[#151820] border-l border-white/[0.06] flex flex-col shrink-0 select-none">
-          {/* Calendar Header */}
-          <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
-            <div>
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
-                <CalendarIcon className="h-3.5 w-3.5 text-indigo-400" />
-                <span>Calendar (15m Grid)</span>
-              </h3>
-              <p className="text-[10px] text-slate-500 mt-0.5">
-                Drop on any 15m slot • Drag bottom edge to resize (down to 5m)
-              </p>
+        <aside className="w-[360px] bg-[#151820] border-l border-white/[0.06] flex flex-col shrink-0 select-none">
+          {/* Calendar Header + Day Switcher */}
+          <div className="p-3.5 border-b border-white/[0.06] space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
+                  <CalendarIcon className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Calendar ({timeboxedTodayTasks.length})</span>
+                </h3>
+                <p className="text-[10px] text-slate-500 mt-0.5">
+                  15m grid • Drag bottom edge to resize (down to 5m)
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleAutoTimeboxToday}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 text-[11px] font-semibold transition-colors shrink-0"
+                title="Automatically slot un-timeboxed Today tasks into free calendar gaps"
+              >
+                <Sparkles className="h-3 w-3" />
+                <span>Auto-Slot</span>
+              </button>
             </div>
 
-            <button
-              type="button"
-              onClick={handleAutoTimeboxToday}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 text-[11px] font-semibold transition-colors shrink-0"
-              title="Automatically slot un-timeboxed Today tasks into free calendar gaps"
-            >
-              <Sparkles className="h-3 w-3" />
-              <span>Auto-Slot</span>
-            </button>
+            {/* Day Switcher Pills (Today / Tomorrow / Day After) */}
+            <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-black/30 border border-white/[0.05]">
+              {(
+                [
+                  { id: 'today', label: 'Today' },
+                  { id: 'tomorrow', label: 'Tomorrow' },
+                  {
+                    id: 'later',
+                    label: dayAfterStart.toLocaleDateString('en-US', {
+                      weekday: 'short',
+                      month: 'numeric',
+                      day: 'numeric',
+                    }),
+                  },
+                ] as const
+              ).map((tab) => {
+                const isActive = timelineDayBucket === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setTimelineDayBucket(tab.id)}
+                    className={`py-1 px-2 rounded-md text-[11px] font-semibold transition-all ${
+                      isActive
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Scrollable 15-Minute Precision Timeline Canvas */}
@@ -1879,6 +1997,10 @@ export default function SunsamaWorkspace() {
                 const ch = getChannelForTask(t);
                 const isMeeting = isCalendarMeetingTask(t);
                 const isBeingResized = resizingState?.taskId === t.id;
+                const totalCols = Math.max(1, t.totalCols || 1);
+                const colIndex = Math.max(0, t.colIndex || 0);
+                const leftCalc = `calc(54px + ((100% - 60px) * ${colIndex} / ${totalCols}))`;
+                const widthCalc = `calc(((100% - 60px) / ${totalCols}) - 3px)`;
 
                 return (
                   <div
@@ -1898,16 +2020,18 @@ export default function SunsamaWorkspace() {
                     style={{
                       top: `${topPx}px`,
                       height: `${heightPx}px`,
+                      left: leftCalc,
+                      width: widthCalc,
                       borderLeftWidth: '3px',
                       borderLeftColor: isMeeting ? '#38BDF8' : ch.color,
                     }}
-                    className={`group/block absolute left-14 right-2 z-10 rounded-lg border px-2.5 flex flex-col justify-between overflow-hidden transition-shadow ${
+                    className={`group/block absolute z-10 hover:z-40 rounded-lg border px-2 flex flex-col justify-between overflow-hidden transition-shadow ${
                       isMeeting
-                        ? 'bg-sky-950/90 border-sky-500/40 text-sky-100'
+                        ? 'bg-sky-950/90 hover:bg-sky-900/95 border-sky-500/40 text-sky-100 shadow-md'
                         : 'bg-[#1E2230]/95 hover:bg-[#252A3B] border-indigo-500/35 text-slate-100 shadow-md'
                     } ${
                       isBeingResized
-                        ? 'ring-2 ring-indigo-400 z-30 shadow-xl'
+                        ? 'ring-2 ring-indigo-400 z-40 shadow-xl'
                         : ''
                     }`}
                   >

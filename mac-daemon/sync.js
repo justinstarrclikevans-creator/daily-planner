@@ -2,7 +2,8 @@ const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
-const { getIncompleteReminders, getRecentCompletedReminders, addReminder } = require('./reminders');
+const { getIncompleteReminders, getRecentCompletedReminders, addReminder, updateReminderNotes } = require('./reminders');
+const { exec } = require('child_process');
 const { getRecentSlackMessages } = require('./slack');
 const { getRecentEmails, getTodaysCalendarEvents } = require('./google');
 const { getRecentLetterlyNotes } = require('./letterly');
@@ -102,25 +103,33 @@ function saveState(state) {
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
+function isSameLocalCalendarDay(aIso, bIso) {
+    if (!aIso || !bIso) return false;
+    const a = new Date(aIso);
+    const b = new Date(bIso);
+    if (isNaN(a.getTime()) || isNaN(b.getTime())) return false;
+    return (
+        a.getFullYear() === b.getFullYear() &&
+        a.getMonth() === b.getMonth() &&
+        a.getDate() === b.getDate()
+    );
+}
+
 async function syncCalendarEventsAsReminders(events, incompleteTodos, completedTodos, state) {
     if (!Array.isArray(events) || events.length === 0) return;
 
     state.syncedCalendarEventIds = state.syncedCalendarEventIds || [];
-    const activeTitlesSet = new Set(incompleteTodos.map(t => normalizeTitle(t.title)));
-    const completedTitlesSet = new Set([
-        ...completedTodos.map(t => normalizeTitle(t.title)),
-        ...(state.completedTaskTitles || [])
-    ]);
-
     const now = Date.now();
-    // Filter events: only timed events that are upcoming or started recently (within 45 minutes)
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    // Filter events: timed events from today onward
     const candidateEvents = events.filter(ev => {
         if (!ev.summary || !ev.start) return false;
-        if (ev.isAllDay) return false; // skip background all-day events
+        if (ev.isAllDay) return false;
         const startMs = new Date(ev.start).getTime();
         if (isNaN(startMs)) return false;
-        if (startMs < now - 45 * 60 * 1000) return false; // skip past events
-        if (ev.id && state.syncedCalendarEventIds.includes(ev.id)) return false;
+        if (startMs < startOfToday.getTime()) return false;
         return true;
     });
 
@@ -128,7 +137,6 @@ async function syncCalendarEventsAsReminders(events, incompleteTodos, completedT
         return;
     }
 
-    console.log(`[Calendar] Processing ${candidateEvents.length} upcoming calendar events for scheduled reminders...`);
     const reminderItems = await convertCalendarEventsToReminders(candidateEvents);
 
     let targetList = 'General';
@@ -143,31 +151,44 @@ async function syncCalendarEventsAsReminders(events, incompleteTodos, completedT
     let addedCount = 0;
     for (const item of reminderItems) {
         const normTitle = normalizeTitle(item.title);
+        const normRaw = normalizeTitle(item.rawSummary || '');
         if (!normTitle) continue;
 
-        // Skip if already completed
-        if (completedTitlesSet.has(normTitle)) {
-            console.log(`[Calendar] Event "${item.title}" was already completed. Skipping.`);
-            if (item.id) state.syncedCalendarEventIds.push(item.id);
+        // Check if already an active reminder on the SAME calendar day
+        const existingSameDay = incompleteTodos.find(t => {
+            if (!isSameLocalCalendarDay(t.dueDate, item.start)) return false;
+            const nt = normalizeTitle(t.title);
+            return nt === normTitle || (normRaw && nt === normRaw) || nt.includes(normTitle) || normTitle.includes(nt);
+        });
+
+        if (existingSameDay) {
+            // Upgrade notes with [⏱ durationm] [Calendar Event] if missing
+            if (existingSameDay.id && item.notes && !(existingSameDay.description || '').includes('[Calendar Event]')) {
+                await updateReminderNotes(existingSameDay.id, item.notes);
+                existingSameDay.description = item.notes;
+                console.log(`[Calendar] Upgraded metadata for "${existingSameDay.title}" -> ${item.notes.split('\n')[0]}`);
+            }
+            if (item.id && !state.syncedCalendarEventIds.includes(item.id)) {
+                state.syncedCalendarEventIds.push(item.id);
+            }
             continue;
         }
 
-        // Skip if already an active reminder
-        if (activeTitlesSet.has(normTitle) || incompleteTodos.some(t => {
-            const nt = normalizeTitle(t.title);
-            return nt.includes(normTitle) || normTitle.includes(nt);
-        })) {
-            console.log(`[Calendar] Event "${item.title}" already exists in Reminders. Skipping.`);
-            if (item.id) state.syncedCalendarEventIds.push(item.id);
+        // Skip if this specific event ID was already synced and completed
+        if (item.id && state.syncedCalendarEventIds.includes(item.id)) {
             continue;
         }
 
         const cleanItemTitle = (item.title || '').replace(/!+/g, '').trim();
         const ok = await addReminder(targetList, cleanItemTitle, item.notes || '', 'none', item.start);
         if (ok) {
-            console.log(`[Calendar Scheduled] Added to [${targetList}]: "${cleanItemTitle}" scheduled for ${new Date(item.start).toLocaleTimeString()}`);
-            activeTitlesSet.add(normTitle);
-            incompleteTodos.push({ title: cleanItemTitle, listName: targetList, dueDate: item.start });
+            console.log(`[Calendar Scheduled] Added to [${targetList}]: "${cleanItemTitle}" scheduled for ${new Date(item.start).toLocaleString()} (${item.durationMinutes || 30}m)`);
+            incompleteTodos.push({
+                title: cleanItemTitle,
+                description: item.notes || '',
+                listName: targetList,
+                dueDate: item.start
+            });
             if (item.id) state.syncedCalendarEventIds.push(item.id);
             addedCount++;
 
@@ -176,6 +197,7 @@ async function syncCalendarEventsAsReminders(events, incompleteTodos, completedT
                 listName: targetList,
                 description: item.notes || '',
                 dueDate: item.start,
+                estimatedMinutes: item.durationMinutes || 30,
                 priority: 'none'
             });
         }
@@ -216,22 +238,6 @@ async function runHourlySync() {
             state.completedTaskTitles = state.completedTaskTitles.slice(-500);
         }
         saveState(state);
-
-        // Keep webapp fallback dataset fresh with current active incomplete reminders
-        try {
-            const fallbackPath = path.join(__dirname, '../render-webapp/src/lib/fallback-todos.json');
-            const fallbackPayload = incompleteTodos.map(r => ({
-                title: r.title,
-                notes: r.description || '',
-                listName: r.listName || 'Personal',
-                priority: r.priority || 'medium',
-                dueDate: r.dueDate || null,
-                appleReminderId: r.id
-            }));
-            fs.writeFileSync(fallbackPath, JSON.stringify(fallbackPayload, null, 2));
-        } catch (e) {
-            // non-fatal
-        }
 
         // 1. Sync Calendar Events to Apple Reminders as Scheduled Reminders
         await syncCalendarEventsAsReminders(events, incompleteTodos, completedTodos, state);
@@ -376,6 +382,37 @@ async function runHourlySync() {
 async function syncAllRemindersToCloud() {
     try {
         const reminders = await getIncompleteReminders();
+
+        // Keep webapp fallback dataset fresh with current active incomplete reminders (including newly synced Calendar Events)
+        try {
+            const fallbackPath = path.join(__dirname, '../render-webapp/src/lib/fallback-todos.json');
+            const fallbackPayload = reminders.map(r => ({
+                title: r.title,
+                notes: r.description || '',
+                listName: r.listName || 'General',
+                priority: r.priority || 'medium',
+                dueDate: r.dueDate || null,
+                appleReminderId: r.id
+            }));
+            const nextJson = JSON.stringify(fallbackPayload, null, 2);
+            const prevJson = fs.existsSync(fallbackPath) ? fs.readFileSync(fallbackPath, 'utf8') : '';
+            if (nextJson !== prevJson) {
+                fs.writeFileSync(fallbackPath, nextJson);
+                const repoRoot = path.join(__dirname, '..');
+                exec(
+                    'git add render-webapp/src/lib/fallback-todos.json && git commit -m "chore(sync): auto-sync live calendar appointments & reminders" && git push origin HEAD:main && git push origin feat/ios-companion-app',
+                    { cwd: repoRoot },
+                    (err) => {
+                        if (!err) {
+                            console.log("[Git Sync] Pushed updated fallback-todos.json to Render (origin/main).");
+                        }
+                    }
+                );
+            }
+        } catch (e) {
+            // non-fatal
+        }
+
         for (const r of reminders) {
             await syncTaskToSupabase(r, r.id);
         }
