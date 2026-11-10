@@ -320,38 +320,6 @@
     "appleReminderId": "42023BA5-2B6F-410E-B012-A27F08DAEF81"
   },
   {
-    "title": "Ensure Reece completes the 8th grade Science Discussion Based Assessment before Thanksgiving Break",
-    "notes": "Amy McKenzie notified families that all 8th grade students are required to complete a science DBA before the Thanksgiving break.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "A5A82A7D-787F-4935-BEC5-32729AFD0CC6"
-  },
-  {
-    "title": "Review Matt Carlisle's time off request in Gusto",
-    "notes": "Matt requested 4.0 hours of time off for November 20, 2026.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "6EBF6A34-8122-4171-9841-9E46B28389A1"
-  },
-  {
-    "title": "Finish the pay report and get Reece to do his exercise",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": "2026-11-10T00:07:26Z",
-    "appleReminderId": "C53A77C8-FDDB-4A97-8CF2-A9FDACDF623A"
-  },
-  {
-    "title": "Review SC Works Trident Hot Jobs flyer for participant job opportunities",
-    "notes": "Check the latest Hot Jobs flyer from SC Works Trident for relevant employment opportunities for Turn90 participants.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "8AF23123-938E-427A-8951-0BAF598BD362"
-  },
-  {
     "title": "Pay Dominion Energy electric bill",
     "notes": "Payment reminder received from Dominion Energy for the account ending in 4282.",
     "listName": "General",
@@ -360,28 +328,12 @@
     "appleReminderId": "88480BED-FC8B-4431-B4AE-155D56BFA46B"
   },
   {
-    "title": "Call Chris Cherry",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": "2026-11-10T05:00:00Z",
-    "appleReminderId": "64734390-B760-4A7D-8FD8-BAA6105C5779"
-  },
-  {
     "title": "Review The First Shift Model document shared by Amy",
     "notes": "Amy Barch invited you to review and edit The First Shift Model document in Google Docs.",
     "listName": "General",
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "C7C38307-7C16-49D5-871D-CF5782D9D10F"
-  },
-  {
-    "title": "Run the Neighbors",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": "2026-11-10T12:00:00Z",
-    "appleReminderId": "A2D0438E-0A9E-4D50-A609-BD8B7F7D0802"
   },
   {
     "title": "Text or call each board member",
@@ -408,19 +360,27 @@
     "appleReminderId": "83538C77-9567-45C2-AF60-F1DE34F9CD38"
   },
   {
-    "title": "Pay failed $32.20 Klarna payment for eBay",
-    "notes": "Klarna reported that the $32.20 payment for eBay did not go through. Pay the balance to avoid late fees.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "B888A122-CFD8-4284-A1C0-D60F486D1B54"
-  },
-  {
     "title": "Send out the 843 stuff to the lawyers and to Amanda and Terrence",
     "notes": "",
     "listName": "General",
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "7C8F2A14-6349-4342-8F83-6FC421FF2BAD"
+  },
+  {
+    "title": "Use the app to create a marketing email and send it out to all the people on my list",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": "2026-11-11T00:00:00Z",
+    "appleReminderId": "43F1B792-20FC-4E62-A4F7-84B1EBCEAAA6"
+  },
+  {
+    "title": "Complete new hire check-in for Demarcus Baxter in Gusto",
+    "notes": "Review and complete the new hire check-in task for Demarcus Baxter in Gusto due today.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "EAB1F7A2-FB90-46B2-ABEB-D2466412A0BF"
   }
 ]
