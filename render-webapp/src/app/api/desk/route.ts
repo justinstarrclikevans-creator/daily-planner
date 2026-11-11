@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleSpreadsheet } from 'google-spreadsheet';
-import { JWT } from 'google-auth-library';
 import {
   DEFAULT_PROJECTS,
   getFallbackTasks,
@@ -11,7 +9,14 @@ import {
   Task,
   TaskPriority,
   CalendarTimelineEvent,
+  SUNSAMA_CHANNELS,
+  SunsamaChannel,
 } from '@/lib/supabase';
+import {
+  enqueueCompletedInGoogleSheets,
+  fetchActiveRemindersFromSheet,
+  fetchCustomChannelsFromSheet,
+} from '@/lib/sheets';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,80 +32,29 @@ let inMemoryTasks: Task[] | null = null;
 let inMemoryProjects: any[] | null = null;
 let inMemoryCalendarEvents: CalendarTimelineEvent[] | null = null;
 
-async function getSheetDoc() {
-  if (
-    !process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL ||
-    !process.env.GOOGLE_PRIVATE_KEY ||
-    !process.env.GOOGLE_SHEET_ID
-  ) {
-    return null;
+export function updateInMemoryDeskTasks(newTasks: Task[]) {
+  if (!inMemoryTasks || inMemoryTasks.length === 0) {
+    inMemoryTasks = newTasks;
+    return;
   }
-
-  const rawKey = process.env.GOOGLE_PRIVATE_KEY || '';
-  let sanitizedKey = rawKey.trim();
-  if (
-    (sanitizedKey.startsWith('"') && sanitizedKey.endsWith('"')) ||
-    (sanitizedKey.startsWith("'") && sanitizedKey.endsWith("'"))
-  ) {
-    sanitizedKey = sanitizedKey.slice(1, -1);
-  }
-  sanitizedKey = sanitizedKey.replace(/\\n/g, '\n');
-
-  const serviceAccountAuth = new JWT({
-    email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
-    key: sanitizedKey,
-    scopes: ['https://www.googleapis.com/auth/spreadsheets'],
+  const taskMap = new Map(inMemoryTasks.map((t) => [t.id, t]));
+  inMemoryTasks = newTasks.map((t) => {
+    const existing = taskMap.get(t.id);
+    if (!existing) return t;
+    return {
+      ...t,
+      inPlayQueue: existing.inPlayQueue ?? t.inPlayQueue,
+      actualSeconds: existing.actualSeconds || t.actualSeconds,
+      tags:
+        existing.tags && existing.tags.length > 0
+          ? Array.from(new Set([...(t.tags || []), ...(existing.tags || [])]))
+          : t.tags,
+    };
   });
-
-  const doc = new GoogleSpreadsheet(process.env.GOOGLE_SHEET_ID, serviceAccountAuth);
-  await doc.loadInfo();
-  return doc;
 }
 
-async function enqueueCompletedInGoogleSheets(item: {
-  id: string;
-  appleReminderId?: string | null;
-  title?: string;
-}) {
-  try {
-    const doc = await getSheetDoc();
-    if (!doc) return;
-
-    let settingsSheet = doc.sheetsByTitle['Settings'];
-    if (!settingsSheet) {
-      settingsSheet = await doc.addSheet({
-        title: 'Settings',
-        headerValues: ['Key', 'Value'],
-      });
-    }
-
-    const rows = await settingsSheet.getRows();
-    const qRow = rows.find((r) => r.get('Key') === 'web_completed_queue');
-    let queue: any[] = [];
-    if (qRow && qRow.get('Value')) {
-      try {
-        const parsed = JSON.parse(qRow.get('Value'));
-        if (Array.isArray(parsed)) queue = parsed;
-      } catch {}
-    }
-
-    queue.push({
-      id: item.id,
-      appleReminderId: item.appleReminderId || item.id,
-      title: item.title || '',
-      completedAt: new Date().toISOString(),
-    });
-
-    const serialized = JSON.stringify(queue.slice(-200));
-    if (qRow) {
-      qRow.set('Value', serialized);
-      await qRow.save();
-    } else {
-      await settingsSheet.addRow({ Key: 'web_completed_queue', Value: serialized });
-    }
-  } catch (err) {
-    console.warn('Failed to enqueue completion in Google Sheets:', err);
-  }
+export function updateInMemoryCalendarEvents(events: CalendarTimelineEvent[]) {
+  inMemoryCalendarEvents = events;
 }
 
 async function supabaseFetch(path: string, options: RequestInit = {}) {
@@ -113,7 +67,7 @@ async function supabaseFetch(path: string, options: RequestInit = {}) {
     ...((options.headers as Record<string, string>) || {}),
   };
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  const timeoutId = setTimeout(() => controller.abort(), 2000);
   try {
     const res = await fetch(url, { ...options, headers, signal: controller.signal });
     clearTimeout(timeoutId);
@@ -126,12 +80,13 @@ async function supabaseFetch(path: string, options: RequestInit = {}) {
 
 export async function GET() {
   try {
-    const [projRes, taskRes] = await Promise.all([
-      supabaseFetch('/projects?select=*&order=name.asc'),
-      supabaseFetch('/tasks?select=*&order=created_at.desc&limit=500'),
-    ]);
+    // 1. Fetch live custom channels
+    const customChannels = await fetchCustomChannelsFromSheet();
+    const channels: SunsamaChannel[] = [...SUNSAMA_CHANNELS, ...customChannels];
 
+    // 2. Load projects
     let projects = inMemoryProjects || DEFAULT_PROJECTS;
+    const projRes = await supabaseFetch('/projects?select=*&order=name.asc');
     if (projRes && projRes.ok) {
       const data = await projRes.json();
       if (Array.isArray(data) && data.length > 0) {
@@ -140,12 +95,28 @@ export async function GET() {
       }
     }
 
+    // 3. Load calendar events
     if (!inMemoryCalendarEvents) {
       inMemoryCalendarEvents = getFallbackCalendarEvents();
     }
     const calendarEvents = inMemoryCalendarEvents;
 
+    // 4. Fetch live reminders from Google Sheets
+    const sheetTasks = await fetchActiveRemindersFromSheet();
+    if (sheetTasks.length > 0) {
+      updateInMemoryDeskTasks(sheetTasks);
+      return NextResponse.json({
+        projects,
+        tasks: inMemoryTasks,
+        calendarEvents,
+        channels,
+        source: 'sheets',
+      });
+    }
+
+    // 5. If Supabase is available, attempt to read from it
     let tasks: Task[] = [];
+    const taskRes = await supabaseFetch('/tasks?select=*&order=created_at.desc&limit=500');
     if (taskRes && taskRes.ok) {
       const data = await taskRes.json();
       if (Array.isArray(data) && data.length > 0) {
@@ -202,23 +173,28 @@ export async function GET() {
               completedAt: row.updated_at || null,
             };
           });
-        inMemoryTasks = tasks;
+        updateInMemoryDeskTasks(tasks);
+        return NextResponse.json({
+          projects,
+          tasks: inMemoryTasks,
+          calendarEvents,
+          channels,
+          source: 'supabase',
+        });
       }
     }
 
-    if (tasks.length === 0) {
-      if (!inMemoryTasks) {
-        inMemoryTasks = getFallbackTasks(projects);
-      }
-      return NextResponse.json({
-        projects,
-        tasks: inMemoryTasks,
-        calendarEvents,
-        source: 'fallback',
-      });
+    // 6. Final fallback to in-memory tasks or static fallback file
+    if (!inMemoryTasks) {
+      inMemoryTasks = getFallbackTasks(projects);
     }
-
-    return NextResponse.json({ projects, tasks, calendarEvents, source: 'supabase' });
+    return NextResponse.json({
+      projects,
+      tasks: inMemoryTasks,
+      calendarEvents,
+      channels,
+      source: 'fallback',
+    });
   } catch (error: any) {
     console.error('Error in /api/desk GET:', error);
     if (!inMemoryTasks) {
@@ -228,6 +204,7 @@ export async function GET() {
       projects: inMemoryProjects || DEFAULT_PROJECTS,
       tasks: inMemoryTasks,
       calendarEvents: inMemoryCalendarEvents || getFallbackCalendarEvents(),
+      channels: SUNSAMA_CHANNELS,
       source: 'fallback_error',
       error: error.message,
     });

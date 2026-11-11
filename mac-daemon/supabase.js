@@ -118,14 +118,34 @@ async function syncTaskToSupabase(task, appleReminderId = null) {
                 .update(baseTaskPayload)
                 .eq('id', existing[0].id)
                 .select();
-            if (error) console.error("Error updating task in Supabase:", error.message);
+            if (error) {
+                if (error.message && (error.message.includes('fetch failed') || error.message.includes('ENOTFOUND'))) {
+                    if (!supabaseDisabled) {
+                        console.log("[Supabase] Cloud endpoint unreachable. Pausing Supabase sync.");
+                        supabaseDisabled = true;
+                    }
+                    return null;
+                }
+                console.error("Error updating task in Supabase:", error.message);
+                return null;
+            }
             return data ? data[0] : null;
         } else {
             const { data, error } = await supabase
                 .from('tasks')
                 .insert([baseTaskPayload])
                 .select();
-            if (error) console.error("Error inserting task into Supabase:", error.message);
+            if (error) {
+                if (error.message && (error.message.includes('fetch failed') || error.message.includes('ENOTFOUND'))) {
+                    if (!supabaseDisabled) {
+                        console.log("[Supabase] Cloud endpoint unreachable. Pausing Supabase sync.");
+                        supabaseDisabled = true;
+                    }
+                    return null;
+                }
+                console.error("Error inserting task into Supabase:", error.message);
+                return null;
+            }
             return data ? data[0] : null;
         }
     } catch (err) {

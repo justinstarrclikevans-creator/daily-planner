@@ -54,9 +54,10 @@ export type SunsamaChannel = {
   tag: string;
   label: string;
   color: string;
+  isCustom?: boolean;
 };
 
-const CHANNEL_COLORS = [
+export const CHANNEL_COLORS = [
   '#6366F1', // indigo
   '#EF4444', // red
   '#10B981', // emerald
@@ -174,20 +175,24 @@ export type CalendarTimelineEvent = {
   calendarName?: string;
 };
 
-export function getChannelForTask(task: Task): SunsamaChannel {
+export function getChannelForTask(
+  task: Task,
+  channels: SunsamaChannel[] = SUNSAMA_CHANNELS
+): SunsamaChannel {
   const tags = [
     ...(task.tags || []),
     ...extractHashtags(task.title),
     ...extractHashtags(task.description),
   ].map((t) => t.toLowerCase());
 
-  for (const ch of SUNSAMA_CHANNELS) {
+  for (const ch of channels) {
     if (ch.tag !== 'general' && tags.includes(ch.tag)) {
       return ch;
     }
   }
 
-  return SUNSAMA_CHANNELS[0]; // #general (manual tagging only)
+  const general = channels.find((c) => c.tag === 'general');
+  return general || channels[0] || SUNSAMA_CHANNELS[0];
 }
 
 export function buildTaskDescription(params: {

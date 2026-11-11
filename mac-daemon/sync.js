@@ -9,7 +9,7 @@ const { getRecentEmails, getTodaysCalendarEvents } = require('./google');
 const { getRecentLetterlyNotes } = require('./letterly');
 const { extractTodos } = require('./ai');
 const { syncTaskToSupabase, getCompletedTasksFromSupabase } = require('./supabase');
-const { getWebCompletedQueue, clearWebCompletedQueue } = require('./sheets');
+const { getWebCompletedQueue, clearWebCompletedQueue, syncActiveRemindersToSheet } = require('./sheets');
 
 const STATE_FILE = path.join(__dirname, 'state.json');
 
@@ -253,10 +253,34 @@ async function runHourlySync() {
     }
 }
 
-async function syncAllRemindersToCloud(events = []) {
+async function runFastReminderSync() {
     try {
+        await syncWebCompletionsToAppleReminders();
         const reminders = await getIncompleteReminders();
+        const events = await getTodaysCalendarEvents().catch(() => []);
+        await syncAllRemindersToCloud(events, reminders);
+    } catch (e) {
+        console.error("[Fast Sync] Error:", e.message);
+    }
+}
 
+async function syncAllRemindersToCloud(events = [], incomingReminders = null) {
+    try {
+        const reminders = incomingReminders || await getIncompleteReminders();
+
+        // 1. Sync live active reminders to Google Sheets Settings sheet
+        await syncActiveRemindersToSheet(reminders, events);
+
+        // 2. Direct push to local webapp if running
+        try {
+            fetch('http://localhost:3000/api/sync/reminders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reminders, events })
+            }).catch(() => null);
+        } catch (e) {}
+
+        // 3. Fallback files + debounced git commit
         try {
             const fallbackPath = path.join(__dirname, '../render-webapp/src/lib/fallback-todos.json');
             const calendarFallbackPath = path.join(__dirname, '../render-webapp/src/lib/fallback-calendar.json');
@@ -307,27 +331,23 @@ async function syncAllRemindersToCloud(events = []) {
         } catch (e) {
             // non-fatal
         }
-
-        for (const r of reminders) {
-            await syncTaskToSupabase(r, r.id);
-        }
     } catch (e) {
         console.error("Error syncing reminders to cloud:", e.message);
     }
 }
 
-// Poll web app completions every 2 minutes so completing a task in Render marks it complete in Apple Reminders
-cron.schedule('*/2 * * * *', () => syncWebCompletionsToAppleReminders());
+// Run fast sync every 1 minute so new reminders and web completions sync immediately
+cron.schedule('* * * * *', () => runFastReminderSync());
 
 // Check everything once an hour at the top of every hour
 cron.schedule('0 * * * *', () => runHourlySync());
 
-console.log("Sync daemon started (v2 Hourly Architecture + 2-Minute Two-Way Completion Sync).");
-console.log("- Checking Emails, Slack & Huddle Summaries, and Letterly MCP once an hour (no AI project assignments; no calendar todos)");
-console.log("- Syncing web completions back to Apple Reminders every 2 minutes");
-console.log("- Inbound and outbound iMessage texts paused per user request");
+console.log("Sync daemon started (v2 1-Minute Live Reminder Sync + Hourly Slack/Email AI Extraction).");
+console.log("- Syncing active Apple Reminders and web completions every 1 minute");
+console.log("- Checking Emails, Slack & Huddle Summaries, and Letterly MCP once an hour");
 
 module.exports = {
     runHourlySync,
+    runFastReminderSync,
     syncWebCompletionsToAppleReminders
 };

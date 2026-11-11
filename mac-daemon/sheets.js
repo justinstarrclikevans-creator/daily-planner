@@ -144,11 +144,54 @@ async function clearWebCompletedQueue() {
     } catch (e) {}
 }
 
+async function syncActiveRemindersToSheet(reminders = [], events = []) {
+    if (!reminders) return false;
+    try {
+        const doc = await getSheetDoc();
+
+        // 1. Update active_reminders_payload in Settings sheet
+        let settingsSheet = doc.sheetsByTitle['Settings'];
+        if (!settingsSheet) {
+            settingsSheet = await doc.addSheet({ title: 'Settings', headerValues: ['Key', 'Value'] });
+        }
+        const rows = await settingsSheet.getRows();
+        let payloadRow = rows.find(r => r.get('Key') === 'active_reminders_payload');
+
+        const payload = JSON.stringify(reminders.map(r => ({
+            id: r.id,
+            appleReminderId: r.id,
+            title: r.title,
+            notes: r.description || '',
+            dueDate: r.dueDate || null,
+            priority: r.priority || 'medium',
+            listName: r.listName || 'General',
+            status: 'pending'
+        })));
+
+        if (payloadRow) {
+            if (payloadRow.get('Value') !== payload) {
+                payloadRow.set('Value', payload);
+                await payloadRow.save();
+                console.log(`[Sheets Sync] Updated active_reminders_payload (${reminders.length} items).`);
+            }
+        } else {
+            await settingsSheet.addRow({ Key: 'active_reminders_payload', Value: payload });
+            console.log(`[Sheets Sync] Saved active_reminders_payload (${reminders.length} items).`);
+        }
+
+        return true;
+    } catch (e) {
+        console.error("[Sheets Sync] Error updating active reminders in sheet:", e.message);
+        return false;
+    }
+}
+
 module.exports = {
     addTodosToSheet,
     addLetterlySummariesToSheet,
     addDailySummaryToSheet,
     getAllPendingTodos,
     getWebCompletedQueue,
-    clearWebCompletedQueue
+    clearWebCompletedQueue,
+    syncActiveRemindersToSheet
 };

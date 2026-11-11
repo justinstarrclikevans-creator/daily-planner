@@ -8,6 +8,8 @@ import {
   TaskPriority,
   CalendarTimelineEvent,
   SUNSAMA_CHANNELS,
+  SunsamaChannel,
+  CHANNEL_COLORS,
   getChannelForTask,
   buildTaskDescription,
   extractCleanNotes,
@@ -125,6 +127,15 @@ export default function SunsamaWorkspace() {
   const [calendarEvents, setCalendarEvents] = useState<CalendarTimelineEvent[]>([]);
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'error'>('syncing');
 
+  // Channels & Tags
+  const [channels, setChannels] = useState<SunsamaChannel[]>(SUNSAMA_CHANNELS);
+  const [isNewChannelModalOpen, setIsNewChannelModalOpen] = useState<boolean>(false);
+  const [newChannelName, setNewChannelName] = useState<string>('');
+  const [newChannelTag, setNewChannelTag] = useState<string>('');
+  const [newChannelColor, setNewChannelColor] = useState<string>(CHANNEL_COLORS[0]);
+  const [creatingChannel, setCreatingChannel] = useState<boolean>(false);
+  const [channelError, setChannelError] = useState<string | null>(null);
+
   // Sunsama Panel Toggles & Filters
   const [showBacklogDrawer, setShowBacklogDrawer] = useState<boolean>(true);
   const [showCalendarPane, setShowCalendarPane] = useState<boolean>(true);
@@ -189,6 +200,9 @@ export default function SunsamaWorkspace() {
       if (json.calendarEvents && Array.isArray(json.calendarEvents)) {
         setCalendarEvents(json.calendarEvents);
       }
+      if (json.channels && Array.isArray(json.channels)) {
+        setChannels(json.channels);
+      }
       setSyncStatus('connected');
     } catch (err) {
       console.warn('Sync fetch error:', err);
@@ -198,6 +212,9 @@ export default function SunsamaWorkspace() {
 
   useEffect(() => {
     loadData();
+    const pollInterval = setInterval(() => {
+      loadData();
+    }, 30000);
     const channel = supabase
       .channel('sunsama-realtime-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
@@ -205,6 +222,7 @@ export default function SunsamaWorkspace() {
       })
       .subscribe();
     return () => {
+      clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
   }, [loadData]);
@@ -310,10 +328,10 @@ export default function SunsamaWorkspace() {
   const channelFilteredTasks = useMemo(() => {
     return tasks.filter((t) => {
       if (selectedChannelTag === 'all') return true;
-      const ch = getChannelForTask(t);
+      const ch = getChannelForTask(t, channels);
       return ch.tag === selectedChannelTag;
     });
-  }, [tasks, selectedChannelTag]);
+  }, [tasks, selectedChannelTag, channels]);
 
   // Date Buckets: Backlog, Today, Tomorrow, Next Day
   const todayStart = useMemo(() => startOfDay(now), [now]);
@@ -716,7 +734,7 @@ export default function SunsamaWorkspace() {
   const handleSetChannel = useCallback(
     async (task: Task, channelTag: string) => {
       const otherTags = (task.tags || []).filter(
-        (t) => !SUNSAMA_CHANNELS.some((c) => c.tag === t.toLowerCase())
+        (t) => !channels.some((c) => c.tag === t.toLowerCase())
       );
       const nextTags =
         channelTag === 'general' ? otherTags : [...otherTags, channelTag];
@@ -732,8 +750,72 @@ export default function SunsamaWorkspace() {
         description: nextDesc,
       });
     },
-    [patchTask]
+    [patchTask, channels]
   );
+
+  const handleOpenNewChannelModal = () => {
+    setNewChannelName('');
+    setNewChannelTag('');
+    setNewChannelColor(CHANNEL_COLORS[(channels.length + 2) % CHANNEL_COLORS.length]);
+    setChannelError(null);
+    setIsNewChannelModalOpen(true);
+  };
+
+  const handleCreateChannel = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = newChannelName.trim();
+    if (!trimmed) {
+      setChannelError('Channel name is required');
+      return;
+    }
+    setCreatingChannel(true);
+    setChannelError(null);
+    try {
+      const res = await fetch('/api/channels', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: trimmed,
+          tag: newChannelTag.trim(),
+          color: newChannelColor,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to create channel');
+      }
+      if (data.channels) {
+        setChannels(data.channels);
+      }
+      if (data.channel) {
+        setSelectedChannelTag(data.channel.tag);
+      }
+      setIsNewChannelModalOpen(false);
+      setNewChannelName('');
+      setNewChannelTag('');
+    } catch (err: any) {
+      setChannelError(err.message || 'Error creating channel');
+    } finally {
+      setCreatingChannel(false);
+    }
+  };
+
+  const handleDeleteChannel = async (e: React.MouseEvent, tag: string) => {
+    e.stopPropagation();
+    if (!confirm(`Delete channel #${tag}? Tasks with this tag will not be deleted.`)) return;
+    try {
+      const res = await fetch(`/api/channels?tag=${encodeURIComponent(tag)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (data.channels) {
+        setChannels(data.channels);
+        if (selectedChannelTag === tag) setSelectedChannelTag('all');
+      }
+    } catch (err) {
+      console.error('Error deleting channel:', err);
+    }
+  };
 
   // Inline Create Task in any Column
   const handleCreateTaskInBucket = useCallback(
@@ -1045,7 +1127,7 @@ export default function SunsamaWorkspace() {
       if (!isSameCalendarDay(d, activeTimelineDate)) return false;
 
       if (selectedChannelTag === 'all') return true;
-      const ch = getChannelForTask(t);
+      const ch = getChannelForTask(t, channels);
       return ch.tag === selectedChannelTag;
     });
 
@@ -1130,14 +1212,14 @@ export default function SunsamaWorkspace() {
     flushCluster();
 
     return positioned;
-  }, [tasks, calendarEvents, activeTimelineDate, selectedChannelTag]);
+  }, [tasks, calendarEvents, activeTimelineDate, selectedChannelTag, channels]);
 
   // Render a Sunsama Task Card
   const renderTaskCard = (
     task: Task,
     currentBucket: 'backlog' | 'today' | 'tomorrow' | 'later'
   ) => {
-    const channel = getChannelForTask(task);
+    const channel = getChannelForTask(task, channels);
     const isDone = task.status === 'completed';
     const timeboxed = isTimeboxedDate(task.dueDate);
     const completedSubs = (task.subtasks || []).filter((s) => s.isCompleted).length;
@@ -1284,7 +1366,7 @@ export default function SunsamaWorkspace() {
                 onChange={(e) => handleSetChannel(task, e.target.value)}
                 className="appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 rounded-md pl-4 pr-2 py-0.5 text-[11px] font-medium cursor-pointer focus:outline-none border border-transparent hover:border-white/10"
               >
-                {SUNSAMA_CHANNELS.map((ch) => (
+                {channels.map((ch) => (
                   <option
                     key={ch.tag}
                     value={ch.tag}
@@ -1525,15 +1607,25 @@ export default function SunsamaWorkspace() {
               <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 Channels
               </span>
-              {selectedChannelTag !== 'all' && (
+              <div className="flex items-center gap-1">
+                {selectedChannelTag !== 'all' && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedChannelTag('all')}
+                    className="text-[10px] text-indigo-400 hover:underline mr-1"
+                  >
+                    All
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setSelectedChannelTag('all')}
-                  className="text-[10px] text-indigo-400 hover:underline"
+                  onClick={handleOpenNewChannelModal}
+                  className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors"
+                  title="Create New Channel / Tag"
                 >
-                  All
+                  <Plus className="h-3 w-3" />
                 </button>
-              )}
+              </div>
             </div>
 
             <button
@@ -1554,19 +1646,18 @@ export default function SunsamaWorkspace() {
               </span>
             </button>
 
-            {SUNSAMA_CHANNELS.map((ch) => {
+            {channels.map((ch) => {
               const count = tasks.filter(
-                (t) => t.status !== 'completed' && getChannelForTask(t).tag === ch.tag
+                (t) => t.status !== 'completed' && getChannelForTask(t, channels).tag === ch.tag
               ).length;
               const isSelected = selectedChannelTag === ch.tag;
               return (
-                <button
+                <div
                   key={ch.tag}
-                  type="button"
                   onClick={() =>
                     setSelectedChannelTag(isSelected ? 'all' : ch.tag)
                   }
-                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
+                  className={`group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
                     isSelected
                       ? 'bg-white/[0.08] text-white font-medium'
                       : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
@@ -1579,10 +1670,22 @@ export default function SunsamaWorkspace() {
                     />
                     <span className="truncate">#{ch.label}</span>
                   </span>
-                  {count > 0 && (
-                    <span className="text-[10px] text-slate-500">{count}</span>
-                  )}
-                </button>
+                  <div className="flex items-center gap-1.5">
+                    {count > 0 && (
+                      <span className="text-[10px] text-slate-500">{count}</span>
+                    )}
+                    {ch.isCustom && (
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteChannel(e, ch.tag)}
+                        className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-slate-500 hover:text-red-400 hover:bg-white/[0.06] transition-all"
+                        title="Delete custom channel"
+                      >
+                        <Trash2 className="h-2.5 w-2.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -2270,7 +2373,7 @@ export default function SunsamaWorkspace() {
                   effectiveMinutes * PX_PER_MINUTE
                 );
 
-                const ch = getChannelForTask(t);
+                const ch = getChannelForTask(t, channels);
                 const isMeeting = isCalendarMeetingTask(t);
                 const isBeingResized = resizingState?.taskId === t.id;
                 const totalCols = Math.max(1, t.totalCols || 1);
@@ -2428,13 +2531,13 @@ export default function SunsamaWorkspace() {
             <div className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <select
-                  value={getChannelForTask(inspectingTask).tag}
+                  value={getChannelForTask(inspectingTask, channels).tag}
                   onChange={(e) =>
                     handleSetChannel(inspectingTask, e.target.value)
                   }
                   className="bg-white/[0.06] text-xs font-medium text-slate-200 rounded-lg px-2.5 py-1 focus:outline-none"
                 >
-                  {SUNSAMA_CHANNELS.map((c) => (
+                  {channels.map((c) => (
                     <option key={c.tag} value={c.tag} className="bg-[#181B23]">
                       #{c.label}
                     </option>
@@ -2711,7 +2814,7 @@ export default function SunsamaWorkspace() {
                           {t.title}
                         </p>
                         <span className="text-[10px] text-slate-400">
-                          #{getChannelForTask(t).label} • {t.estimatedMinutes}m
+                          #{getChannelForTask(t, channels).label} • {t.estimatedMinutes}m
                         </span>
                       </div>
                       <button
@@ -2749,7 +2852,7 @@ export default function SunsamaWorkspace() {
                             {t.title}
                           </p>
                           <span className="text-[10px] text-indigo-300">
-                            #{getChannelForTask(t).label} •{' '}
+                            #{getChannelForTask(t, channels).label} •{' '}
                             {t.estimatedMinutes}m
                           </span>
                         </div>
@@ -2891,7 +2994,7 @@ export default function SunsamaWorkspace() {
             <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
               {focusQueue.map((item, idx) => {
                 const isSelected = activeFocusTask?.id === item.id;
-                const ch = getChannelForTask(item);
+                const ch = getChannelForTask(item, channels);
                 return (
                   <button
                     key={item.id}
@@ -2960,7 +3063,7 @@ export default function SunsamaWorkspace() {
               <div className="w-full max-w-xl text-center space-y-6">
                 <div className="flex items-center justify-center gap-2">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] text-xs text-indigo-300 font-medium">
-                    #{getChannelForTask(activeFocusTask).label}
+                    #{getChannelForTask(activeFocusTask, channels).label}
                   </span>
 
                   {/* Duration Adjuster right inside Focus Mode (down to 5m) */}
@@ -3144,6 +3247,136 @@ export default function SunsamaWorkspace() {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* New Channel / Tag Modal */}
+      {isNewChannelModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setIsNewChannelModalOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-2xl bg-[#181B23] border border-white/10 shadow-2xl p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
+              <div className="flex items-center gap-2.5">
+                <div
+                  className="h-3 w-3 rounded-full shrink-0"
+                  style={{ backgroundColor: newChannelColor }}
+                />
+                <h2 className="text-sm font-semibold text-white">Create New Channel / Tag</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsNewChannelModalOpen(false)}
+                className="text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateChannel} className="mt-4 space-y-4">
+              {channelError && (
+                <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                  {channelError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Channel Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Marketing, Fitness, Finances"
+                  value={newChannelName}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setNewChannelName(val);
+                    if (
+                      !newChannelTag ||
+                      newChannelTag ===
+                        newChannelName.toLowerCase().replace(/[^a-z0-9_-]/g, '')
+                    ) {
+                      setNewChannelTag(val.toLowerCase().replace(/[^a-z0-9_-]/g, ''));
+                    }
+                  }}
+                  autoFocus
+                  className="w-full px-3 py-2 bg-white/[0.05] border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Hashtag / Tag Slug
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-slate-400 text-sm">#</span>
+                  <input
+                    type="text"
+                    placeholder="slug"
+                    value={newChannelTag}
+                    onChange={(e) =>
+                      setNewChannelTag(
+                        e.target.value
+                          .toLowerCase()
+                          .replace(/^#/, '')
+                          .replace(/[^a-z0-9_-]/g, '')
+                      )
+                    }
+                    className="w-full pl-7 pr-3 py-2 bg-white/[0.05] border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono text-xs"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Tasks mentioning #{newChannelTag || 'tag'} will automatically be categorized under this channel.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                  Channel Color
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {CHANNEL_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setNewChannelColor(c)}
+                      className={`h-7 w-7 rounded-full transition-transform flex items-center justify-center cursor-pointer ${
+                        newChannelColor === c
+                          ? 'scale-110 ring-2 ring-white ring-offset-2 ring-offset-[#181B23]'
+                          : 'hover:scale-105'
+                      }`}
+                      style={{ backgroundColor: c }}
+                    >
+                      {newChannelColor === c && (
+                        <Check className="h-3.5 w-3.5 text-white" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-white/[0.06] flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsNewChannelModalOpen(false)}
+                  className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.05] transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingChannel || !newChannelName.trim()}
+                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50 transition-colors cursor-pointer"
+                >
+                  {creatingChannel ? 'Creating...' : 'Create Channel'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
