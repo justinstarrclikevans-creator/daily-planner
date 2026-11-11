@@ -400,14 +400,6 @@
     "appleReminderId": "F46D27EA-98F6-4347-A64E-D0BD58FAEF82"
   },
   {
-    "title": "Review and store needed Stripe secret API key values before November 20",
-    "notes": "Stripe will hide all secret API key values on November 20, though active keys will continue to work.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "D692B296-5579-49EE-9B2A-A038519EE219"
-  },
-  {
     "title": "Text sally wayman",
     "notes": "",
     "listName": "General",
