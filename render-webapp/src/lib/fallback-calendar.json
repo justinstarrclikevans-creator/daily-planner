@@ -45,6 +45,15 @@
     "calendarName": "justin@turnninety.com"
   },
   {
+    "id": "021k2ap3pk0ob7f5oguqjgoomt",
+    "title": "Alston with ISO",
+    "start": "2026-11-12T10:00:00-05:00",
+    "end": "2026-11-12T11:00:00-05:00",
+    "durationMinutes": 60,
+    "location": "",
+    "calendarName": "justin@turnninety.com"
+  },
+  {
     "id": "6r3nm6fh4ttv0lbnskf5lj9mgc",
     "title": "Prerelease meeting",
     "start": "2026-11-12T12:00:00-05:00",
