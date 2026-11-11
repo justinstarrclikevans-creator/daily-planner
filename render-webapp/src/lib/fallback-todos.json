@@ -422,5 +422,13 @@
     "priority": "none",
     "dueDate": "2026-11-11T15:30:00Z",
     "appleReminderId": "416353D2-E4DE-40BE-9336-CDF1712A4E2F"
+  },
+  {
+    "title": "Review and store needed Stripe secret API key values before November 20",
+    "notes": "Stripe will hide all secret API key values on November 20, though active keys will continue to work.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "D692B296-5579-49EE-9B2A-A038519EE219"
   }
 ]
