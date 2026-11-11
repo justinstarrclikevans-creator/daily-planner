@@ -454,5 +454,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "338E5F2A-4979-4C59-B134-5ED0230362E6"
+  },
+  {
+    "title": "Ask AI if I give it certain instructions like Slack TB and in my own voice if I can do that",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "11FE67D6-A23D-44AE-8963-7A345FAD7434"
   }
 ]
