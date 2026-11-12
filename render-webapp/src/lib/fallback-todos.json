@@ -6,5 +6,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "99C44A00-D2D9-48F3-A70A-05B985AC80C5"
+  },
+  {
+    "title": "Build a communication agent app that analyzes uploaded conversations and provides feedback",
+    "notes": "Develop an app where users can talk or upload conversations to receive feedback to improve communication skills, intended to share with Chris and public defenders.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "A1CCA6B9-ED90-4134-97C8-BFBAA5BC33F6"
   }
 ]
