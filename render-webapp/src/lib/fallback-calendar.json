@@ -1,50 +1,5 @@
 [
   {
-    "id": "_8kok8c9i8gq32b9o89234b9k6933aba16p346ba66kok2e2588r3ed9h8k_20261111T123000Z",
-    "title": "Publix",
-    "start": "2026-11-11T07:30:00-05:00",
-    "end": "2026-11-11T08:00:00-05:00",
-    "durationMinutes": 30,
-    "location": "",
-    "calendarName": "justin@turnninety.com"
-  },
-  {
-    "id": "_6sp32cq28gpk8b9j8p0kcb9k6gr48ba16l348b9o64pk2dpo6cr3gda568",
-    "title": "Teach class",
-    "start": "2026-11-11T09:00:00-05:00",
-    "end": "2026-11-11T10:30:00-05:00",
-    "durationMinutes": 90,
-    "location": "",
-    "calendarName": "justin@turnninety.com"
-  },
-  {
-    "id": "397a4chlgl6oa23la9hr1mionc_20261111T170000Z",
-    "title": "Leadership L10",
-    "start": "2026-11-11T12:00:00-05:00",
-    "end": "2026-11-11T13:30:00-05:00",
-    "durationMinutes": 90,
-    "location": "",
-    "calendarName": "justin@turnninety.com"
-  },
-  {
-    "id": "2qb7bii018arq3jl7ekrngql5t_20261111T201500Z",
-    "title": "Jenn Standing Meeting",
-    "start": "2026-11-11T15:15:00-05:00",
-    "end": "2026-11-11T15:45:00-05:00",
-    "durationMinutes": 30,
-    "location": "",
-    "calendarName": "justin@turnninety.com"
-  },
-  {
-    "id": "_8goj8d266gp48b9j6krjgb9k8cskcb9p6t34cb9j70s4cci16kr42g9g6o_20261111T211000Z",
-    "title": "Practice ",
-    "start": "2026-11-11T16:10:00-05:00",
-    "end": "2026-11-11T17:40:00-05:00",
-    "durationMinutes": 90,
-    "location": "",
-    "calendarName": "justin@turnninety.com"
-  },
-  {
     "id": "021k2ap3pk0ob7f5oguqjgoomt",
     "title": "Alston with ISO",
     "start": "2026-11-12T10:00:00-05:00",
