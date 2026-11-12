@@ -486,5 +486,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "A9EB64E8-3497-4A99-BA7F-14BB0E4321BA"
+  },
+  {
+    "title": "Review USPS eReceipt from Joe Jenkins in Google Chat",
+    "notes": "Joe Jenkins sent a message containing a USPS eReceipt via Google Chat.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "BC2C082E-0B9D-44E4-BEB4-C520974C401E"
   }
 ]
