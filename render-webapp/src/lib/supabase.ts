@@ -3,8 +3,8 @@ import fallbackRaw from './fallback-todos.json';
 import fallbackCalendarRaw from './fallback-calendar.json';
 import taggingRules from './tagging-rules.json';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://huwattmqwiqhcfhtqely.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_secret_21i-I_QCc5xA_dPeVQPKsg_iV7ZzjQm';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://irlqhowgimaxmnpiocmp.supabase.co';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_jpHLDOeJ9TqWdA-esBVqyA_v3u9C7Ay';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
