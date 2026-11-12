@@ -1,1 +1,58 @@
-[]
+[
+  {
+    "title": "Configure funnel report to flag missing points, unnoted absences, and stalled contacts by center",
+    "notes": "[⏱ 5m]\nIntegrate Apricot, class evaluation, case management, and SkillCat reports to highlight participants missing points without case notes, contacts over a week old, and job check-ins separated by center.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "A5E4BB37-306F-4947-BAAD-375A733D4660"
+  },
+  {
+    "title": "Build a communication training agent for users to upload conversations and receive feedback",
+    "notes": "[⏱ 5m]\nDevelop an interactive agent tool where users can upload conversation recordings, receive feedback on their communication skills, and share results with partners.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "CC1627FE-BD39-4E4D-95CA-F78F905EFADE"
+  },
+  {
+    "title": "Design daily workflow in the Synapse app around opening journal check-ins and daily lessons",
+    "notes": "[⏱ 5m]\nStructure the app user experience to open directly into the daily journal and check-in prompt, followed by a featured lesson and the meditation/exercise modules.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "FCB5F67F-3687-4C8D-BE25-A98D2783B6D7"
+  },
+  {
+    "title": "Build calendar drag-and-drop scheduling feature into the to-do app to sync with Google Calendar",
+    "notes": "[⏱ 5m]\nImplement a Sunsama-style daily planning workflow that lists active reminders and allows dragging tasks directly into scheduled Google Calendar time blocks.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "67E0CE76-CF0B-4ABB-A192-15FF2D9387F4"
+  },
+  {
+    "title": "Create gold standard examples for class evaluations, case management, and LSCMI assessments",
+    "notes": "[⏱ 5m]\nPartner with program managers to establish benchmark evaluation records so automated scoring tools can accurately evaluate staff documentation against clear standards.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "B7AE0D1E-A4A3-4E09-AC7D-8833BD1B14D7"
+  },
+  {
+    "title": "Build AI extraction workflow to identify outstanding participant to-dos from case notes",
+    "notes": "[⏱ 5m]\nConfigure AI prompts and templates to parse case notes, identify unfulfilled participant needs such as IDs and housing plans, and track them until marked complete.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "16F0EAE8-DD2D-479B-A5CF-5419EC035D34"
+  },
+  {
+    "title": "Generate audio recordings of Thich Nhat Hanh mindfulness readings using custom meditation voices",
+    "notes": "[⏱ 5m]\nUtilize existing meditation voice models to produce narrated mindfulness and reflection readings for the app.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "C36387DD-7C7E-4737-826C-726E64959AD5"
+  }
+]
