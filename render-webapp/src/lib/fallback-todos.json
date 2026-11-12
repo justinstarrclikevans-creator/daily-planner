@@ -526,5 +526,21 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "0FDD6664-5058-4EE6-B133-9449DCA663D7"
+  },
+  {
+    "title": "Listen to voicemail from (803) 543-3795 regarding program services",
+    "notes": "New voicemail received on Extension 1 - Program Services from (803) 543-3795.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "32DD61A2-F063-4B75-9031-6ED525B89184"
+  },
+  {
+    "title": "Share Walmart Distribution Center hiring event with the team and participants",
+    "notes": "Dave Tam from SC DEW shared an announcement for the Walmart Distribution Center hiring event in Ridgeville scheduled for November 20, 2026.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "F7B7B057-ACDD-4A25-8D31-7481BE623A8F"
   }
 ]
