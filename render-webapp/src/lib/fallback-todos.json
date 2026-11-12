@@ -14,5 +14,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "A1CCA6B9-ED90-4134-97C8-BFBAA5BC33F6"
+  },
+  {
+    "title": "Streamline the Turn90 app down to core features",
+    "notes": "Break down the app to focus strictly on essential needs including LSCMI interviews, case management, class evaluations, and Daisy's workflow tools while offloading non-critical features.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "22A7C16C-AAAD-45B0-B254-9322B98A361C"
   }
 ]
