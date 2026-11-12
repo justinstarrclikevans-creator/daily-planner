@@ -470,5 +470,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "A473BB21-35B4-480C-8F56-ACAA38607D77"
+  },
+  {
+    "title": "Finish the assessments and the apricot report automation",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": "2026-11-12T12:00:00Z",
+    "appleReminderId": "AF401E75-774B-4D84-BEBF-F401338A682B"
   }
 ]
