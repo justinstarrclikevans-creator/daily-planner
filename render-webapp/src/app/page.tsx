@@ -5,6 +5,7 @@ import {
   supabase,
   Task,
   Project,
+  Note,
   Subtask,
   TaskPriority,
   CalendarTimelineEvent,
@@ -13,6 +14,7 @@ import {
   extractCleanNotes,
   cleanTaskTitle,
 } from '@/lib/supabase';
+import NotesWorkspace from '@/components/NotesWorkspace';
 import {
   Check,
   Plus,
@@ -122,6 +124,8 @@ export default function ProjectPlannerWorkspace() {
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'error'>('syncing');
 
   // Navigation & Filters
+  const [activeWorkspace, setActiveWorkspace] = useState<'tasks' | 'notes'>('tasks');
+  const [notes, setNotes] = useState<Note[]>([]);
   const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('all'); // 'all' | 'general' | project.id
   const [taskSearch, setTaskSearch] = useState<string>('');
   const [showCalendarPane, setShowCalendarPane] = useState<boolean>(true);
@@ -211,18 +215,35 @@ export default function ProjectPlannerWorkspace() {
     }
   }, []);
 
+  const loadNotes = useCallback(async () => {
+    try {
+      const res = await fetch('/api/notes', { cache: 'no-store' });
+      if (!res.ok) return;
+      const json = await res.json();
+      if (Array.isArray(json.notes)) {
+        setNotes(json.notes);
+      }
+    } catch (err) {
+      console.warn('Notes fetch error:', err);
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
+    loadNotes();
     const channel = supabase
       .channel('planner-realtime-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
         loadData();
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, () => {
+        loadNotes();
+      })
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [loadData]);
+  }, [loadData, loadNotes]);
 
   // Core API Patch Helper (handles both Tasks and Calendar Timeline Events)
   const patchTask = useCallback(
@@ -1398,6 +1419,34 @@ export default function ProjectPlannerWorkspace() {
             </button>
           </div>
 
+          {/* Workspace Switcher: Tasks vs Notes */}
+          <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-[#111318] border border-white/[0.06]">
+            <button
+              type="button"
+              onClick={() => setActiveWorkspace('tasks')}
+              className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                activeWorkspace === 'tasks'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              <span>Tasks ({openTasks.length})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveWorkspace('notes')}
+              className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                activeWorkspace === 'notes'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span>Notes ({notes.length})</span>
+            </button>
+          </div>
+
           {/* Primary Actions: Paste Transcript + Auto-Classify + Focus */}
           <div className="space-y-1.5">
             <button
@@ -1537,8 +1586,16 @@ export default function ProjectPlannerWorkspace() {
         </div>
       </aside>
 
-      {/* 2. CENTER WORKSPACE: OPEN TASKS GROUPED BY PROJECT */}
-      <main className="flex-1 flex flex-col overflow-hidden bg-[#111318]">
+      {activeWorkspace === 'notes' ? (
+        <NotesWorkspace
+          notes={notes}
+          onRefresh={loadNotes}
+          onNotesChange={setNotes}
+        />
+      ) : (
+        <>
+          {/* 2. CENTER WORKSPACE: OPEN TASKS GROUPED BY PROJECT */}
+          <main className="flex-1 flex flex-col overflow-hidden bg-[#111318]">
         {/* Top Bar */}
         <header className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between gap-4 shrink-0">
           <div>
@@ -2113,6 +2170,8 @@ export default function ProjectPlannerWorkspace() {
             </div>
           </div>
         </aside>
+      )}
+        </>
       )}
 
       {/* 4. PASTE TRANSCRIPT / PLAN MY DAY MODAL */}

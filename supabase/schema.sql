@@ -72,12 +72,25 @@ create table if not exists public.routines (
     updated_at timestamptz not null default now()
 );
 
+-- 5. Notes Table (Imported from Apple Notes & editable in webapp)
+create table if not exists public.notes (
+    id uuid primary key default gen_random_uuid(),
+    title text not null default 'Untitled Note',
+    content text not null default '',
+    folder text not null default 'Notes',
+    apple_note_id text,
+    source text not null default 'webapp',
+    created_at timestamptz not null default now(),
+    updated_at timestamptz not null default now()
+);
+
 -- Indexes for performance
 create index if not exists idx_tasks_project_id on public.tasks(project_id);
 create index if not exists idx_tasks_status on public.tasks(status);
 create index if not exists idx_tasks_list_name on public.tasks(list_name);
 create index if not exists idx_ideas_project_id on public.ideas(project_id);
 create index if not exists idx_routines_project_id on public.routines(project_id);
+create index if not exists idx_notes_updated_at on public.notes(updated_at desc);
 
 -- Safely Enable Realtime (ignores error if already added)
 do $$
@@ -104,11 +117,18 @@ begin
 exception when others then null;
 end $$;
 
+do $$
+begin
+    alter publication supabase_realtime add table public.notes;
+exception when others then null;
+end $$;
+
 -- Enable Row Level Security (RLS)
 alter table public.projects enable row level security;
 alter table public.ideas enable row level security;
 alter table public.tasks enable row level security;
 alter table public.routines enable row level security;
+alter table public.notes enable row level security;
 
 -- Policies (Drop first to avoid "policy already exists" error)
 drop policy if exists "Allow all operations for anon/authenticated" on public.projects;
@@ -125,6 +145,10 @@ create policy "Allow all operations for anon/authenticated" on public.tasks
 
 drop policy if exists "Allow all operations for anon/authenticated" on public.routines;
 create policy "Allow all operations for anon/authenticated" on public.routines
+    for all using (true) with check (true);
+
+drop policy if exists "Allow all operations for anon/authenticated" on public.notes;
+create policy "Allow all operations for anon/authenticated" on public.notes
     for all using (true) with check (true);
 
 -- Seed Default Projects

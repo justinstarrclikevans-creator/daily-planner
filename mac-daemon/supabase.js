@@ -95,7 +95,6 @@ async function syncTaskToSupabase(task, appleReminderId = null) {
             source: task.source || 'daemon',
             apple_reminder_id: appleReminderId || task.id || null,
             project_id: projectId,
-            priority: task.priority || 'medium',
             estimated_minutes: estimatedMinutes,
             subtasks: subtasks,
             in_play_queue: inPlayQueue,

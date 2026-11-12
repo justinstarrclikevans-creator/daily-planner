@@ -12,22 +12,18 @@ import {
   SUNSAMA_CHANNELS,
   SunsamaChannel,
 } from '@/lib/supabase';
-import {
-  enqueueCompletedInGoogleSheets,
-  fetchActiveRemindersFromSheet,
-  fetchCustomChannelsFromSheet,
-  fetchProjectsFromSheet,
-} from '@/lib/sheets';
 
 export const dynamic = 'force-dynamic';
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL;
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  'https://irlqhowgimaxmnpiocmp.supabase.co';
 const SUPABASE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  'sb_publishable_jpHLDOeJ9TqWdA-esBVqyA_v3u9C7Ay';
 
 let inMemoryTasks: Task[] | null = null;
 let inMemoryProjects: any[] | null = null;
@@ -81,26 +77,15 @@ async function supabaseFetch(path: string, options: RequestInit = {}) {
 
 export async function GET() {
   try {
-    // 1. Fetch live custom channels
-    const customChannels = await fetchCustomChannelsFromSheet();
-    const channels: SunsamaChannel[] = [...SUNSAMA_CHANNELS, ...customChannels];
+    const channels: SunsamaChannel[] = [...SUNSAMA_CHANNELS];
 
-    // 2. Load projects (Supabase -> Google Sheets -> Default General)
+    // 2. Load projects (Supabase -> Default General)
     let projects = inMemoryProjects || DEFAULT_PROJECTS;
     const projRes = await supabaseFetch('/projects?select=*&order=created_at.asc');
-    let loadedFromSupa = false;
     if (projRes && projRes.ok) {
       const data = await projRes.json();
       if (Array.isArray(data) && data.length > 0) {
         projects = data;
-        inMemoryProjects = projects;
-        loadedFromSupa = true;
-      }
-    }
-    if (!loadedFromSupa) {
-      const sheetProjects = await fetchProjectsFromSheet();
-      if (sheetProjects.length > 0) {
-        projects = sheetProjects;
         inMemoryProjects = projects;
       }
     }
@@ -111,25 +96,12 @@ export async function GET() {
     }
     const calendarEvents = inMemoryCalendarEvents;
 
-    // 4. Fetch live reminders from Google Sheets
-    const sheetTasks = await fetchActiveRemindersFromSheet();
-    if (sheetTasks.length > 0) {
-      updateInMemoryDeskTasks(sheetTasks);
-      return NextResponse.json({
-        projects,
-        tasks: inMemoryTasks,
-        calendarEvents,
-        channels,
-        source: 'sheets',
-      });
-    }
-
-    // 5. If Supabase is available, attempt to read from it
+    // 4. Query Supabase tasks first (primary source of truth)
     let tasks: Task[] = [];
     const taskRes = await supabaseFetch('/tasks?select=*&order=created_at.desc&limit=500');
     if (taskRes && taskRes.ok) {
       const data = await taskRes.json();
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         tasks = data
           .filter((row: any) => !(row.description || '').includes('[Calendar Event]'))
           .map((row: any) => {
@@ -151,14 +123,6 @@ export async function GET() {
             if (durMatch && durMatch[1]) {
               estMins = parseInt(durMatch[1], 10);
             }
-
-            const extractedTags = Array.from(
-              new Set([
-                ...(Array.isArray(row.tags) ? row.tags : []),
-                ...extractHashtags(row.title),
-                ...extractHashtags(row.description),
-              ])
-            );
 
             const inQueue =
               Boolean(row.in_play_queue) || (row.description || '').includes('[▶️ Queue]');
@@ -183,10 +147,10 @@ export async function GET() {
               completedAt: row.updated_at || null,
             };
           });
-        updateInMemoryDeskTasks(tasks);
+        inMemoryTasks = tasks;
         return NextResponse.json({
           projects,
-          tasks: inMemoryTasks,
+          tasks,
           calendarEvents,
           channels,
           source: 'supabase',
@@ -194,7 +158,7 @@ export async function GET() {
       }
     }
 
-    // 6. Final fallback to in-memory tasks or static fallback file
+    // 5. Final fallback to in-memory tasks or static fallback file
     if (!inMemoryTasks) {
       inMemoryTasks = getFallbackTasks(projects);
     }
@@ -347,20 +311,6 @@ export async function PATCH(req: NextRequest) {
         actualSeconds:
           updates.actual_seconds !== undefined ? updates.actual_seconds : current.actualSeconds,
       };
-
-      if (updates.status === 'completed') {
-        await enqueueCompletedInGoogleSheets({
-          id: current.id,
-          appleReminderId: current.appleReminderId || current.id,
-          title: current.title,
-        });
-      }
-    } else if (updates.status === 'completed') {
-      await enqueueCompletedInGoogleSheets({
-        id,
-        appleReminderId: id,
-        title: updates.title || '',
-      });
     }
 
     return NextResponse.json({ success: true, task: idx !== -1 ? inMemoryTasks[idx] : null });
@@ -452,14 +402,7 @@ export async function DELETE(req: NextRequest) {
     if (!inMemoryTasks) {
       inMemoryTasks = getFallbackTasks(inMemoryProjects || DEFAULT_PROJECTS);
     }
-    const targetTask = inMemoryTasks.find((t) => t.id === id);
     inMemoryTasks = inMemoryTasks.filter((t) => t.id !== id);
-
-    await enqueueCompletedInGoogleSheets({
-      id,
-      appleReminderId: targetTask?.appleReminderId || id,
-      title: targetTask?.title || '',
-    });
 
     return NextResponse.json({ success: true });
   } catch (e: any) {

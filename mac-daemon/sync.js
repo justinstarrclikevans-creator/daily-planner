@@ -9,7 +9,6 @@ const { getRecentEmails, getTodaysCalendarEvents } = require('./google');
 const { getRecentLetterlyNotes } = require('./letterly');
 const { extractTodos } = require('./ai');
 const { syncTaskToSupabase, getCompletedTasksFromSupabase } = require('./supabase');
-const { getWebCompletedQueue, clearWebCompletedQueue, syncActiveRemindersToSheet } = require('./sheets');
 
 const STATE_FILE = path.join(__dirname, 'state.json');
 
@@ -38,17 +37,13 @@ function saveState(state) {
 
 async function syncWebCompletionsToAppleReminders() {
     try {
-        const [sheetCompleted, supaCompleted, openReminders] = await Promise.all([
-            getWebCompletedQueue(),
+        const [supaCompleted, openReminders] = await Promise.all([
             getCompletedTasksFromSupabase(),
             getIncompleteReminders()
         ]);
 
-        const webCompleted = [...sheetCompleted, ...supaCompleted];
+        const webCompleted = [...supaCompleted];
         if (webCompleted.length === 0 || openReminders.length === 0) {
-            if (sheetCompleted.length > 0) {
-                await clearWebCompletedQueue();
-            }
             return 0;
         }
 
@@ -82,10 +77,6 @@ async function syncWebCompletionsToAppleReminders() {
             state.completedTaskTitles = state.completedTaskTitles.slice(-500);
         }
         saveState(state);
-
-        if (sheetCompleted.length > 0) {
-            await clearWebCompletedQueue();
-        }
 
         if (completedCount > 0) {
             const events = await getTodaysCalendarEvents().catch(() => []);
@@ -268,10 +259,7 @@ async function syncAllRemindersToCloud(events = [], incomingReminders = null) {
     try {
         const reminders = incomingReminders || await getIncompleteReminders();
 
-        // 1. Sync live active reminders to Google Sheets Settings sheet
-        await syncActiveRemindersToSheet(reminders, events);
-
-        // 2. Direct push to local webapp if running
+        // 1. Direct push to local webapp if running
         try {
             fetch('http://localhost:3000/api/sync/reminders', {
                 method: 'POST',

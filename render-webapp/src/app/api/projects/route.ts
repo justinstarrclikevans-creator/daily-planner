@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { DEFAULT_PROJECTS, Project } from '@/lib/supabase';
-import { fetchProjectsFromSheet, saveProjectsToSheet } from '@/lib/sheets';
 
 export const dynamic = 'force-dynamic';
 
 const SUPABASE_URL =
   process.env.SUPABASE_URL ||
-  process.env.NEXT_PUBLIC_SUPABASE_URL;
+  process.env.NEXT_PUBLIC_SUPABASE_URL ||
+  'https://irlqhowgimaxmnpiocmp.supabase.co';
 const SUPABASE_KEY =
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
   process.env.SUPABASE_KEY ||
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+  'sb_publishable_jpHLDOeJ9TqWdA-esBVqyA_v3u9C7Ay';
 
 let inMemoryProjects: Project[] | null = null;
 
@@ -44,11 +45,6 @@ async function ensureProjectsLoaded(): Promise<Project[]> {
         inMemoryProjects = data;
         return inMemoryProjects;
       }
-    }
-    const sheetProjects = await fetchProjectsFromSheet();
-    if (sheetProjects.length > 0) {
-      inMemoryProjects = sheetProjects;
-      return inMemoryProjects;
     }
     inMemoryProjects = [...DEFAULT_PROJECTS];
   }
@@ -109,8 +105,6 @@ export async function POST(req: NextRequest) {
       }),
     }).catch(() => null);
 
-    await saveProjectsToSheet(next);
-
     return NextResponse.json({ success: true, project: newProject, projects: next });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
@@ -156,8 +150,6 @@ export async function PATCH(req: NextRequest) {
       }),
     }).catch(() => null);
 
-    await saveProjectsToSheet(next);
-
     return NextResponse.json({ success: true, project: updatedProject, projects: next });
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 });
@@ -182,8 +174,6 @@ export async function DELETE(req: NextRequest) {
     supabaseFetch(`/projects?id=eq.${id}`, {
       method: 'DELETE',
     }).catch(() => null);
-
-    await saveProjectsToSheet(next);
 
     return NextResponse.json({ success: true, projects: next });
   } catch (e: any) {

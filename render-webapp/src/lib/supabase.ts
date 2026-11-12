@@ -50,6 +50,17 @@ export type Project = {
   customActiveDays?: number[];
 };
 
+export type Note = {
+  id: string;
+  title: string;
+  content: string;
+  folder: string;
+  apple_note_id?: string | null;
+  source?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
 export type SunsamaChannel = {
   tag: string;
   label: string;
