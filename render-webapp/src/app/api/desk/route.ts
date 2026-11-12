@@ -16,6 +16,7 @@ import {
   enqueueCompletedInGoogleSheets,
   fetchActiveRemindersFromSheet,
   fetchCustomChannelsFromSheet,
+  fetchProjectsFromSheet,
 } from '@/lib/sheets';
 
 export const dynamic = 'force-dynamic';
@@ -43,12 +44,12 @@ export function updateInMemoryDeskTasks(newTasks: Task[]) {
     if (!existing) return t;
     return {
       ...t,
+      projectId: existing.projectId ?? t.projectId ?? null,
+      dueDate: existing.dueDate ?? t.dueDate ?? null,
+      estimatedMinutes: existing.estimatedMinutes || t.estimatedMinutes,
       inPlayQueue: existing.inPlayQueue ?? t.inPlayQueue,
       actualSeconds: existing.actualSeconds || t.actualSeconds,
-      tags:
-        existing.tags && existing.tags.length > 0
-          ? Array.from(new Set([...(t.tags || []), ...(existing.tags || [])]))
-          : t.tags,
+      tags: [],
     };
   });
 }
@@ -84,13 +85,22 @@ export async function GET() {
     const customChannels = await fetchCustomChannelsFromSheet();
     const channels: SunsamaChannel[] = [...SUNSAMA_CHANNELS, ...customChannels];
 
-    // 2. Load projects
+    // 2. Load projects (Supabase -> Google Sheets -> Default General)
     let projects = inMemoryProjects || DEFAULT_PROJECTS;
-    const projRes = await supabaseFetch('/projects?select=*&order=name.asc');
+    const projRes = await supabaseFetch('/projects?select=*&order=created_at.asc');
+    let loadedFromSupa = false;
     if (projRes && projRes.ok) {
       const data = await projRes.json();
       if (Array.isArray(data) && data.length > 0) {
         projects = data;
+        inMemoryProjects = projects;
+        loadedFromSupa = true;
+      }
+    }
+    if (!loadedFromSupa) {
+      const sheetProjects = await fetchProjectsFromSheet();
+      if (sheetProjects.length > 0) {
+        projects = sheetProjects;
         inMemoryProjects = projects;
       }
     }
@@ -155,10 +165,10 @@ export async function GET() {
 
             return {
               id: row.id,
-              projectId: null,
+              projectId: row.project_id || null,
               title: cleanTaskTitle(row.title),
-              description: row.description || '',
-              listName: 'General',
+              description: (row.description || '').replace(/\s*#[a-zA-Z0-9_\-]+/g, '').trim(),
+              listName: row.list_name || 'General',
               status: row.status === 'completed' ? 'completed' : 'pending',
               dueDate: row.due_date || null,
               source: row.source || 'daemon',
@@ -168,7 +178,7 @@ export async function GET() {
               priority: prio,
               inPlayQueue: inQueue,
               subtasks: subs,
-              tags: extractedTags,
+              tags: [],
               createdAt: row.created_at,
               completedAt: row.updated_at || null,
             };
@@ -277,6 +287,8 @@ export async function PATCH(req: NextRequest) {
     if (updates.subtasks !== undefined) dbPayload.subtasks = updates.subtasks;
     if (updates.list_name !== undefined) dbPayload.list_name = updates.list_name;
     if (updates.actual_seconds !== undefined) dbPayload.actual_seconds = updates.actual_seconds;
+    if (updates.project_id !== undefined) dbPayload.project_id = updates.project_id;
+    if (updates.projectId !== undefined) dbPayload.project_id = updates.projectId;
 
     supabaseFetch(`/tasks?id=eq.${id}`, {
       method: 'PATCH',
@@ -302,8 +314,14 @@ export async function PATCH(req: NextRequest) {
 
       inMemoryTasks[idx] = {
         ...current,
+        projectId:
+          updates.project_id !== undefined
+            ? updates.project_id
+            : updates.projectId !== undefined
+            ? updates.projectId
+            : current.projectId,
         title: updates.title !== undefined ? cleanTaskTitle(updates.title) : current.title,
-        description: nextDesc,
+        description: nextDesc.replace(/\s*#[a-zA-Z0-9_\-]+/g, '').trim(),
         status: updates.status !== undefined ? updates.status : current.status,
         dueDate:
           updates.due_date !== undefined
@@ -325,7 +343,7 @@ export async function PATCH(req: NextRequest) {
             : current.estimatedMinutes,
         priority: updates.priority !== undefined ? updates.priority : current.priority,
         subtasks: updates.subtasks !== undefined ? updates.subtasks : current.subtasks,
-        tags: nextTags,
+        tags: [],
         actualSeconds:
           updates.actual_seconds !== undefined ? updates.actual_seconds : current.actualSeconds,
       };
@@ -360,15 +378,13 @@ export async function POST(req: NextRequest) {
     }
 
     const cleanedTitle = cleanTaskTitle(body.title || '');
-    const tags = Array.isArray(body.tags)
-      ? body.tags
-      : extractHashtags(`${body.title || ''} ${body.description || ''}`);
+    const cleanDesc = (body.description || '').replace(/\s*#[a-zA-Z0-9_\-]+/g, '').trim();
 
     const newTask: Task = {
       id: body.id || crypto.randomUUID(),
-      projectId: body.project_id || DEFAULT_PROJECTS[0].id,
+      projectId: body.project_id ?? body.projectId ?? null,
       title: cleanedTitle,
-      description: body.description || '',
+      description: cleanDesc,
       listName: 'General',
       status: body.status || 'pending',
       dueDate: body.due_date !== undefined ? body.due_date : null,
@@ -376,8 +392,8 @@ export async function POST(req: NextRequest) {
       actualSeconds: 0,
       priority: body.priority || 'medium',
       inPlayQueue: Boolean(body.in_play_queue),
-      subtasks: body.subtasks || extractSubtasks(body.description),
-      tags,
+      subtasks: body.subtasks || extractSubtasks(cleanDesc),
+      tags: [],
       createdAt: new Date().toISOString(),
     };
 

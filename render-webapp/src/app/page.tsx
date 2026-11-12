@@ -4,13 +4,11 @@ import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import {
   supabase,
   Task,
+  Project,
   Subtask,
   TaskPriority,
   CalendarTimelineEvent,
-  SUNSAMA_CHANNELS,
-  SunsamaChannel,
-  CHANNEL_COLORS,
-  getChannelForTask,
+  DEFAULT_PROJECTS,
   buildTaskDescription,
   extractCleanNotes,
   cleanTaskTitle,
@@ -19,30 +17,25 @@ import {
   Check,
   Plus,
   Calendar as CalendarIcon,
-  Inbox,
+  Folder,
   Sparkles,
-  Sun,
-  Moon,
   Play,
   Pause,
   RotateCcw,
   Clock,
-  ChevronRight,
-  ChevronLeft,
-  Hash,
   Trash2,
   X,
-  ArrowRight,
   RefreshCw,
   Search,
-  Columns,
   CheckCircle2,
   AlertTriangle,
-  Flame,
-  GripHorizontal,
+  Pencil,
+  Undo2,
+  FileText,
+  Wand2,
 } from 'lucide-react';
 
-type ActiveModal = 'none' | 'morning_plan' | 'evening_shutdown' | 'focus_mode';
+type ActiveModal = 'none' | 'transcript_plan' | 'focus_mode';
 
 const DURATION_OPTIONS = [5, 10, 15, 20, 25, 30, 45, 60, 90, 120];
 const TIMELINE_START_HOUR = 6; // 6:00 AM
@@ -53,9 +46,9 @@ const TIMELINE_HOURS = Array.from(
 );
 const QUARTERS = [0, 15, 30, 45];
 const PX_PER_MINUTE = 2.4; // 144px per hour -> 36px per 15m interval, 12px per 5m
-const HOUR_HEIGHT_PX = 60 * PX_PER_MINUTE; // 144px
-const QUARTER_HEIGHT_PX = 15 * PX_PER_MINUTE; // 36px
-const DAILY_TARGET_MINUTES = 360; // 6 hours realistic daily capacity
+const HOUR_HEIGHT_PX = 60 * PX_PER_MINUTE;
+const QUARTER_HEIGHT_PX = 15 * PX_PER_MINUTE;
+const DAILY_TARGET_MINUTES = 360;
 
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
@@ -122,37 +115,39 @@ function formatTimeRange(iso: string, durationMinutes: number): string {
   return `${fmt(start)} – ${fmt(end)}`;
 }
 
-export default function SunsamaWorkspace() {
+export default function ProjectPlannerWorkspace() {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [projects, setProjects] = useState<Project[]>(DEFAULT_PROJECTS);
   const [calendarEvents, setCalendarEvents] = useState<CalendarTimelineEvent[]>([]);
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'error'>('syncing');
 
-  // Channels & Tags
-  const [channels, setChannels] = useState<SunsamaChannel[]>(SUNSAMA_CHANNELS);
-  const [isNewChannelModalOpen, setIsNewChannelModalOpen] = useState<boolean>(false);
-  const [newChannelName, setNewChannelName] = useState<string>('');
-  const [newChannelTag, setNewChannelTag] = useState<string>('');
-  const [newChannelColor, setNewChannelColor] = useState<string>(CHANNEL_COLORS[0]);
-  const [creatingChannel, setCreatingChannel] = useState<boolean>(false);
-  const [channelError, setChannelError] = useState<string | null>(null);
-
-  // Sunsama Panel Toggles & Filters
-  const [showBacklogDrawer, setShowBacklogDrawer] = useState<boolean>(true);
+  // Navigation & Filters
+  const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('all'); // 'all' | 'general' | project.id
+  const [taskSearch, setTaskSearch] = useState<string>('');
   const [showCalendarPane, setShowCalendarPane] = useState<boolean>(true);
   const [timelineDayBucket, setTimelineDayBucket] = useState<'today' | 'tomorrow' | 'later'>('today');
-  const [selectedChannelTag, setSelectedChannelTag] = useState<string>('all');
-  const [backlogSearch, setBacklogSearch] = useState<string>('');
 
-  // Inline Quick-Add Inputs per Column
-  const [addingInColumn, setAddingInColumn] = useState<string | null>(null);
+  // Project Creation / Inline Editing
+  const [newProjectName, setNewProjectName] = useState<string>('');
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingProjectTitle, setEditingProjectTitle] = useState<string>('');
+  const [editingInstructionsId, setEditingInstructionsId] = useState<string | null>(null);
+  const [editingInstructionsText, setEditingInstructionsText] = useState<string>('');
+
+  // Inline Task Creation per Project Group
+  const [addingInProjectId, setAddingInProjectId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState<string>('');
 
   // Task Detail Modal / Inspector
   const [inspectingTaskId, setInspectingTaskId] = useState<string | null>(null);
   const [newSubtaskText, setNewSubtaskText] = useState<string>('');
 
-  // Ritual & Focus Overlays
+  // Transcript Planner & Focus Mode
   const [activeModal, setActiveModal] = useState<ActiveModal>('none');
+  const [transcriptText, setTranscriptText] = useState<string>('');
+  const [isPlanningTranscript, setIsPlanningTranscript] = useState<boolean>(false);
+  const [transcriptStatusMsg, setTranscriptStatusMsg] = useState<string | null>(null);
+
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [focusRunning, setFocusRunning] = useState<boolean>(false);
   const [focusElapsedSeconds, setFocusElapsedSeconds] = useState<number>(0);
@@ -170,7 +165,7 @@ export default function SunsamaWorkspace() {
     previewMinutes: number;
   } | null>(null);
 
-  // Calendar Block Move State (Drag up/down to any 5-minute / 15-minute slot)
+  // Calendar Block Move State (Drag up/down in 5-minute increments)
   const [movingState, setMovingState] = useState<{
     taskId: string;
     startY: number;
@@ -194,14 +189,20 @@ export default function SunsamaWorkspace() {
       const res = await fetch('/api/desk', { cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
+      if (json.projects && Array.isArray(json.projects) && json.projects.length > 0) {
+        setProjects(json.projects);
+      }
       if (json.tasks && Array.isArray(json.tasks)) {
-        setTasks(json.tasks);
+        setTasks(
+          json.tasks.map((t: Task) => ({
+            ...t,
+            title: cleanTaskTitle(t.title),
+            tags: [],
+          }))
+        );
       }
       if (json.calendarEvents && Array.isArray(json.calendarEvents)) {
         setCalendarEvents(json.calendarEvents);
-      }
-      if (json.channels && Array.isArray(json.channels)) {
-        setChannels(json.channels);
       }
       setSyncStatus('connected');
     } catch (err) {
@@ -212,104 +213,226 @@ export default function SunsamaWorkspace() {
 
   useEffect(() => {
     loadData();
-    const pollInterval = setInterval(() => {
-      loadData();
-    }, 30000);
     const channel = supabase
-      .channel('sunsama-realtime-sync')
+      .channel('planner-realtime-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
         loadData();
       })
       .subscribe();
     return () => {
-      clearInterval(pollInterval);
       supabase.removeChannel(channel);
     };
   }, [loadData]);
 
   // Core API Patch Helper (handles both Tasks and Calendar Timeline Events)
-  const patchTask = useCallback(async (taskId: string, updates: Partial<Task> & Record<string, any>) => {
-    if (String(taskId).startsWith('cal-event-')) {
-      const rawCalId = String(taskId).replace(/^cal-event-/, '');
-      setCalendarEvents((prev) => {
-        const nextDue =
-          updates.due_date !== undefined
-            ? updates.due_date
-            : updates.dueDate !== undefined
-            ? updates.dueDate
-            : undefined;
-        if (nextDue === null) {
-          return prev.filter((ev) => ev.id !== rawCalId && `cal-event-${ev.id}` !== taskId);
-        }
-        return prev.map((ev) => {
-          if (ev.id !== rawCalId && `cal-event-${ev.id}` !== taskId) return ev;
-          const nextStart = nextDue !== undefined ? nextDue : ev.start;
-          const nextMins =
-            updates.estimated_minutes !== undefined
-              ? updates.estimated_minutes
-              : updates.estimatedMinutes !== undefined
-              ? updates.estimatedMinutes
-              : ev.durationMinutes;
-          const nextEnd = new Date(
-            new Date(nextStart).getTime() + Math.max(5, nextMins) * 60000
-          ).toISOString();
-          return {
-            ...ev,
-            title: updates.title !== undefined ? updates.title : ev.title,
-            start: nextStart,
-            end: nextEnd,
-            durationMinutes: Math.max(5, nextMins),
-          };
-        });
-      });
-    } else {
-      setTasks((prev) =>
-        prev.map((t) => {
-          if (t.id !== taskId) return t;
-          return {
-            ...t,
-            ...updates,
-            dueDate:
-              updates.due_date !== undefined
-                ? updates.due_date
-                : updates.dueDate !== undefined
-                ? updates.dueDate
-                : t.dueDate,
-            inPlayQueue:
-              updates.in_play_queue !== undefined
-                ? updates.in_play_queue
-                : updates.inPlayQueue !== undefined
-                ? updates.inPlayQueue
-                : t.inPlayQueue,
-            estimatedMinutes:
+  const patchTask = useCallback(
+    async (taskId: string, updates: Partial<Task> & Record<string, any>) => {
+      if (String(taskId).startsWith('cal-event-')) {
+        const rawCalId = String(taskId).replace(/^cal-event-/, '');
+        setCalendarEvents((prev) => {
+          const nextDue =
+            updates.due_date !== undefined
+              ? updates.due_date
+              : updates.dueDate !== undefined
+              ? updates.dueDate
+              : undefined;
+          if (nextDue === null) {
+            return prev.filter(
+              (ev) => ev.id !== rawCalId && `cal-event-${ev.id}` !== taskId
+            );
+          }
+          return prev.map((ev) => {
+            if (ev.id !== rawCalId && `cal-event-${ev.id}` !== taskId) return ev;
+            const nextStart = nextDue !== undefined ? nextDue : ev.start;
+            const nextMins =
               updates.estimated_minutes !== undefined
                 ? updates.estimated_minutes
                 : updates.estimatedMinutes !== undefined
                 ? updates.estimatedMinutes
-                : t.estimatedMinutes,
-            actualSeconds:
-              updates.actual_seconds !== undefined
-                ? updates.actual_seconds
-                : updates.actualSeconds !== undefined
-                ? updates.actualSeconds
-                : t.actualSeconds,
-          };
-        })
-      );
-    }
+                : ev.durationMinutes;
+            const nextEnd = new Date(
+              new Date(nextStart).getTime() + Math.max(5, nextMins) * 60000
+            ).toISOString();
+            return {
+              ...ev,
+              title: updates.title !== undefined ? updates.title : ev.title,
+              start: nextStart,
+              end: nextEnd,
+              durationMinutes: Math.max(5, nextMins),
+            };
+          });
+        });
+      } else {
+        setTasks((prev) =>
+          prev.map((t) => {
+            if (t.id !== taskId) return t;
+            return {
+              ...t,
+              ...updates,
+              projectId:
+                updates.project_id !== undefined
+                  ? updates.project_id
+                  : updates.projectId !== undefined
+                  ? updates.projectId
+                  : t.projectId,
+              dueDate:
+                updates.due_date !== undefined
+                  ? updates.due_date
+                  : updates.dueDate !== undefined
+                  ? updates.dueDate
+                  : t.dueDate,
+              inPlayQueue:
+                updates.in_play_queue !== undefined
+                  ? updates.in_play_queue
+                  : updates.inPlayQueue !== undefined
+                  ? updates.inPlayQueue
+                  : t.inPlayQueue,
+              estimatedMinutes:
+                updates.estimated_minutes !== undefined
+                  ? updates.estimated_minutes
+                  : updates.estimatedMinutes !== undefined
+                  ? updates.estimatedMinutes
+                  : t.estimatedMinutes,
+              actualSeconds:
+                updates.actual_seconds !== undefined
+                  ? updates.actual_seconds
+                  : updates.actualSeconds !== undefined
+                  ? updates.actualSeconds
+                  : t.actualSeconds,
+              tags: [],
+            };
+          })
+        );
+      }
 
+      try {
+        await fetch('/api/desk', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: taskId, ...updates }),
+        });
+      } catch (err) {
+        console.error('Failed to patch task:', err);
+      }
+    },
+    []
+  );
+
+  // Project Helpers
+  const generalProject = useMemo(
+    () =>
+      projects.find((p) => p.slug === 'general' || p.name.toLowerCase() === 'general') ||
+      DEFAULT_PROJECTS[0],
+    [projects]
+  );
+
+  const customProjects = useMemo(
+    () => projects.filter((p) => p.id !== generalProject.id),
+    [projects, generalProject]
+  );
+
+  const getTaskProject = useCallback(
+    (task: Task): Project => {
+      if (task.projectId) {
+        const found = projects.find((p) => p.id === task.projectId);
+        if (found) return found;
+      }
+      return generalProject;
+    },
+    [projects, generalProject]
+  );
+
+  const handleCreateProject = useCallback(
+    async (name: string, instructions: string = '') => {
+      const clean = name.trim();
+      if (!clean) return null;
+
+      const existing = projects.find(
+        (p) => p.name.toLowerCase() === clean.toLowerCase()
+      );
+      if (existing) return existing;
+
+      try {
+        const res = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: clean, instructions }),
+        });
+        const json = await res.json();
+        if (json.projects && Array.isArray(json.projects)) {
+          setProjects(json.projects);
+        } else if (json.project) {
+          setProjects((prev) => [...prev, json.project]);
+        }
+        setNewProjectName('');
+        return json.project || null;
+      } catch (err) {
+        console.error('Error creating project:', err);
+        return null;
+      }
+    },
+    [projects]
+  );
+
+  const handleRenameProject = useCallback(async (projectId: string, newName: string) => {
+    const clean = newName.trim();
+    setEditingProjectId(null);
+    if (!clean) return;
+
+    setProjects((prev) =>
+      prev.map((p) => (p.id === projectId ? { ...p, name: clean } : p))
+    );
     try {
-      await fetch('/api/desk', {
+      await fetch('/api/projects', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: taskId, ...updates }),
+        body: JSON.stringify({ id: projectId, name: clean }),
       });
     } catch (err) {
-      console.error('Failed to patch task:', err);
+      console.error('Error renaming project:', err);
     }
   }, []);
 
-  // Focus Mode Timer Tick + Auto-Save Actual Seconds
+  const handleSaveProjectInstructions = useCallback(
+    async (projectId: string, instructions: string) => {
+      setEditingInstructionsId(null);
+      setProjects((prev) =>
+        prev.map((p) => (p.id === projectId ? { ...p, instructions } : p))
+      );
+      try {
+        await fetch('/api/projects', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: projectId, instructions }),
+        });
+      } catch (err) {
+        console.error('Error updating project instructions:', err);
+      }
+    },
+    []
+  );
+
+  const handleAssignTaskProject = useCallback(
+    async (task: Task, targetProjectId: string | null) => {
+      const normalizedId =
+        !targetProjectId || targetProjectId === generalProject.id ? null : targetProjectId;
+      await patchTask(task.id, { project_id: normalizedId });
+    },
+    [generalProject.id, patchTask]
+  );
+
+  // Date Helpers
+  const todayStart = useMemo(() => startOfDay(now), [now]);
+  const tomorrowStart = useMemo(() => addDays(todayStart, 1), [todayStart]);
+  const dayAfterStart = useMemo(() => addDays(todayStart, 2), [todayStart]);
+
+  const activeTimelineDate = useMemo(() => {
+    if (timelineDayBucket === 'tomorrow') return tomorrowStart;
+    if (timelineDayBucket === 'later') return dayAfterStart;
+    return todayStart;
+  }, [timelineDayBucket, todayStart, tomorrowStart, dayAfterStart]);
+
+  // Focus Mode Timer
   useEffect(() => {
     if (!focusRunning || !focusTaskId) return;
     const interval = setInterval(() => {
@@ -324,128 +447,6 @@ export default function SunsamaWorkspace() {
     return () => clearInterval(interval);
   }, [focusRunning, focusTaskId, patchTask]);
 
-  // Channel Filtered Tasks
-  const channelFilteredTasks = useMemo(() => {
-    return tasks.filter((t) => {
-      if (selectedChannelTag === 'all') return true;
-      const ch = getChannelForTask(t, channels);
-      return ch.tag === selectedChannelTag;
-    });
-  }, [tasks, selectedChannelTag, channels]);
-
-  // Date Buckets: Backlog, Today, Tomorrow, Next Day
-  const todayStart = useMemo(() => startOfDay(now), [now]);
-  const tomorrowStart = useMemo(() => addDays(todayStart, 1), [todayStart]);
-  const dayAfterStart = useMemo(() => addDays(todayStart, 2), [todayStart]);
-
-  const classifyTaskBucket = useCallback(
-    (task: Task): 'backlog' | 'today' | 'tomorrow' | 'later' => {
-      if (!task.dueDate) {
-        return task.inPlayQueue ? 'today' : 'backlog';
-      }
-      const d = new Date(task.dueDate);
-      if (isNaN(d.getTime())) {
-        return task.inPlayQueue ? 'today' : 'backlog';
-      }
-      const dayStart = startOfDay(d);
-      if (dayStart.getTime() <= todayStart.getTime()) {
-        return 'today';
-      }
-      if (isSameCalendarDay(dayStart, tomorrowStart)) {
-        return 'tomorrow';
-      }
-      return 'later';
-    },
-    [todayStart, tomorrowStart]
-  );
-
-  const sortTasks = useCallback((list: Task[]) => {
-    return [...list].sort((a, b) => {
-      if (a.status !== b.status) {
-        return a.status === 'pending' ? -1 : 1;
-      }
-      const pRank = (p: TaskPriority) => (p === 'high' ? 3 : p === 'medium' ? 2 : 1);
-      if (pRank(a.priority) !== pRank(b.priority)) {
-        return pRank(b.priority) - pRank(a.priority);
-      }
-      const tbA = isTimeboxedDate(a.dueDate);
-      const tbB = isTimeboxedDate(b.dueDate);
-      if (tbA !== tbB) return tbA ? -1 : 1;
-      if (tbA && tbB && a.dueDate && b.dueDate) {
-        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      }
-      return (a.estimatedMinutes || 15) - (b.estimatedMinutes || 15);
-    });
-  }, []);
-
-  const backlogTasks = useMemo(() => {
-    return sortTasks(
-      channelFilteredTasks.filter((t) => {
-        if (t.status === 'completed') return false;
-        if (classifyTaskBucket(t) !== 'backlog') return false;
-        if (backlogSearch.trim()) {
-          const q = backlogSearch.toLowerCase();
-          return (
-            t.title.toLowerCase().includes(q) ||
-            (t.description || '').toLowerCase().includes(q)
-          );
-        }
-        return true;
-      })
-    );
-  }, [channelFilteredTasks, classifyTaskBucket, backlogSearch, sortTasks]);
-
-  const todayTasks = useMemo(() => {
-    return sortTasks(
-      channelFilteredTasks.filter((t) => classifyTaskBucket(t) === 'today')
-    );
-  }, [channelFilteredTasks, classifyTaskBucket, sortTasks]);
-
-  const tomorrowTasks = useMemo(() => {
-    return sortTasks(
-      channelFilteredTasks.filter(
-        (t) => t.status !== 'completed' && classifyTaskBucket(t) === 'tomorrow'
-      )
-    );
-  }, [channelFilteredTasks, classifyTaskBucket, sortTasks]);
-
-  const laterTasks = useMemo(() => {
-    return sortTasks(
-      channelFilteredTasks.filter(
-        (t) => t.status !== 'completed' && classifyTaskBucket(t) === 'later'
-      )
-    );
-  }, [channelFilteredTasks, classifyTaskBucket, sortTasks]);
-
-  // Workload Metrics for Today & Tomorrow
-  const todayPendingMinutes = useMemo(
-    () =>
-      todayTasks
-        .filter((t) => t.status !== 'completed')
-        .reduce((acc, t) => acc + (t.estimatedMinutes || 15), 0),
-    [todayTasks]
-  );
-
-  const todayCompletedMinutes = useMemo(
-    () =>
-      todayTasks
-        .filter((t) => t.status === 'completed')
-        .reduce((acc, t) => acc + (t.estimatedMinutes || 15), 0),
-    [todayTasks]
-  );
-
-  const todayTotalPlannedMinutes = todayPendingMinutes + todayCompletedMinutes;
-
-  const tomorrowPlannedMinutes = useMemo(
-    () => tomorrowTasks.reduce((acc, t) => acc + (t.estimatedMinutes || 15), 0),
-    [tomorrowTasks]
-  );
-
-  const laterPlannedMinutes = useMemo(
-    () => laterTasks.reduce((acc, t) => acc + (t.estimatedMinutes || 15), 0),
-    [laterTasks]
-  );
-
   // Change Duration (down to 5m)
   const handleSetDuration = useCallback(
     async (task: Task, mins: number) => {
@@ -455,7 +456,7 @@ export default function SunsamaWorkspace() {
         estimatedMinutes: clamped,
         inPlayQueue: task.inPlayQueue,
         subtasks: task.subtasks,
-        tags: task.tags,
+        tags: [],
       });
       await patchTask(task.id, {
         estimated_minutes: clamped,
@@ -465,7 +466,7 @@ export default function SunsamaWorkspace() {
     [patchTask]
   );
 
-  // Global Mouse Move / Mouse Up Listeners for Calendar Block Drag-to-Resize
+  // Calendar Resize Listener
   useEffect(() => {
     if (!resizingState) return;
 
@@ -473,7 +474,6 @@ export default function SunsamaWorkspace() {
       const deltaY = e.clientY - resizingState.startY;
       const deltaMinutes = deltaY / PX_PER_MINUTE;
       const rawTarget = resizingState.initialMinutes + deltaMinutes;
-      // Snap to 5-minute increments, minimum 5 minutes!
       const snapped = Math.max(5, Math.min(360, Math.round(rawTarget / 5) * 5));
       setResizingState((prev) =>
         prev ? { ...prev, previewMinutes: snapped } : null
@@ -500,49 +500,6 @@ export default function SunsamaWorkspace() {
     };
   }, [resizingState, tasks, handleSetDuration, patchTask]);
 
-  // Actions: Move Task between Backlog / Today / Tomorrow / Later / Timebox Hour+Minute
-  const moveTaskToBucket = useCallback(
-    async (task: Task, bucket: 'backlog' | 'today' | 'tomorrow' | 'later') => {
-      let nextDue: string | null = null;
-      let nextQueue = false;
-
-      if (bucket === 'today') {
-        nextDue = todayStart.toISOString();
-        nextQueue = true;
-      } else if (bucket === 'tomorrow') {
-        nextDue = tomorrowStart.toISOString();
-        nextQueue = false;
-      } else if (bucket === 'later') {
-        nextDue = dayAfterStart.toISOString();
-        nextQueue = false;
-      } else {
-        nextDue = null;
-        nextQueue = false;
-      }
-
-      const nextDesc = buildTaskDescription({
-        cleanNotes: extractCleanNotes(task.description),
-        estimatedMinutes: task.estimatedMinutes || 15,
-        inPlayQueue: nextQueue,
-        subtasks: task.subtasks,
-        tags: task.tags,
-      });
-
-      await patchTask(task.id, {
-        due_date: nextDue,
-        in_play_queue: nextQueue,
-        description: nextDesc,
-      });
-    },
-    [todayStart, tomorrowStart, dayAfterStart, patchTask]
-  );
-
-  const activeTimelineDate = useMemo(() => {
-    if (timelineDayBucket === 'tomorrow') return tomorrowStart;
-    if (timelineDayBucket === 'later') return dayAfterStart;
-    return todayStart;
-  }, [timelineDayBucket, todayStart, tomorrowStart, dayAfterStart]);
-
   const scheduleTaskAtSlot = useCallback(
     async (task: Task, hour: number, minute: number = 0) => {
       const slotDate = new Date(
@@ -560,7 +517,7 @@ export default function SunsamaWorkspace() {
         estimatedMinutes: task.estimatedMinutes || 15,
         inPlayQueue: isTodayTarget,
         subtasks: task.subtasks,
-        tags: task.tags,
+        tags: [],
       });
       await patchTask(task.id, {
         due_date: slotDate.toISOString(),
@@ -571,22 +528,30 @@ export default function SunsamaWorkspace() {
     [activeTimelineDate, timelineDayBucket, patchTask]
   );
 
-  const clearTaskTimebox = useCallback(
+  // Move a scheduled/missed task back to its Project's Open List
+  const moveTaskBackToOpen = useCallback(
     async (task: Task) => {
       if (String(task.id).startsWith('cal-event-')) {
         await patchTask(task.id, { due_date: null });
         return;
       }
-      const nextDue = activeTimelineDate.toISOString();
+      const nextDesc = buildTaskDescription({
+        cleanNotes: extractCleanNotes(task.description),
+        estimatedMinutes: task.estimatedMinutes || 15,
+        inPlayQueue: false,
+        subtasks: task.subtasks,
+        tags: [],
+      });
       await patchTask(task.id, {
-        due_date: nextDue,
-        in_play_queue: timelineDayBucket === 'today',
+        due_date: null,
+        in_play_queue: false,
+        description: nextDesc,
       });
     },
-    [activeTimelineDate, timelineDayBucket, patchTask]
+    [patchTask]
   );
 
-  // Global Mouse Move / Mouse Up Listeners for Calendar Block Drag-to-Move
+  // Calendar Move Listener
   useEffect(() => {
     if (!movingState) return;
 
@@ -648,79 +613,6 @@ export default function SunsamaWorkspace() {
     };
   }, [movingState, activeTimelineDate, tasks, scheduleTaskAtSlot, patchTask]);
 
-  // Auto-Timebox Unslotted Today Tasks in 15-Minute / 5-Minute Increments
-  const handleAutoTimeboxToday = useCallback(async () => {
-    const unslotted = todayTasks.filter(
-      (t) => t.status !== 'completed' && !isTimeboxedDate(t.dueDate)
-    );
-    if (unslotted.length === 0) return;
-
-    const slotted = todayTasks.filter(
-      (t) => t.status !== 'completed' && isTimeboxedDate(t.dueDate) && t.dueDate
-    );
-
-    const occupied: { start: number; end: number }[] = [
-      ...slotted.map((t) => {
-        const s = new Date(t.dueDate!).getTime();
-        return {
-          start: s,
-          end: s + Math.max(5, t.estimatedMinutes || 15) * 60000,
-        };
-      }),
-      ...calendarEvents
-        .filter((ev) => isSameCalendarDay(new Date(ev.start), todayStart))
-        .map((ev) => {
-          const s = new Date(ev.start).getTime();
-          return {
-            start: s,
-            end: s + Math.max(5, ev.durationMinutes || 30) * 60000,
-          };
-        }),
-    ];
-
-    const currentRoundedQuarter = Math.ceil(now.getMinutes() / 15) * 15;
-    const startCursor = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      Math.max(8, now.getHours()),
-      now.getHours() >= 8 ? currentRoundedQuarter : 0,
-      0,
-      0
-    ).getTime();
-    const dayEnd = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      20,
-      30,
-      0,
-      0
-    ).getTime();
-
-    let probe = startCursor;
-
-    for (const task of unslotted) {
-      const durMs = Math.max(5, task.estimatedMinutes || 15) * 60000;
-      while (probe + durMs <= dayEnd) {
-        const probeEnd = probe + durMs;
-        const conflict = occupied.some(
-          (r) => probe < r.end && probeEnd > r.start
-        );
-        if (!conflict) {
-          occupied.push({ start: probe, end: probeEnd });
-          const d = new Date(probe);
-          await scheduleTaskAtSlot(task, d.getHours(), d.getMinutes());
-          // Snap next probe to next 5-minute mark
-          const nextMs = Math.ceil(probeEnd / (5 * 60000)) * (5 * 60000);
-          probe = nextMs;
-          break;
-        }
-        probe += 5 * 60000;
-      }
-    }
-  }, [todayTasks, calendarEvents, todayStart, now, scheduleTaskAtSlot]);
-
   // Toggle Complete
   const handleToggleComplete = useCallback(
     async (task: Task) => {
@@ -730,99 +622,12 @@ export default function SunsamaWorkspace() {
     [patchTask]
   );
 
-  // Change Channel Tag
-  const handleSetChannel = useCallback(
-    async (task: Task, channelTag: string) => {
-      const otherTags = (task.tags || []).filter(
-        (t) => !channels.some((c) => c.tag === t.toLowerCase())
-      );
-      const nextTags =
-        channelTag === 'general' ? otherTags : [...otherTags, channelTag];
-      const nextDesc = buildTaskDescription({
-        cleanNotes: extractCleanNotes(task.description),
-        estimatedMinutes: task.estimatedMinutes || 15,
-        inPlayQueue: task.inPlayQueue,
-        subtasks: task.subtasks,
-        tags: nextTags,
-      });
-      await patchTask(task.id, {
-        tags: nextTags,
-        description: nextDesc,
-      });
-    },
-    [patchTask, channels]
-  );
-
-  const handleOpenNewChannelModal = () => {
-    setNewChannelName('');
-    setNewChannelTag('');
-    setNewChannelColor(CHANNEL_COLORS[(channels.length + 2) % CHANNEL_COLORS.length]);
-    setChannelError(null);
-    setIsNewChannelModalOpen(true);
-  };
-
-  const handleCreateChannel = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = newChannelName.trim();
-    if (!trimmed) {
-      setChannelError('Channel name is required');
-      return;
-    }
-    setCreatingChannel(true);
-    setChannelError(null);
-    try {
-      const res = await fetch('/api/channels', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          label: trimmed,
-          tag: newChannelTag.trim(),
-          color: newChannelColor,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) {
-        throw new Error(data.error || 'Failed to create channel');
-      }
-      if (data.channels) {
-        setChannels(data.channels);
-      }
-      if (data.channel) {
-        setSelectedChannelTag(data.channel.tag);
-      }
-      setIsNewChannelModalOpen(false);
-      setNewChannelName('');
-      setNewChannelTag('');
-    } catch (err: any) {
-      setChannelError(err.message || 'Error creating channel');
-    } finally {
-      setCreatingChannel(false);
-    }
-  };
-
-  const handleDeleteChannel = async (e: React.MouseEvent, tag: string) => {
-    e.stopPropagation();
-    if (!confirm(`Delete channel #${tag}? Tasks with this tag will not be deleted.`)) return;
-    try {
-      const res = await fetch(`/api/channels?tag=${encodeURIComponent(tag)}`, {
-        method: 'DELETE',
-      });
-      const data = await res.json();
-      if (data.channels) {
-        setChannels(data.channels);
-        if (selectedChannelTag === tag) setSelectedChannelTag('all');
-      }
-    } catch (err) {
-      console.error('Error deleting channel:', err);
-    }
-  };
-
-  // Inline Create Task in any Column
-  const handleCreateTaskInBucket = useCallback(
-    async (bucket: 'backlog' | 'today' | 'tomorrow' | 'later') => {
+  // Create Task inside a Project Group
+  const handleCreateTaskInProject = useCallback(
+    async (projectId: string) => {
       const raw = newTaskTitle.trim();
       if (!raw) {
-        setAddingInColumn(null);
+        setAddingInProjectId(null);
         return;
       }
 
@@ -832,56 +637,37 @@ export default function SunsamaWorkspace() {
         duration = Math.max(5, parseInt(durMatch[1], 10));
       }
 
-      const inlineTags = (raw.match(/#([a-zA-Z0-9_\-]+)/g) || []).map((t) =>
-        t.substring(1).toLowerCase()
-      );
-      if (
-        selectedChannelTag !== 'all' &&
-        selectedChannelTag !== 'general' &&
-        !inlineTags.includes(selectedChannelTag)
-      ) {
-        inlineTags.push(selectedChannelTag);
-      }
-
       const titleClean = cleanTaskTitle(raw.replace(/\b\d+m\b/gi, '').trim());
-      let due: string | null = null;
-      let inQueue = false;
-      if (bucket === 'today') {
-        due = todayStart.toISOString();
-        inQueue = true;
-      } else if (bucket === 'tomorrow') {
-        due = tomorrowStart.toISOString();
-      } else if (bucket === 'later') {
-        due = dayAfterStart.toISOString();
-      }
+      const normalizedProjId = projectId === generalProject.id ? null : projectId;
 
       const desc = buildTaskDescription({
         cleanNotes: '',
         estimatedMinutes: duration,
-        inPlayQueue: inQueue,
+        inPlayQueue: false,
         subtasks: [],
-        tags: inlineTags,
+        tags: [],
       });
 
       const tempId = crypto.randomUUID();
       const created: Task = {
         id: tempId,
+        projectId: normalizedProjId,
         title: titleClean,
         description: desc,
         listName: 'General',
         status: 'pending',
-        dueDate: due,
+        dueDate: null,
         estimatedMinutes: duration,
         priority: 'medium',
-        inPlayQueue: inQueue,
+        inPlayQueue: false,
         subtasks: [],
-        tags: inlineTags,
+        tags: [],
         createdAt: new Date().toISOString(),
       };
 
       setTasks((prev) => [created, ...prev]);
       setNewTaskTitle('');
-      setAddingInColumn(null);
+      setAddingInProjectId(null);
 
       try {
         await fetch('/api/desk', {
@@ -889,31 +675,26 @@ export default function SunsamaWorkspace() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: tempId,
+            project_id: normalizedProjId,
             title: titleClean,
             description: desc,
             list_name: 'General',
             status: 'pending',
-            due_date: due,
+            due_date: null,
             estimated_minutes: duration,
             priority: 'medium',
-            in_play_queue: inQueue,
-            tags: inlineTags,
+            in_play_queue: false,
+            tags: [],
           }),
         });
       } catch (err) {
         console.error('Error creating task:', err);
       }
     },
-    [
-      newTaskTitle,
-      selectedChannelTag,
-      todayStart,
-      tomorrowStart,
-      dayAfterStart,
-    ]
+    [newTaskTitle, generalProject.id]
   );
 
-  // Click any 15-Minute Calendar Slot to Create a Timeboxed Task at that Slot
+  // Quick-add directly at a 15-minute calendar slot
   const handleQuickAddAtSlot = useCallback(
     async (hour: number, minute: number) => {
       const slotDate = new Date(
@@ -926,22 +707,25 @@ export default function SunsamaWorkspace() {
         0
       );
       const due = slotDate.toISOString();
-      const inQueue = timelineDayBucket === 'today';
-      const inlineTags =
-        selectedChannelTag !== 'all' && selectedChannelTag !== 'general'
-          ? [selectedChannelTag]
-          : [];
+      const targetProjId =
+        selectedProjectFilter !== 'all' &&
+        selectedProjectFilter !== 'general' &&
+        selectedProjectFilter !== generalProject.id
+          ? selectedProjectFilter
+          : null;
+
       const desc = buildTaskDescription({
         cleanNotes: '',
         estimatedMinutes: 15,
-        inPlayQueue: inQueue,
+        inPlayQueue: timelineDayBucket === 'today',
         subtasks: [],
-        tags: inlineTags,
+        tags: [],
       });
 
       const tempId = crypto.randomUUID();
       const created: Task = {
         id: tempId,
+        projectId: targetProjId,
         title: 'New scheduled task',
         description: desc,
         listName: 'General',
@@ -949,9 +733,9 @@ export default function SunsamaWorkspace() {
         dueDate: due,
         estimatedMinutes: 15,
         priority: 'medium',
-        inPlayQueue: inQueue,
+        inPlayQueue: timelineDayBucket === 'today',
         subtasks: [],
-        tags: inlineTags,
+        tags: [],
         createdAt: new Date().toISOString(),
       };
 
@@ -964,6 +748,7 @@ export default function SunsamaWorkspace() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: tempId,
+            project_id: targetProjId,
             title: created.title,
             description: desc,
             list_name: 'General',
@@ -971,15 +756,15 @@ export default function SunsamaWorkspace() {
             due_date: due,
             estimated_minutes: 15,
             priority: 'medium',
-            in_play_queue: inQueue,
-            tags: inlineTags,
+            in_play_queue: timelineDayBucket === 'today',
+            tags: [],
           }),
         });
       } catch (err) {
         console.error('Error creating slot task:', err);
       }
     },
-    [activeTimelineDate, timelineDayBucket, selectedChannelTag]
+    [activeTimelineDate, timelineDayBucket, selectedProjectFilter, generalProject.id]
   );
 
   // Delete Task or Calendar Event
@@ -1002,7 +787,7 @@ export default function SunsamaWorkspace() {
     }
   }, []);
 
-  // Subtask Toggle & Add
+  // Subtasks
   const handleToggleSubtask = useCallback(
     async (task: Task, subtaskId: string) => {
       const nextSubs = (task.subtasks || []).map((s) =>
@@ -1013,7 +798,7 @@ export default function SunsamaWorkspace() {
         estimatedMinutes: task.estimatedMinutes,
         inPlayQueue: task.inPlayQueue,
         subtasks: nextSubs,
-        tags: task.tags,
+        tags: [],
       });
       await patchTask(task.id, {
         subtasks: nextSubs,
@@ -1036,7 +821,7 @@ export default function SunsamaWorkspace() {
         estimatedMinutes: task.estimatedMinutes,
         inPlayQueue: task.inPlayQueue,
         subtasks: nextSubs,
-        tags: task.tags,
+        tags: [],
       });
       await patchTask(task.id, {
         subtasks: nextSubs,
@@ -1046,18 +831,235 @@ export default function SunsamaWorkspace() {
     [patchTask]
   );
 
-  // Evening Shutdown Rollover
-  const handleShutdownRollover = useCallback(
-    async (target: 'tomorrow' | 'backlog') => {
-      const incompleteToday = todayTasks.filter((t) => t.status !== 'completed');
-      for (const t of incompleteToday) {
-        await moveTaskToBucket(t, target);
+  // Apply AI Plan from Pasted Transcript (or Auto-Classify by Project Instructions)
+  const runTranscriptPlanner = useCallback(
+    async (mode: 'plan_day' | 'classify_only') => {
+      setIsPlanningTranscript(true);
+      setTranscriptStatusMsg(null);
+      try {
+        const res = await fetch('/api/plan-transcript', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            transcript: transcriptText,
+            mode,
+            projects,
+            tasks,
+            calendarEvents,
+            currentTimeIso: now.toISOString(),
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json.error || 'Failed to run planner');
+        }
+
+        // 1. Create any new projects mentioned
+        const updatedProjectList = [...projects];
+        for (const np of json.newProjects || []) {
+          if (!np?.name) continue;
+          const exists = updatedProjectList.find(
+            (p) => p.name.toLowerCase() === String(np.name).toLowerCase()
+          );
+          if (!exists) {
+            const createdProj = await handleCreateProject(np.name, np.instructions || '');
+            if (createdProj) updatedProjectList.push(createdProj);
+          }
+        }
+
+        const resolveProjectId = (projName?: string | null): string | null | undefined => {
+          if (!projName) return undefined;
+          const lower = projName.toLowerCase().trim();
+          if (lower === 'general') return null;
+          const found = updatedProjectList.find((p) => p.name.toLowerCase() === lower);
+          return found ? found.id : undefined;
+        };
+
+        // 2. Apply task updates (project assignment, timebox slot, or unscheduling back to open)
+        for (const upd of json.taskUpdates || []) {
+          const targetTask = tasks.find((t) => t.id === upd.taskId);
+          if (!targetTask) continue;
+          const patchPayload: Record<string, any> = {};
+          const resolvedProjId = resolveProjectId(upd.projectName);
+          if (resolvedProjId !== undefined) {
+            patchPayload.project_id = resolvedProjId;
+          }
+          if (upd.dueDate !== undefined) {
+            patchPayload.due_date = upd.dueDate;
+            patchPayload.in_play_queue = Boolean(upd.dueDate);
+          }
+          if (upd.estimatedMinutes) {
+            patchPayload.estimated_minutes = Math.max(5, Number(upd.estimatedMinutes));
+          }
+          if (Object.keys(patchPayload).length > 0) {
+            await patchTask(targetTask.id, patchPayload);
+          }
+        }
+
+        // 3. Create any brand-new tasks extracted from transcript
+        for (const nt of json.newTasks || []) {
+          if (!nt?.title) continue;
+          const newId = crypto.randomUUID();
+          const projId = resolveProjectId(nt.projectName) ?? null;
+          const mins = Math.max(5, Number(nt.estimatedMinutes || 15));
+          const titleClean = cleanTaskTitle(nt.title);
+          const desc = buildTaskDescription({
+            cleanNotes: '',
+            estimatedMinutes: mins,
+            inPlayQueue: Boolean(nt.dueDate),
+            subtasks: [],
+            tags: [],
+          });
+          const createdTask: Task = {
+            id: newId,
+            projectId: projId,
+            title: titleClean,
+            description: desc,
+            listName: 'General',
+            status: 'pending',
+            dueDate: nt.dueDate || null,
+            estimatedMinutes: mins,
+            priority: 'medium',
+            inPlayQueue: Boolean(nt.dueDate),
+            subtasks: [],
+            tags: [],
+            createdAt: new Date().toISOString(),
+          };
+          setTasks((prev) => [createdTask, ...prev]);
+          await fetch('/api/desk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: newId,
+              project_id: projId,
+              title: titleClean,
+              description: desc,
+              list_name: 'General',
+              status: 'pending',
+              due_date: nt.dueDate || null,
+              estimated_minutes: mins,
+              priority: 'medium',
+              in_play_queue: Boolean(nt.dueDate),
+              tags: [],
+            }),
+          });
+        }
+
+        setTranscriptStatusMsg(json.summary || 'Schedule updated.');
+        if (mode === 'plan_day') {
+          setTranscriptText('');
+          setActiveModal('none');
+        }
+      } catch (err: any) {
+        setTranscriptStatusMsg(`Error: ${err.message}`);
+      } finally {
+        setIsPlanningTranscript(false);
       }
-      setActiveModal('none');
     },
-    [todayTasks, moveTaskToBucket]
+    [transcriptText, projects, tasks, calendarEvents, now, handleCreateProject, patchTask]
   );
 
+  // Auto-Slot Unscheduled Today/Open Tasks into Free 15m/5m Calendar Gaps
+  const handleAutoTimeboxToday = useCallback(async () => {
+    const candidates = tasks.filter(
+      (t) => t.status !== 'completed' && !isTimeboxedDate(t.dueDate)
+    );
+    if (candidates.length === 0) return;
+
+    const slotted = tasks.filter(
+      (t) =>
+        t.status !== 'completed' &&
+        isTimeboxedDate(t.dueDate) &&
+        t.dueDate &&
+        isSameCalendarDay(new Date(t.dueDate), activeTimelineDate)
+    );
+
+    const occupied: { start: number; end: number }[] = [
+      ...slotted.map((t) => {
+        const s = new Date(t.dueDate!).getTime();
+        return {
+          start: s,
+          end: s + Math.max(5, t.estimatedMinutes || 15) * 60000,
+        };
+      }),
+      ...calendarEvents
+        .filter((ev) => isSameCalendarDay(new Date(ev.start), activeTimelineDate))
+        .map((ev) => {
+          const s = new Date(ev.start).getTime();
+          return {
+            start: s,
+            end: s + Math.max(5, ev.durationMinutes || 30) * 60000,
+          };
+        }),
+    ];
+
+    const isToday = isSameCalendarDay(activeTimelineDate, todayStart);
+    const currentRoundedQuarter = Math.ceil(now.getMinutes() / 15) * 15;
+    let probe = new Date(
+      activeTimelineDate.getFullYear(),
+      activeTimelineDate.getMonth(),
+      activeTimelineDate.getDate(),
+      isToday ? Math.max(8, now.getHours()) : 8,
+      isToday && now.getHours() >= 8 ? currentRoundedQuarter : 0,
+      0,
+      0
+    ).getTime();
+
+    const dayEnd = new Date(
+      activeTimelineDate.getFullYear(),
+      activeTimelineDate.getMonth(),
+      activeTimelineDate.getDate(),
+      20,
+      30,
+      0,
+      0
+    ).getTime();
+
+    for (const task of candidates.slice(0, 6)) {
+      const durMs = Math.max(5, task.estimatedMinutes || 15) * 60000;
+      while (probe + durMs <= dayEnd) {
+        const probeEnd = probe + durMs;
+        const conflict = occupied.some((r) => probe < r.end && probeEnd > r.start);
+        if (!conflict) {
+          occupied.push({ start: probe, end: probeEnd });
+          const d = new Date(probe);
+          await scheduleTaskAtSlot(task, d.getHours(), d.getMinutes());
+          probe = Math.ceil(probeEnd / (5 * 60000)) * (5 * 60000);
+          break;
+        }
+        probe += 5 * 60000;
+      }
+    }
+  }, [tasks, calendarEvents, activeTimelineDate, todayStart, now, scheduleTaskAtSlot]);
+
+  // Open Tasks Filtered by Search
+  const openTasks = useMemo(() => {
+    return tasks.filter((t) => {
+      if (t.status === 'completed') return false;
+      if (taskSearch.trim()) {
+        const q = taskSearch.toLowerCase();
+        return (
+          t.title.toLowerCase().includes(q) ||
+          (t.description || '').toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [tasks, taskSearch]);
+
+  // Ordered Project Groups: General first, then user-created projects
+  const orderedProjects = useMemo(
+    () => [generalProject, ...customProjects],
+    [generalProject, customProjects]
+  );
+
+  const visibleProjectGroups = useMemo(() => {
+    if (selectedProjectFilter === 'all') return orderedProjects;
+    if (selectedProjectFilter === 'general') return [generalProject];
+    return orderedProjects.filter((p) => p.id === selectedProjectFilter);
+  }, [selectedProjectFilter, orderedProjects, generalProject]);
+
+  // Inspector Task (supports both tasks and calendar events)
   const inspectingTask = useMemo(() => {
     if (!inspectingTaskId) return null;
     const fromTasks = tasks.find((t) => t.id === inspectingTaskId);
@@ -1086,12 +1088,13 @@ export default function SunsamaWorkspace() {
     return null;
   }, [tasks, calendarEvents, inspectingTaskId]);
 
-  // Focus Mode Queue: Today's pending tasks first, then Backlog tasks so Focus Mode NEVER fails to open!
+  // Focus Mode Queue
   const focusQueue = useMemo(() => {
-    const todayPending = todayTasks.filter((t) => t.status !== 'completed');
-    if (todayPending.length > 0) return todayPending;
-    return backlogTasks;
-  }, [todayTasks, backlogTasks]);
+    const scheduledToday = openTasks.filter(
+      (t) => t.dueDate && isTimeboxedDate(t.dueDate) && isSameCalendarDay(new Date(t.dueDate), todayStart)
+    );
+    return scheduledToday.length > 0 ? scheduledToday : openTasks;
+  }, [openTasks, todayStart]);
 
   const activeFocusTask = useMemo(() => {
     if (focusTaskId) {
@@ -1118,17 +1121,13 @@ export default function SunsamaWorkspace() {
     [focusQueue]
   );
 
-  // Timeboxed Tasks & Calendar Appointments for Selected Day's Calendar Timeline (with side-by-side overlap layout)
-  const timeboxedTodayTasks = useMemo(() => {
+  // Calendar Timeline Positioned Blocks
+  const timeboxedTimelineBlocks = useMemo(() => {
     const taskBlocks = tasks.filter((t) => {
       if (!t.dueDate || !isTimeboxedDate(t.dueDate)) return false;
       const d = new Date(t.dueDate);
       if (isNaN(d.getTime())) return false;
-      if (!isSameCalendarDay(d, activeTimelineDate)) return false;
-
-      if (selectedChannelTag === 'all') return true;
-      const ch = getChannelForTask(t, channels);
-      return ch.tag === selectedChannelTag;
+      return isSameCalendarDay(d, activeTimelineDate);
     });
 
     const calendarBlocks: Task[] = calendarEvents
@@ -1155,8 +1154,6 @@ export default function SunsamaWorkspace() {
       }));
 
     const raw = [...calendarBlocks, ...taskBlocks];
-
-    // Sort by start time, then longest duration first
     const sorted = [...raw].sort((a, b) => {
       const sA = new Date(a.dueDate!).getTime();
       const sB = new Date(b.dueDate!).getTime();
@@ -1164,12 +1161,9 @@ export default function SunsamaWorkspace() {
       return (b.estimatedMinutes || 15) - (a.estimatedMinutes || 15);
     });
 
-    // Compute overlapping columns so concurrent appointments render side-by-side instead of covering each other
     type PositionedTask = Task & { colIndex: number; totalCols: number };
     const positioned: PositionedTask[] = [];
     const columnsEndMs: number[] = [];
-
-    // Group into connected overlap clusters
     let cluster: { task: Task; startMs: number; endMs: number; colIndex: number }[] = [];
     let clusterMaxEnd = -1;
 
@@ -1212,18 +1206,27 @@ export default function SunsamaWorkspace() {
     flushCluster();
 
     return positioned;
-  }, [tasks, calendarEvents, activeTimelineDate, selectedChannelTag, channels]);
+  }, [tasks, calendarEvents, activeTimelineDate]);
 
-  // Render a Sunsama Task Card
-  const renderTaskCard = (
-    task: Task,
-    currentBucket: 'backlog' | 'today' | 'tomorrow' | 'later'
-  ) => {
-    const channel = getChannelForTask(task, channels);
-    const isDone = task.status === 'completed';
+  // Scheduled Minutes Today
+  const todayScheduledMinutes = useMemo(
+    () =>
+      tasks
+        .filter(
+          (t) =>
+            t.status !== 'completed' &&
+            t.dueDate &&
+            isTimeboxedDate(t.dueDate) &&
+            isSameCalendarDay(new Date(t.dueDate), todayStart)
+        )
+        .reduce((acc, t) => acc + (t.estimatedMinutes || 15), 0),
+    [tasks, todayStart]
+  );
+
+  // Render Task Card inside Project Group
+  const renderTaskCard = (task: Task) => {
+    const taskProj = getTaskProject(task);
     const timeboxed = isTimeboxedDate(task.dueDate);
-    const completedSubs = (task.subtasks || []).filter((s) => s.isCompleted).length;
-    const totalSubs = (task.subtasks || []).length;
     const displayMinutes =
       resizingState?.taskId === task.id
         ? resizingState.previewMinutes
@@ -1242,13 +1245,8 @@ export default function SunsamaWorkspace() {
           setDragOverTarget(null);
         }}
         onClick={() => setInspectingTaskId(task.id)}
-        className={`group relative rounded-xl border p-3.5 transition-all cursor-pointer select-none ${
-          isDone
-            ? 'bg-[#14161B]/60 border-white/[0.04] opacity-60'
-            : 'bg-[#1B1E26] hover:bg-[#212530] border-white/[0.07] hover:border-white/[0.14] shadow-sm'
-        }`}
+        className="group relative rounded-xl border bg-[#1B1E26] hover:bg-[#212530] border-white/[0.07] hover:border-white/[0.15] p-3 transition-all cursor-pointer select-none shadow-sm"
       >
-        {/* Top Row: Checkbox + Title + Quick Hover Actions */}
         <div className="flex items-start gap-2.5">
           <button
             type="button"
@@ -1256,168 +1254,84 @@ export default function SunsamaWorkspace() {
               e.stopPropagation();
               handleToggleComplete(task);
             }}
-            className={`mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center transition-colors shrink-0 ${
-              isDone
-                ? 'bg-emerald-500 border-emerald-500 text-slate-950'
-                : 'border-slate-500 hover:border-indigo-400'
-            }`}
-          >
-            {isDone && <Check className="h-2.5 w-2.5 stroke-[3]" />}
-          </button>
+            className="mt-0.5 h-4 w-4 rounded-full border border-slate-500 hover:border-emerald-400 flex items-center justify-center transition-colors shrink-0"
+            title="Complete task"
+          />
 
           <div className="flex-1 min-w-0">
-            <p
-              className={`text-[13px] font-medium leading-snug break-words ${
-                isDone ? 'line-through text-slate-500' : 'text-slate-100'
-              }`}
-            >
+            <p className="text-[13px] font-medium leading-snug text-slate-100 break-words">
               {task.title}
             </p>
+            {extractCleanNotes(task.description) && (
+              <p className="text-[11px] text-slate-400 mt-1 line-clamp-1">
+                {extractCleanNotes(task.description)}
+              </p>
+            )}
           </div>
 
-          {/* Hover Quick Actions */}
           <div
             className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0"
             onClick={(e) => e.stopPropagation()}
           >
-            {currentBucket === 'backlog' && (
-              <button
-                type="button"
-                title="Move to Today"
-                onClick={() => moveTaskToBucket(task, 'today')}
-                className="px-2 py-0.5 rounded-md bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 text-[10px] font-semibold flex items-center gap-1"
-              >
-                <Sun className="h-2.5 w-2.5" />
-                <span>Today</span>
-              </button>
-            )}
-
             <button
               type="button"
-              title="Enter Focus Mode on this task"
+              title="Enter Focus Mode"
               onClick={() => openFocusMode(task)}
               className="p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
             >
               <Play className="h-3 w-3 fill-current" />
             </button>
-
-            {currentBucket === 'today' && (
-              <button
-                type="button"
-                title="Defer to Tomorrow"
-                onClick={() => moveTaskToBucket(task, 'tomorrow')}
-                className="p-1 rounded-md bg-white/[0.06] hover:bg-amber-500/20 text-slate-400 hover:text-amber-300"
-              >
-                <ArrowRight className="h-3 w-3" />
-              </button>
-            )}
           </div>
         </div>
 
-        {/* Subtasks Progress / Inline Checklist */}
-        {totalSubs > 0 && (
-          <div className="mt-2.5 pl-6 space-y-1">
-            {task.subtasks.slice(0, 3).map((sub) => (
-              <div
-                key={sub.id}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleToggleSubtask(task, sub.id);
-                }}
-                className="flex items-center gap-2 text-[11px] text-slate-400 hover:text-slate-200"
-              >
-                <div
-                  className={`h-3 w-3 rounded border flex items-center justify-center shrink-0 ${
-                    sub.isCompleted
-                      ? 'bg-indigo-500 border-indigo-500 text-white'
-                      : 'border-slate-600'
-                  }`}
-                >
-                  {sub.isCompleted && <Check className="h-2 w-2 stroke-[3]" />}
-                </div>
-                <span
-                  className={`truncate ${
-                    sub.isCompleted ? 'line-through text-slate-600' : ''
-                  }`}
-                >
-                  {sub.title}
-                </span>
-              </div>
-            ))}
-            {totalSubs > 3 && (
-              <div className="text-[10px] text-slate-500">
-                +{totalSubs - 3} more steps ({completedSubs}/{totalSubs})
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Sunsama Card Footer: Channel Tag + Timebox Badge + Quick Duration Controls (down to 5m) */}
+        {/* Footer: Project Selector + Scheduled Slot Badge (with Move back to Open) + Duration */}
         <div
-          className="mt-3 pl-6 flex items-center justify-between gap-2 text-[11px]"
+          className="mt-2.5 pl-6 flex items-center justify-between gap-2 text-[11px]"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
-            {/* Channel Selector Pill */}
+            {/* Project Assignment Selector */}
             <div className="relative inline-flex items-center">
               <select
-                aria-label="Channel tag"
-                value={channel.tag}
-                onChange={(e) => handleSetChannel(task, e.target.value)}
-                className="appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 rounded-md pl-4 pr-2 py-0.5 text-[11px] font-medium cursor-pointer focus:outline-none border border-transparent hover:border-white/10"
+                aria-label="Assign project"
+                value={taskProj.id}
+                onChange={(e) => handleAssignTaskProject(task, e.target.value)}
+                className="appearance-none bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 rounded-md pl-4 pr-2.5 py-0.5 text-[11px] font-medium cursor-pointer focus:outline-none border border-transparent hover:border-white/10"
               >
-                {channels.map((ch) => (
-                  <option
-                    key={ch.tag}
-                    value={ch.tag}
-                    className="bg-[#1B1E26] text-white"
-                  >
-                    #{ch.label}
+                {orderedProjects.map((proj) => (
+                  <option key={proj.id} value={proj.id} className="bg-[#1B1E26] text-white">
+                    {proj.name}
                   </option>
                 ))}
               </select>
               <span
                 className="absolute left-1.5 h-1.5 w-1.5 rounded-full pointer-events-none"
-                style={{ backgroundColor: channel.color }}
+                style={{ backgroundColor: taskProj.color }}
               />
             </div>
 
-            {/* Timeboxed Clock / Calendar Appointment Badge */}
             {timeboxed && task.dueDate && (
-              <span
-                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ${
-                  isCalendarMeetingTask(task)
-                    ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
-                    : 'bg-indigo-500/15 text-indigo-300'
-                }`}
-              >
-                {isCalendarMeetingTask(task) ? (
-                  <CalendarIcon className="h-2.5 w-2.5" />
-                ) : (
-                  <Clock className="h-2.5 w-2.5" />
-                )}
-                {formatTimeRange(task.dueDate, displayMinutes)}
-              </span>
-            )}
-
-            {task.priority === 'high' && (
-              <span
-                className="inline-flex items-center text-rose-400"
-                title="High Priority"
-              >
-                <Flame className="h-3 w-3 fill-current" />
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-300 text-[10px] font-medium">
+                <Clock className="h-2.5 w-2.5" />
+                <span>{formatTimeRange(task.dueDate, displayMinutes)}</span>
+                <button
+                  type="button"
+                  onClick={() => moveTaskBackToOpen(task)}
+                  title="Move back to open list"
+                  className="ml-0.5 text-indigo-300 hover:text-white"
+                >
+                  <Undo2 className="h-2.5 w-2.5" />
+                </button>
               </span>
             )}
           </div>
 
-          {/* Stepper + Dropdown for Planned Duration (5m increments down to 5m) */}
+          {/* 5-minute precision duration control */}
           <div className="flex items-center gap-0.5 bg-white/[0.03] rounded-md px-1 py-0.5 border border-white/[0.05]">
             <button
               type="button"
-              title="Shorten by 5 minutes (min 5m)"
-              onClick={() =>
-                handleSetDuration(task, Math.max(5, displayMinutes - 5))
-              }
+              title="Shorten by 5m"
+              onClick={() => handleSetDuration(task, Math.max(5, displayMinutes - 5))}
               className="px-1 text-[10px] text-slate-500 hover:text-white font-bold"
             >
               −
@@ -1425,28 +1339,20 @@ export default function SunsamaWorkspace() {
             <select
               aria-label="Planned duration"
               value={displayMinutes}
-              onChange={(e) =>
-                handleSetDuration(task, parseInt(e.target.value, 10))
-              }
+              onChange={(e) => handleSetDuration(task, parseInt(e.target.value, 10))}
               className="appearance-none bg-transparent text-slate-300 hover:text-white px-1 text-[11px] font-mono cursor-pointer focus:outline-none text-center"
             >
-              {Array.from(
-                new Set([...DURATION_OPTIONS, displayMinutes])
-              )
+              {Array.from(new Set([...DURATION_OPTIONS, displayMinutes]))
                 .sort((a, b) => a - b)
                 .map((m) => (
-                  <option
-                    key={m}
-                    value={m}
-                    className="bg-[#1B1E26] text-white"
-                  >
+                  <option key={m} value={m} className="bg-[#1B1E26] text-white">
                     {formatDurationShort(m)}
                   </option>
                 ))}
             </select>
             <button
               type="button"
-              title="Extend by 5 minutes"
+              title="Extend by 5m"
               onClick={() => handleSetDuration(task, displayMinutes + 5)}
               className="px-1 text-[10px] text-slate-500 hover:text-white font-bold"
             >
@@ -1460,23 +1366,23 @@ export default function SunsamaWorkspace() {
 
   return (
     <div className="h-screen w-screen flex bg-[#111318] text-slate-100 font-sans overflow-hidden">
-      {/* 1. LEFT SUNSAMA NAVIGATION RAIL & CHANNELS */}
-      <aside className="w-56 bg-[#151820] border-r border-white/[0.06] flex flex-col justify-between shrink-0 select-none">
+      {/* 1. LEFT NAVIGATION RAIL & USER PROJECTS */}
+      <aside className="w-64 bg-[#151820] border-r border-white/[0.06] flex flex-col justify-between shrink-0 select-none">
         <div className="p-3.5 space-y-5 overflow-y-auto">
-          {/* Brand & Live Daemon Sync Status */}
-          <div className="flex items-center justify-between px-1.5">
-            <div className="flex items-center gap-2.5">
+          {/* Header & Sync */}
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
               <div className="h-6 w-6 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white font-bold text-xs shadow">
-                S
+                P
               </div>
               <span className="text-sm font-semibold tracking-tight text-white">
-                Sunsama
+                Day Planner
               </span>
             </div>
             <button
               type="button"
               onClick={loadData}
-              title="Sync with Mac Daemon & Supabase"
+              title="Refresh tasks & calendar"
               className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-white/[0.05] hover:bg-white/[0.1] text-[10px] text-slate-400"
             >
               <RefreshCw
@@ -1492,172 +1398,85 @@ export default function SunsamaWorkspace() {
             </button>
           </div>
 
-          {/* Primary Sunsama Navigation & Daily Rituals */}
-          <nav className="space-y-1">
+          {/* Primary Actions: Paste Transcript + Auto-Classify + Focus */}
+          <div className="space-y-1.5">
             <button
               type="button"
-              onClick={() => setActiveModal('none')}
-              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                activeModal === 'none'
-                  ? 'bg-white/[0.08] text-white'
-                  : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
-              }`}
+              onClick={() => {
+                setTranscriptStatusMsg(null);
+                setActiveModal('transcript_plan');
+              }}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-sm transition-colors"
             >
-              <span className="flex items-center gap-2">
-                <Columns className="h-3.5 w-3.5 text-indigo-400" />
-                <span>Daily Kanban</span>
-              </span>
-              <span className="text-[10px] text-slate-500">
-                {todayTasks.filter((t) => t.status !== 'completed').length}
-              </span>
+              <FileText className="h-3.5 w-3.5" />
+              <span>Paste Transcript / Plan Day</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setActiveModal('morning_plan')}
-              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                activeModal === 'morning_plan'
-                  ? 'bg-indigo-500/20 text-indigo-300'
-                  : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <Sun className="h-3.5 w-3.5 text-amber-400" />
-                <span>Plan My Day</span>
-              </span>
-            </button>
+            {customProjects.length > 0 && (
+              <button
+                type="button"
+                disabled={isPlanningTranscript}
+                onClick={() => runTranscriptPlanner('classify_only')}
+                className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.09] text-slate-300 text-xs font-medium transition-colors disabled:opacity-50"
+                title="Use project instructions to classify tasks in General"
+              >
+                <Wand2 className="h-3.5 w-3.5 text-amber-400" />
+                <span>
+                  {isPlanningTranscript ? 'Classifying...' : 'Classify General by Rules'}
+                </span>
+              </button>
+            )}
 
             <button
               type="button"
               onClick={() => openFocusMode()}
-              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                activeModal === 'focus_mode'
-                  ? 'bg-emerald-500/20 text-emerald-300'
-                  : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
-              }`}
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:bg-white/[0.04] hover:text-slate-200 transition-colors"
             >
               <span className="flex items-center gap-2">
                 <Play className="h-3.5 w-3.5 text-emerald-400 fill-current" />
                 <span>Focus Mode</span>
               </span>
-              <span className="text-[10px] text-slate-500">F</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setActiveModal('evening_shutdown')}
-              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                activeModal === 'evening_shutdown'
-                  ? 'bg-purple-500/20 text-purple-300'
-                  : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <Moon className="h-3.5 w-3.5 text-purple-400" />
-                <span>Daily Shutdown</span>
-              </span>
-            </button>
-          </nav>
-
-          {/* Workspace Pane Toggles */}
-          <div className="space-y-1 pt-2 border-t border-white/[0.06]">
-            <div className="px-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-              Panels
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowBacklogDrawer((v) => !v)}
-              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                showBacklogDrawer
-                  ? 'bg-white/[0.06] text-slate-200'
-                  : 'text-slate-500 hover:bg-white/[0.04]'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <Inbox className="h-3.5 w-3.5" />
-                <span>Backlog Drawer</span>
-              </span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded bg-white/[0.06]">
-                {backlogTasks.length}
-              </span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowCalendarPane((v) => !v)}
-              className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                showCalendarPane
-                  ? 'bg-white/[0.06] text-slate-200'
-                  : 'text-slate-500 hover:bg-white/[0.04]'
-              }`}
-            >
-              <span className="flex items-center gap-2">
-                <CalendarIcon className="h-3.5 w-3.5" />
-                <span>Calendar (15m Grid)</span>
-              </span>
-              <span className="text-[10px] text-slate-500">
-                {showCalendarPane ? 'On' : 'Off'}
-              </span>
             </button>
           </div>
 
-          {/* Channels List (#turn90, #843fc, etc.) */}
-          <div className="space-y-1 pt-2 border-t border-white/[0.06]">
+          {/* Projects List + Type to Create Project */}
+          <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
             <div className="px-2 flex items-center justify-between">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Channels
+                Projects
               </span>
-              <div className="flex items-center gap-1">
-                {selectedChannelTag !== 'all' && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedChannelTag('all')}
-                    className="text-[10px] text-indigo-400 hover:underline mr-1"
-                  >
-                    All
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleOpenNewChannelModal}
-                  className="p-1 rounded text-slate-400 hover:text-white hover:bg-white/[0.08] transition-colors"
-                  title="Create New Channel / Tag"
-                >
-                  <Plus className="h-3 w-3" />
-                </button>
-              </div>
+              <span className="text-[10px] text-slate-500">{openTasks.length} open</span>
             </div>
 
             <button
               type="button"
-              onClick={() => setSelectedChannelTag('all')}
+              onClick={() => setSelectedProjectFilter('all')}
               className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
-                selectedChannelTag === 'all'
+                selectedProjectFilter === 'all'
                   ? 'bg-white/[0.08] text-white font-medium'
                   : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
               }`}
             >
               <span className="flex items-center gap-2">
-                <Hash className="h-3 w-3 text-slate-400" />
-                <span>All Channels</span>
+                <Folder className="h-3.5 w-3.5 text-slate-400" />
+                <span>All Open Tasks</span>
               </span>
-              <span className="text-[10px] text-slate-500">
-                {tasks.filter((t) => t.status !== 'completed').length}
-              </span>
+              <span className="text-[10px] text-slate-500">{openTasks.length}</span>
             </button>
 
-            {channels.map((ch) => {
-              const count = tasks.filter(
-                (t) => t.status !== 'completed' && getChannelForTask(t, channels).tag === ch.tag
+            {orderedProjects.map((proj) => {
+              const count = openTasks.filter(
+                (t) => getTaskProject(t).id === proj.id
               ).length;
-              const isSelected = selectedChannelTag === ch.tag;
+              const isSelected = selectedProjectFilter === proj.id;
               return (
-                <div
-                  key={ch.tag}
+                <button
+                  key={proj.id}
+                  type="button"
                   onClick={() =>
-                    setSelectedChannelTag(isSelected ? 'all' : ch.tag)
+                    setSelectedProjectFilter(isSelected ? 'all' : proj.id)
                   }
-                  className={`group w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors ${
                     isSelected
                       ? 'bg-white/[0.08] text-white font-medium'
                       : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
@@ -1666,517 +1485,309 @@ export default function SunsamaWorkspace() {
                   <span className="flex items-center gap-2 truncate">
                     <span
                       className="h-2 w-2 rounded-full shrink-0"
-                      style={{ backgroundColor: ch.color }}
+                      style={{ backgroundColor: proj.color }}
                     />
-                    <span className="truncate">#{ch.label}</span>
+                    <span className="truncate">{proj.name}</span>
                   </span>
-                  <div className="flex items-center gap-1.5">
-                    {count > 0 && (
-                      <span className="text-[10px] text-slate-500">{count}</span>
-                    )}
-                    {ch.isCustom && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleDeleteChannel(e, ch.tag)}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 rounded text-slate-500 hover:text-red-400 hover:bg-white/[0.06] transition-all"
-                        title="Delete custom channel"
-                      >
-                        <Trash2 className="h-2.5 w-2.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
+                  <span className="text-[10px] text-slate-500">{count}</span>
+                </button>
               );
             })}
+
+            {/* Type to Create a New Project */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleCreateProject(newProjectName);
+              }}
+              className="pt-1.5"
+            >
+              <div className="flex items-center gap-1.5 bg-[#1B1E26] border border-white/[0.06] focus-within:border-indigo-500/60 rounded-lg px-2 py-1">
+                <Plus className="h-3 w-3 text-slate-500 shrink-0" />
+                <input
+                  type="text"
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="New project name..."
+                  className="w-full bg-transparent text-xs text-white placeholder:text-slate-500 focus:outline-none"
+                />
+              </div>
+            </form>
           </div>
         </div>
 
-        {/* Footer Daemon Note */}
-        <div className="p-3 border-t border-white/[0.06] text-[11px] text-slate-500">
-          <div className="flex items-center gap-1.5 text-slate-400 font-medium">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            <span>Mac Daemon Sync Active</span>
-          </div>
-          <p className="mt-0.5 text-[10px] text-slate-500">
-            Gmail, Slack & Letterly tasks flow into Backlog automatically.
+        {/* Bottom Panel Toggle & Daemon Status */}
+        <div className="p-3 border-t border-white/[0.06] space-y-2 text-[11px] text-slate-500">
+          <button
+            type="button"
+            onClick={() => setShowCalendarPane((v) => !v)}
+            className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-slate-300 text-xs"
+          >
+            <span className="flex items-center gap-2">
+              <CalendarIcon className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Calendar Timeline</span>
+            </span>
+            <span className="text-[10px] text-slate-400">
+              {showCalendarPane ? 'On' : 'Off'}
+            </span>
+          </button>
+          <p className="text-[10px] text-slate-500 px-1">
+            All new tasks land in General until you create and assign projects.
           </p>
         </div>
       </aside>
 
-      {/* 2. CENTER SUNSAMA MULTI-COLUMN KANBAN WORKSPACE */}
-      <main className="flex-1 flex overflow-x-auto overflow-y-hidden bg-[#111318]">
-        {/* COLUMN A: BACKLOG DRAWER (Toggleable) */}
-        {showBacklogDrawer && (
-          <section
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragOverTarget('backlog');
-            }}
-            onDragLeave={() => setDragOverTarget(null)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragOverTarget(null);
-              const id = e.dataTransfer.getData('text/plain') || draggedTaskId;
-              const task = tasks.find((t) => t.id === id);
-              if (task) moveTaskToBucket(task, 'backlog');
-            }}
-            className={`w-80 shrink-0 border-r border-white/[0.06] bg-[#14171F] flex flex-col transition-colors ${
-              dragOverTarget === 'backlog' ? 'bg-indigo-950/20' : ''
-            }`}
-          >
-            <div className="p-4 border-b border-white/[0.06] space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Inbox className="h-4 w-4 text-slate-400" />
-                  <h2 className="text-sm font-semibold text-white">Backlog</h2>
-                  <span className="text-xs text-slate-500 font-mono">
-                    {backlogTasks.length}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowBacklogDrawer(false)}
-                  className="text-slate-500 hover:text-slate-300"
-                  title="Hide Backlog"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
-
-              <div className="relative">
-                <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-2" />
-                <input
-                  type="text"
-                  value={backlogSearch}
-                  onChange={(e) => setBacklogSearch(e.target.value)}
-                  placeholder="Filter backlog tasks..."
-                  className="w-full bg-[#1B1E26] border border-white/[0.06] rounded-lg pl-8 pr-3 py-1 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50"
-                />
-              </div>
-            </div>
-
-            <div className="px-3.5 pt-3">
-              {addingInColumn === 'backlog' ? (
-                <div className="rounded-xl bg-[#1B1E26] border border-indigo-500/50 p-2.5">
-                  <input
-                    autoFocus
-                    type="text"
-                    value={newTaskTitle}
-                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleCreateTaskInBucket('backlog');
-                      if (e.key === 'Escape') {
-                        setAddingInColumn(null);
-                        setNewTaskTitle('');
-                      }
-                    }}
-                    placeholder="Task title (e.g. Review report #turn90 15m)..."
-                    className="w-full bg-transparent text-xs text-white placeholder:text-slate-500 focus:outline-none"
-                  />
-                  <div className="mt-2 flex items-center justify-end gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAddingInColumn(null);
-                        setNewTaskTitle('');
-                      }}
-                      className="px-2 py-1 text-[10px] text-slate-400 hover:text-white"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleCreateTaskInBucket('backlog')}
-                      className="px-2.5 py-1 rounded bg-indigo-600 text-white text-[10px] font-semibold"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAddingInColumn('backlog');
-                    setNewTaskTitle('');
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] transition-colors"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  <span>Add task</span>
-                </button>
-              )}
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-3.5 space-y-2.5">
-              {backlogTasks.map((t) => renderTaskCard(t, 'backlog'))}
-              {backlogTasks.length === 0 && (
-                <div className="text-center py-12 px-4 text-xs text-slate-500">
-                  No tasks in Backlog.
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* COLUMN B: TODAY */}
-        <section
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOverTarget('today');
-          }}
-          onDragLeave={() => setDragOverTarget(null)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOverTarget(null);
-            const id = e.dataTransfer.getData('text/plain') || draggedTaskId;
-            const task = tasks.find((t) => t.id === id);
-            if (task) moveTaskToBucket(task, 'today');
-          }}
-          className={`flex-1 min-w-[330px] max-w-[440px] border-r border-white/[0.06] flex flex-col transition-colors ${
-            dragOverTarget === 'today' ? 'bg-indigo-950/15' : ''
-          }`}
-        >
-          <div className="p-4 border-b border-white/[0.06] space-y-2">
-            <div className="flex items-baseline justify-between">
-              <div>
-                <h2 className="text-base font-bold text-white flex items-center gap-2">
-                  <span>Today</span>
-                  <span className="text-xs font-normal text-slate-400">
-                    {now.toLocaleDateString('en-US', {
-                      weekday: 'short',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </span>
-                </h2>
-              </div>
-
-              <div className="flex items-center gap-2 text-[11px] font-mono">
-                {todayTotalPlannedMinutes > DAILY_TARGET_MINUTES && (
-                  <span title="Over 6h daily workload target">
-                    <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
-                  </span>
-                )}
-                <span className="text-slate-400">
-                  {formatDurationShort(todayCompletedMinutes)} /{' '}
-                  <strong
-                    className={
-                      todayTotalPlannedMinutes > DAILY_TARGET_MINUTES
-                        ? 'text-amber-400'
-                        : 'text-slate-200'
-                    }
-                  >
-                    {formatDurationShort(todayTotalPlannedMinutes)}
-                  </strong>
-                </span>
-              </div>
-            </div>
-
-            <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden flex">
-              <div
-                className="bg-emerald-500 transition-all"
-                style={{
-                  width: `${Math.min(
-                    100,
-                    (todayCompletedMinutes /
-                      Math.max(
-                        DAILY_TARGET_MINUTES,
-                        todayTotalPlannedMinutes,
-                        60
-                      )) *
-                      100
-                  )}%`,
-                }}
-              />
-              <div
-                className={`${
-                  todayTotalPlannedMinutes > DAILY_TARGET_MINUTES
-                    ? 'bg-amber-500'
-                    : 'bg-indigo-500'
-                } transition-all`}
-                style={{
-                  width: `${Math.min(
-                    100,
-                    (todayPendingMinutes /
-                      Math.max(
-                        DAILY_TARGET_MINUTES,
-                        todayTotalPlannedMinutes,
-                        60
-                      )) *
-                      100
-                  )}%`,
-                }}
-              />
-            </div>
+      {/* 2. CENTER WORKSPACE: OPEN TASKS GROUPED BY PROJECT */}
+      <main className="flex-1 flex flex-col overflow-hidden bg-[#111318]">
+        {/* Top Bar */}
+        <header className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between gap-4 shrink-0">
+          <div>
+            <h1 className="text-base font-bold text-white flex items-center gap-2">
+              <span>Open Tasks by Project</span>
+              <span className="text-xs font-normal text-slate-400">
+                {now.toLocaleDateString('en-US', {
+                  weekday: 'short',
+                  month: 'short',
+                  day: 'numeric',
+                })}
+              </span>
+            </h1>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Click any project title to rename it, add classification instructions, or drag tasks onto the calendar.
+            </p>
           </div>
 
-          <div className="px-4 pt-3">
-            {addingInColumn === 'today' ? (
-              <div className="rounded-xl bg-[#1B1E26] border border-indigo-500/50 p-2.5">
-                <input
-                  autoFocus
-                  type="text"
-                  value={newTaskTitle}
-                  onChange={(e) => setNewTaskTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleCreateTaskInBucket('today');
-                    if (e.key === 'Escape') {
-                      setAddingInColumn(null);
-                      setNewTaskTitle('');
-                    }
-                  }}
-                  placeholder="Add task to Today (e.g. Call Jenn #turn90 15m)..."
-                  className="w-full bg-transparent text-xs text-white placeholder:text-slate-500 focus:outline-none"
-                />
-                <div className="mt-2 flex items-center justify-end gap-1.5">
+          <div className="flex items-center gap-3">
+            <div className="relative w-64">
+              <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-2" />
+              <input
+                type="text"
+                value={taskSearch}
+                onChange={(e) => setTaskSearch(e.target.value)}
+                placeholder="Search open tasks..."
+                className="w-full bg-[#1B1E26] border border-white/[0.06] rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 bg-[#1B1E26] px-2.5 py-1.5 rounded-lg border border-white/[0.06]">
+              {todayScheduledMinutes > DAILY_TARGET_MINUTES && (
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+              )}
+              <span>Scheduled Today:</span>
+              <strong className="text-white">
+                {formatDurationShort(todayScheduledMinutes)}
+              </strong>
+            </div>
+          </div>
+        </header>
+
+        {transcriptStatusMsg && (
+          <div className="mx-5 mt-3 px-3.5 py-2 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-xs text-indigo-200 flex items-center justify-between">
+            <span>{transcriptStatusMsg}</span>
+            <button
+              type="button"
+              onClick={() => setTranscriptStatusMsg(null)}
+              className="text-indigo-300 hover:text-white"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Scrollable Project Groups */}
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          {visibleProjectGroups.map((proj) => {
+            const projTasks = openTasks.filter(
+              (t) => getTaskProject(t).id === proj.id
+            );
+            const isGeneral = proj.id === generalProject.id;
+            const isDropHovered = dragOverTarget === `proj-${proj.id}`;
+
+            return (
+              <section
+                key={proj.id}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOverTarget(`proj-${proj.id}`);
+                }}
+                onDragLeave={() => setDragOverTarget(null)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOverTarget(null);
+                  const id = e.dataTransfer.getData('text/plain') || draggedTaskId;
+                  const task = tasks.find((t) => t.id === id);
+                  if (task) handleAssignTaskProject(task, proj.id);
+                }}
+                className={`rounded-2xl border p-4 transition-colors ${
+                  isDropHovered
+                    ? 'bg-indigo-950/20 border-indigo-500/50'
+                    : 'bg-[#151820]/80 border-white/[0.06]'
+                }`}
+              >
+                {/* Project Group Header (Inline Editable Title + Instructions) */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: proj.color }}
+                      />
+                      {editingProjectId === proj.id ? (
+                        <input
+                          autoFocus
+                          type="text"
+                          value={editingProjectTitle}
+                          onChange={(e) => setEditingProjectTitle(e.target.value)}
+                          onBlur={() => handleRenameProject(proj.id, editingProjectTitle)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter')
+                              handleRenameProject(proj.id, editingProjectTitle);
+                            if (e.key === 'Escape') setEditingProjectId(null);
+                          }}
+                          className="bg-[#1B1E26] border border-indigo-500/60 rounded px-2 py-0.5 text-sm font-bold text-white focus:outline-none"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!isGeneral) {
+                              setEditingProjectId(proj.id);
+                              setEditingProjectTitle(proj.name);
+                            }
+                          }}
+                          className={`text-sm font-bold text-white flex items-center gap-1.5 ${
+                            !isGeneral ? 'hover:text-indigo-300 cursor-text' : 'cursor-default'
+                          }`}
+                          title={isGeneral ? 'Default list for unassigned tasks' : 'Click to rename project'}
+                        >
+                          <span>{proj.name}</span>
+                          {!isGeneral && (
+                            <Pencil className="h-3 w-3 text-slate-500 hover:text-indigo-300" />
+                          )}
+                        </button>
+                      )}
+                      <span className="text-xs font-mono text-slate-500">
+                        ({projTasks.length})
+                      </span>
+                    </div>
+
+                    {/* Project Classification Instructions */}
+                    {!isGeneral && (
+                      <div>
+                        {editingInstructionsId === proj.id ? (
+                          <input
+                            autoFocus
+                            type="text"
+                            value={editingInstructionsText}
+                            onChange={(e) => setEditingInstructionsText(e.target.value)}
+                            onBlur={() =>
+                              handleSaveProjectInstructions(proj.id, editingInstructionsText)
+                            }
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter')
+                                handleSaveProjectInstructions(proj.id, editingInstructionsText);
+                              if (e.key === 'Escape') setEditingInstructionsId(null);
+                            }}
+                            placeholder="Classification instructions (e.g. Tasks mentioning Turn90, First Shift, Apricot)..."
+                            className="w-full max-w-xl bg-[#1B1E26] border border-indigo-500/50 rounded px-2.5 py-1 text-[11px] text-slate-200 focus:outline-none"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingInstructionsId(proj.id);
+                              setEditingInstructionsText(proj.instructions || '');
+                            }}
+                            className="text-[11px] text-slate-500 hover:text-slate-300 text-left"
+                          >
+                            {proj.instructions
+                              ? `Rules: ${proj.instructions}`
+                              : '+ Add classification instructions for this project...'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => {
-                      setAddingInColumn(null);
+                      setAddingInProjectId(proj.id);
                       setNewTaskTitle('');
                     }}
-                    className="px-2 py-1 text-[10px] text-slate-400 hover:text-white"
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-xs text-slate-300 shrink-0"
                   >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleCreateTaskInBucket('today')}
-                    className="px-2.5 py-1 rounded bg-indigo-600 text-white text-[10px] font-semibold"
-                  >
-                    Add to Today
+                    <Plus className="h-3.5 w-3.5" />
+                    <span>Add Task</span>
                   </button>
                 </div>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setAddingInColumn('today');
-                  setNewTaskTitle('');
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Add task</span>
-              </button>
-            )}
-          </div>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-            {todayTasks.map((t) => renderTaskCard(t, 'today'))}
-            {todayTasks.length === 0 && (
-              <div className="rounded-2xl border border-dashed border-white/[0.07] p-8 text-center my-4 space-y-2">
-                <Sun className="h-6 w-6 text-amber-400/70 mx-auto" />
-                <p className="text-xs font-medium text-slate-300">
-                  Your Today board is light
-                </p>
-                <p className="text-[11px] text-slate-500">
-                  Drag tasks from your Backlog onto Today or directly onto any 15-minute calendar slot on the right.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setActiveModal('morning_plan')}
-                  className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 text-xs font-medium"
-                >
-                  <Sparkles className="h-3 w-3" />
-                  <span>Plan My Day</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </section>
+                {/* Inline Add Task Input */}
+                {addingInProjectId === proj.id && (
+                  <div className="mb-3 rounded-xl bg-[#1B1E26] border border-indigo-500/50 p-2.5 flex items-center gap-2">
+                    <input
+                      autoFocus
+                      type="text"
+                      value={newTaskTitle}
+                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleCreateTaskInProject(proj.id);
+                        if (e.key === 'Escape') {
+                          setAddingInProjectId(null);
+                          setNewTaskTitle('');
+                        }
+                      }}
+                      placeholder={`Add task to ${proj.name} (e.g. Follow up with team 20m)...`}
+                      className="flex-1 bg-transparent text-xs text-white placeholder:text-slate-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCreateTaskInProject(proj.id)}
+                      className="px-2.5 py-1 rounded bg-indigo-600 text-white text-[11px] font-semibold"
+                    >
+                      Add
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddingInProjectId(null);
+                        setNewTaskTitle('');
+                      }}
+                      className="px-2 py-1 text-[11px] text-slate-400 hover:text-white"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
 
-        {/* COLUMN C: TOMORROW */}
-        <section
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOverTarget('tomorrow');
-          }}
-          onDragLeave={() => setDragOverTarget(null)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOverTarget(null);
-            const id = e.dataTransfer.getData('text/plain') || draggedTaskId;
-            const task = tasks.find((t) => t.id === id);
-            if (task) moveTaskToBucket(task, 'tomorrow');
-          }}
-          className={`flex-1 min-w-[290px] max-w-[360px] border-r border-white/[0.06] flex flex-col transition-colors ${
-            dragOverTarget === 'tomorrow' ? 'bg-indigo-950/15' : ''
-          }`}
-        >
-          <div className="p-4 border-b border-white/[0.06] space-y-2">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-base font-bold text-slate-200 flex items-center gap-2">
-                <span>Tomorrow</span>
-                <span className="text-xs font-normal text-slate-500">
-                  {tomorrowStart.toLocaleDateString('en-US', {
-                    weekday: 'short',
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </span>
-              </h2>
-              <span className="text-[11px] font-mono text-slate-400">
-                {formatDurationShort(tomorrowPlannedMinutes)}
-              </span>
-            </div>
-            <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
-              <div
-                className="h-full bg-indigo-500/60 transition-all"
-                style={{
-                  width: `${Math.min(
-                    100,
-                    (tomorrowPlannedMinutes / DAILY_TARGET_MINUTES) * 100
-                  )}%`,
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="px-4 pt-3">
-            {addingInColumn === 'tomorrow' ? (
-              <div className="rounded-xl bg-[#1B1E26] border border-indigo-500/50 p-2.5">
-                <input
-                  autoFocus
-                  type="text"
-                  value={newTaskTitle}
-                  onChange={(e) => setNewTaskTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleCreateTaskInBucket('tomorrow');
-                    if (e.key === 'Escape') {
-                      setAddingInColumn(null);
-                      setNewTaskTitle('');
-                    }
-                  }}
-                  placeholder="Add task to Tomorrow..."
-                  className="w-full bg-transparent text-xs text-white placeholder:text-slate-500 focus:outline-none"
-                />
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setAddingInColumn('tomorrow');
-                  setNewTaskTitle('');
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Add task</span>
-              </button>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-            {tomorrowTasks.map((t) => renderTaskCard(t, 'tomorrow'))}
-          </div>
-        </section>
-
-        {/* COLUMN D: UPCOMING / DAY AFTER TOMORROW */}
-        <section
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOverTarget('later');
-          }}
-          onDragLeave={() => setDragOverTarget(null)}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragOverTarget(null);
-            const id = e.dataTransfer.getData('text/plain') || draggedTaskId;
-            const task = tasks.find((t) => t.id === id);
-            if (task) moveTaskToBucket(task, 'later');
-          }}
-          className={`flex-1 min-w-[270px] max-w-[340px] flex flex-col transition-colors ${
-            dragOverTarget === 'later' ? 'bg-indigo-950/15' : ''
-          }`}
-        >
-          <div className="p-4 border-b border-white/[0.06] space-y-2">
-            <div className="flex items-baseline justify-between">
-              <h2 className="text-base font-bold text-slate-300 flex items-center gap-2">
-                <span>
-                  {dayAfterStart.toLocaleDateString('en-US', {
-                    weekday: 'long',
-                  })}
-                </span>
-                <span className="text-xs font-normal text-slate-500">
-                  {dayAfterStart.toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  })}
-                </span>
-              </h2>
-              <span className="text-[11px] font-mono text-slate-400">
-                {formatDurationShort(laterPlannedMinutes)}
-              </span>
-            </div>
-            <div className="h-1.5 w-full rounded-full bg-white/[0.06] overflow-hidden">
-              <div
-                className="h-full bg-indigo-500/40 transition-all"
-                style={{
-                  width: `${Math.min(
-                    100,
-                    (laterPlannedMinutes / DAILY_TARGET_MINUTES) * 100
-                  )}%`,
-                }}
-              />
-            </div>
-          </div>
-
-          <div className="px-4 pt-3">
-            {addingInColumn === 'later' ? (
-              <div className="rounded-xl bg-[#1B1E26] border border-indigo-500/50 p-2.5">
-                <input
-                  autoFocus
-                  type="text"
-                  value={newTaskTitle}
-                  onChange={(e) => setNewTaskTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleCreateTaskInBucket('later');
-                    if (e.key === 'Escape') {
-                      setAddingInColumn(null);
-                      setNewTaskTitle('');
-                    }
-                  }}
-                  placeholder="Add task..."
-                  className="w-full bg-transparent text-xs text-white placeholder:text-slate-500 focus:outline-none"
-                />
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setAddingInColumn('later');
-                  setNewTaskTitle('');
-                }}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] transition-colors"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Add task</span>
-              </button>
-            )}
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
-            {laterTasks.map((t) => renderTaskCard(t, 'later'))}
-          </div>
-        </section>
+                {/* Task Cards Grid */}
+                {projTasks.length > 0 ? (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5">
+                    {projTasks.map((t) => renderTaskCard(t))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 py-3 px-2 border border-dashed border-white/[0.05] rounded-xl text-center">
+                    No open tasks in {proj.name}. Drag a task here or click Add Task.
+                  </div>
+                )}
+              </section>
+            );
+          })}
+        </div>
       </main>
 
-      {/* 3. RIGHT SUNSAMA 15-MINUTE INTERVAL CALENDAR & RESIZABLE TIMEBOX TIMELINE */}
+      {/* 3. RIGHT 15-MINUTE INTERACTIVE CALENDAR TIMELINE */}
       {showCalendarPane && (
-        <aside className="w-[360px] bg-[#151820] border-l border-white/[0.06] flex flex-col shrink-0 select-none">
-          {/* Calendar Header + Day Switcher */}
+        <aside className="w-[370px] bg-[#151820] border-l border-white/[0.06] flex flex-col shrink-0 select-none">
           <div className="p-3.5 border-b border-white/[0.06] space-y-2.5">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-200 flex items-center gap-1.5">
                   <CalendarIcon className="h-3.5 w-3.5 text-indigo-400" />
-                  <span>Calendar ({timeboxedTodayTasks.length})</span>
+                  <span>Day Schedule ({timeboxedTimelineBlocks.length})</span>
                 </h3>
                 <p className="text-[10px] text-slate-500 mt-0.5">
-                  15m grid • Drag bottom edge to resize (down to 5m)
+                  Drag to move • Drag bottom to resize (5m) • Click ↩ to move back to Open
                 </p>
               </div>
 
@@ -2184,14 +1795,13 @@ export default function SunsamaWorkspace() {
                 type="button"
                 onClick={handleAutoTimeboxToday}
                 className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-indigo-300 text-[11px] font-semibold transition-colors shrink-0"
-                title="Automatically slot un-timeboxed Today tasks into free calendar gaps"
+                title="Auto-slot open tasks into free gaps"
               >
                 <Sparkles className="h-3 w-3" />
                 <span>Auto-Slot</span>
               </button>
             </div>
 
-            {/* Day Switcher Pills (Today / Tomorrow / Day After) */}
             <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-black/30 border border-white/[0.05]">
               {(
                 [
@@ -2226,19 +1836,13 @@ export default function SunsamaWorkspace() {
             </div>
           </div>
 
-          {/* Scrollable 15-Minute Precision Timeline Canvas */}
-          <div
-            ref={timelineScrollRef}
-            className="flex-1 overflow-y-auto relative px-2 py-3"
-          >
+          <div ref={timelineScrollRef} className="flex-1 overflow-y-auto relative px-2 py-3">
             <div
               className="relative"
-              style={{
-                height: `${TIMELINE_HOURS.length * HOUR_HEIGHT_PX}px`,
-              }}
+              style={{ height: `${TIMELINE_HOURS.length * HOUR_HEIGHT_PX}px` }}
             >
-              {/* Background 15-Minute Interval Grid & Drop Zones */}
-              {TIMELINE_HOURS.map((hour, hIdx) => (
+              {/* 15-Minute Grid Slots */}
+              {TIMELINE_HOURS.map((hour) => (
                 <div
                   key={hour}
                   className="relative"
@@ -2259,8 +1863,7 @@ export default function SunsamaWorkspace() {
                           e.preventDefault();
                           setDragOverTarget(null);
                           const id =
-                            e.dataTransfer.getData('text/plain') ||
-                            draggedTaskId;
+                            e.dataTransfer.getData('text/plain') || draggedTaskId;
                           const task = tasks.find((t) => t.id === id);
                           if (task) {
                             scheduleTaskAtSlot(task, hour, minute);
@@ -2291,7 +1894,6 @@ export default function SunsamaWorkspace() {
                             : 'border-t border-dotted border-white/[0.03]'
                         } ${isHovered ? 'bg-indigo-500/20' : 'hover:bg-white/[0.03]'}`}
                       >
-                        {/* Left Rail Time Labels (:00, :15, :30, :45) */}
                         <div className="absolute left-0 top-0 -translate-y-2 w-12 text-right pr-2 pointer-events-none">
                           {minute === 0 ? (
                             <span className="text-[10px] font-mono font-semibold text-slate-400">
@@ -2310,7 +1912,6 @@ export default function SunsamaWorkspace() {
                           )}
                         </div>
 
-                        {/* Drop Preview Badge or Hover Quick-Add Hint */}
                         {isHovered ? (
                           <span className="text-[10px] font-mono text-indigo-300 px-1.5 py-0.5 rounded bg-indigo-950/90 border border-indigo-500/40">
                             Drop at {formatHourMinuteLabel(hour, minute)}
@@ -2326,7 +1927,7 @@ export default function SunsamaWorkspace() {
                 </div>
               ))}
 
-              {/* Current Time Red Indicator Line */}
+              {/* Current Time Line */}
               {now.getHours() >= TIMELINE_START_HOUR &&
                 now.getHours() <= TIMELINE_END_HOUR && (
                   <div
@@ -2343,8 +1944,8 @@ export default function SunsamaWorkspace() {
                   </div>
                 )}
 
-              {/* Positioned & Resizable Timeboxed Task Blocks */}
-              {timeboxedTodayTasks.map((t) => {
+              {/* Positioned & Interactive Calendar Blocks */}
+              {timeboxedTimelineBlocks.map((t) => {
                 if (!t.dueDate) return null;
                 const isBeingMoved = movingState?.taskId === t.id;
                 const effectiveDueIso = isBeingMoved
@@ -2368,12 +1969,9 @@ export default function SunsamaWorkspace() {
                   resizingState?.taskId === t.id
                     ? resizingState.previewMinutes
                     : Math.max(5, t.estimatedMinutes || 15);
-                const heightPx = Math.max(
-                  14,
-                  effectiveMinutes * PX_PER_MINUTE
-                );
+                const heightPx = Math.max(16, effectiveMinutes * PX_PER_MINUTE);
 
-                const ch = getChannelForTask(t, channels);
+                const taskProj = getTaskProject(t);
                 const isMeeting = isCalendarMeetingTask(t);
                 const isBeingResized = resizingState?.taskId === t.id;
                 const totalCols = Math.max(1, t.totalCols || 1);
@@ -2405,7 +2003,7 @@ export default function SunsamaWorkspace() {
                       left: leftCalc,
                       width: widthCalc,
                       borderLeftWidth: '3px',
-                      borderLeftColor: isMeeting ? '#38BDF8' : ch.color,
+                      borderLeftColor: isMeeting ? '#38BDF8' : taskProj.color,
                     }}
                     className={`group/block absolute z-10 hover:z-40 rounded-lg border px-2 flex flex-col justify-between overflow-hidden transition-shadow cursor-grab active:cursor-grabbing ${
                       draggedTaskId && draggedTaskId !== t.id
@@ -2421,7 +2019,6 @@ export default function SunsamaWorkspace() {
                         : ''
                     }`}
                   >
-                    {/* Compact vs Multi-line layout depending on block height */}
                     <div className="flex items-center justify-between gap-1.5 min-w-0 pt-0.5">
                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
                         <button
@@ -2446,9 +2043,7 @@ export default function SunsamaWorkspace() {
                         </button>
                         <span
                           className={`text-[11px] font-semibold truncate ${
-                            t.status === 'completed'
-                              ? 'line-through opacity-60'
-                              : ''
+                            t.status === 'completed' ? 'line-through opacity-60' : ''
                           }`}
                         >
                           {t.title}
@@ -2461,6 +2056,19 @@ export default function SunsamaWorkspace() {
                             ? formatHourMinuteLabel(startHour, startMin)
                             : `${effectiveMinutes}m`}
                         </span>
+                        {!isMeeting && (
+                          <button
+                            type="button"
+                            title="Move back to open list"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              moveTaskBackToOpen(t);
+                            }}
+                            className="opacity-0 group-hover/block:opacity-100 text-slate-300 hover:text-amber-300 p-0.5"
+                          >
+                            <Undo2 className="h-2.5 w-2.5" />
+                          </button>
+                        )}
                         <button
                           type="button"
                           title="Focus on this task"
@@ -2472,28 +2080,17 @@ export default function SunsamaWorkspace() {
                         >
                           <Play className="h-2.5 w-2.5 fill-current" />
                         </button>
-                        <button
-                          type="button"
-                          title="Un-slot from timeline"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            clearTaskTimebox(t);
-                          }}
-                          className="opacity-0 group-hover/block:opacity-100 text-slate-400 hover:text-white p-0.5"
-                        >
-                          <X className="h-2.5 w-2.5" />
-                        </button>
                       </div>
                     </div>
 
                     {effectiveMinutes >= 20 && (
                       <div className="text-[9px] font-mono text-slate-400 pb-1 truncate">
-                        {formatTimeRange(effectiveDueIso, effectiveMinutes)} • #
-                        {ch.label}
+                        {formatTimeRange(effectiveDueIso, effectiveMinutes)} •{' '}
+                        {isMeeting ? 'Calendar' : taskProj.name}
                       </div>
                     )}
 
-                    {/* BOTTOM RESIZE HANDLE (Drag up/down in 5-minute increments down to 5m) */}
+                    {/* Bottom Resize Handle (5m precision) */}
                     <div
                       title="Drag up or down to resize duration (down to 5m)"
                       onMouseDown={(e) => {
@@ -2518,7 +2115,104 @@ export default function SunsamaWorkspace() {
         </aside>
       )}
 
-      {/* 4. TASK DETAIL MODAL (SUNSAMA TASK INSPECTOR) */}
+      {/* 4. PASTE TRANSCRIPT / PLAN MY DAY MODAL */}
+      {activeModal === 'transcript_plan' && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setActiveModal('none')}
+        >
+          <div
+            className="w-full max-w-2xl rounded-2xl bg-[#181B23] border border-white/10 shadow-2xl overflow-hidden flex flex-col max-h-[88vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <FileText className="h-5 w-5 text-indigo-400" />
+                <div>
+                  <h2 className="text-base font-bold text-white">
+                    Plan or Adjust Day from Letterly Transcript
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Paste your voice transcript to build today&apos;s schedule, create/assign projects, or move missed tasks back to open.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveModal('none')}
+                className="text-slate-400 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto">
+              <div className="grid grid-cols-3 gap-2 text-[11px]">
+                <div className="rounded-xl bg-[#12141A] border border-white/[0.06] p-2.5">
+                  <div className="text-slate-500">Projects</div>
+                  <div className="text-sm font-bold text-white mt-0.5">
+                    {orderedProjects.length}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-[#12141A] border border-white/[0.06] p-2.5">
+                  <div className="text-slate-500">Open Tasks</div>
+                  <div className="text-sm font-bold text-white mt-0.5">
+                    {openTasks.length}
+                  </div>
+                </div>
+                <div className="rounded-xl bg-[#12141A] border border-white/[0.06] p-2.5">
+                  <div className="text-slate-500">Calendar Events Today</div>
+                  <div className="text-sm font-bold text-sky-300 mt-0.5">
+                    {
+                      calendarEvents.filter((ev) =>
+                        isSameCalendarDay(new Date(ev.start), todayStart)
+                      ).length
+                    }
+                  </div>
+                </div>
+              </div>
+
+              <textarea
+                rows={8}
+                autoFocus
+                value={transcriptText}
+                onChange={(e) => setTranscriptText(e.target.value)}
+                placeholder={`Paste your Letterly transcript here...\n\nExamples:\n• "Create a Turn90 project for anything about First Shift or Apricot. Before my 10am meeting I want to knock out..."\n• "My 1pm appointment ran 45 minutes over. Move the task I missed back to open and push the rest of my afternoon back."`}
+                className="w-full rounded-xl bg-[#12141A] border border-white/[0.08] focus:border-indigo-500/60 p-3.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none leading-relaxed"
+              />
+
+              {transcriptStatusMsg && (
+                <div className="text-xs text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                  {transcriptStatusMsg}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-white/[0.06] flex items-center justify-end gap-2 bg-[#14171F]">
+              <button
+                type="button"
+                onClick={() => setActiveModal('none')}
+                className="px-4 py-2 rounded-xl text-xs font-medium text-slate-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isPlanningTranscript || !transcriptText.trim()}
+                onClick={() => runTranscriptPlanner('plan_day')}
+                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-2 disabled:opacity-50"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>
+                  {isPlanningTranscript ? 'Building Schedule...' : 'Build / Update Schedule'}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. TASK DETAIL INSPECTOR MODAL */}
       {inspectingTask && (
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
@@ -2530,19 +2224,21 @@ export default function SunsamaWorkspace() {
           >
             <div className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <select
-                  value={getChannelForTask(inspectingTask, channels).tag}
-                  onChange={(e) =>
-                    handleSetChannel(inspectingTask, e.target.value)
-                  }
-                  className="bg-white/[0.06] text-xs font-medium text-slate-200 rounded-lg px-2.5 py-1 focus:outline-none"
-                >
-                  {channels.map((c) => (
-                    <option key={c.tag} value={c.tag} className="bg-[#181B23]">
-                      #{c.label}
-                    </option>
-                  ))}
-                </select>
+                {!isCalendarMeetingTask(inspectingTask) && (
+                  <select
+                    value={getTaskProject(inspectingTask).id}
+                    onChange={(e) =>
+                      handleAssignTaskProject(inspectingTask, e.target.value)
+                    }
+                    className="bg-white/[0.06] text-xs font-medium text-slate-200 rounded-lg px-2.5 py-1 focus:outline-none"
+                  >
+                    {orderedProjects.map((proj) => (
+                      <option key={proj.id} value={proj.id} className="bg-[#181B23]">
+                        {proj.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
 
                 <select
                   value={inspectingTask.estimatedMinutes || 15}
@@ -2579,7 +2275,7 @@ export default function SunsamaWorkspace() {
                   type="button"
                   onClick={() => handleDeleteTask(inspectingTask.id)}
                   className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10"
-                  title="Delete Task"
+                  title="Delete"
                 >
                   <Trash2 className="h-4 w-4" />
                 </button>
@@ -2618,26 +2314,16 @@ export default function SunsamaWorkspace() {
                 />
               </div>
 
-              {/* Stage & 15-Minute Slot Picker */}
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                {(['backlog', 'today', 'tomorrow', 'later'] as const).map(
-                  (b) => {
-                    const active = classifyTaskBucket(inspectingTask) === b;
-                    return (
-                      <button
-                        key={b}
-                        type="button"
-                        onClick={() => moveTaskToBucket(inspectingTask, b)}
-                        className={`px-3 py-1 rounded-lg text-xs font-medium capitalize ${
-                          active
-                            ? 'bg-indigo-600 text-white'
-                            : 'bg-white/[0.05] text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        {b}
-                      </button>
-                    );
-                  }
+                {isTimeboxedDate(inspectingTask.dueDate) && (
+                  <button
+                    type="button"
+                    onClick={() => moveTaskBackToOpen(inspectingTask)}
+                    className="px-3 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 text-xs font-medium flex items-center gap-1.5"
+                  >
+                    <Undo2 className="h-3.5 w-3.5" />
+                    <span>Move back to Open</span>
+                  </button>
                 )}
 
                 <select
@@ -2654,7 +2340,7 @@ export default function SunsamaWorkspace() {
                   onChange={(e) => {
                     const val = e.target.value;
                     if (!val) {
-                      clearTaskTimebox(inspectingTask);
+                      moveTaskBackToOpen(inspectingTask);
                     } else {
                       const [h, m] = val.split(':').map(Number);
                       scheduleTaskAtSlot(inspectingTask, h, m);
@@ -2679,72 +2365,74 @@ export default function SunsamaWorkspace() {
                 </select>
               </div>
 
-              {/* Subtasks Checklist */}
-              <div className="space-y-2 pt-2 border-t border-white/[0.06]">
-                <div className="text-xs font-semibold text-slate-400">
-                  Subtasks
-                </div>
-                <div className="space-y-1.5">
-                  {(inspectingTask.subtasks || []).map((sub) => (
-                    <div
-                      key={sub.id}
-                      onClick={() =>
-                        handleToggleSubtask(inspectingTask, sub.id)
-                      }
-                      className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/[0.04] cursor-pointer text-xs"
-                    >
+              {/* Subtasks */}
+              {!isCalendarMeetingTask(inspectingTask) && (
+                <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+                  <div className="text-xs font-semibold text-slate-400">
+                    Subtasks
+                  </div>
+                  <div className="space-y-1.5">
+                    {(inspectingTask.subtasks || []).map((sub) => (
                       <div
-                        className={`h-4 w-4 rounded border flex items-center justify-center ${
-                          sub.isCompleted
-                            ? 'bg-indigo-500 border-indigo-500 text-white'
-                            : 'border-slate-600'
-                        }`}
-                      >
-                        {sub.isCompleted && (
-                          <Check className="h-2.5 w-2.5 stroke-[3]" />
-                        )}
-                      </div>
-                      <span
-                        className={
-                          sub.isCompleted
-                            ? 'line-through text-slate-500'
-                            : 'text-slate-200'
+                        key={sub.id}
+                        onClick={() =>
+                          handleToggleSubtask(inspectingTask, sub.id)
                         }
+                        className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/[0.04] cursor-pointer text-xs"
                       >
-                        {sub.title}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                        <div
+                          className={`h-4 w-4 rounded border flex items-center justify-center ${
+                            sub.isCompleted
+                              ? 'bg-indigo-500 border-indigo-500 text-white'
+                              : 'border-slate-600'
+                          }`}
+                        >
+                          {sub.isCompleted && (
+                            <Check className="h-2.5 w-2.5 stroke-[3]" />
+                          )}
+                        </div>
+                        <span
+                          className={
+                            sub.isCompleted
+                              ? 'line-through text-slate-500'
+                              : 'text-slate-200'
+                          }
+                        >
+                          {sub.title}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
 
-                <div className="flex items-center gap-2 pt-1">
-                  <input
-                    type="text"
-                    value={newSubtaskText}
-                    onChange={(e) => setNewSubtaskText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                  <div className="flex items-center gap-2 pt-1">
+                    <input
+                      type="text"
+                      value={newSubtaskText}
+                      onChange={(e) => setNewSubtaskText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleAddSubtask(inspectingTask, newSubtaskText);
+                          setNewSubtaskText('');
+                        }
+                      }}
+                      placeholder="Add a subtask..."
+                      className="flex-1 bg-[#12141A] border border-white/[0.07] rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
                         handleAddSubtask(inspectingTask, newSubtaskText);
                         setNewSubtaskText('');
-                      }
-                    }}
-                    placeholder="Add a subtask..."
-                    className="flex-1 bg-[#12141A] border border-white/[0.07] rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleAddSubtask(inspectingTask, newSubtaskText);
-                      setNewSubtaskText('');
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] text-xs font-medium"
-                  >
-                    Add
-                  </button>
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] text-xs font-medium"
+                    >
+                      Add
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
-              {/* Clean Notes */}
+              {/* Notes */}
               <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
                 <div className="text-xs font-semibold text-slate-400">
                   Notes
@@ -2758,11 +2446,11 @@ export default function SunsamaWorkspace() {
                       estimatedMinutes: inspectingTask.estimatedMinutes,
                       inPlayQueue: inspectingTask.inPlayQueue,
                       subtasks: inspectingTask.subtasks,
-                      tags: inspectingTask.tags,
+                      tags: [],
                     });
                     patchTask(inspectingTask.id, { description: nextDesc });
                   }}
-                  placeholder="Add notes or context..."
+                  placeholder="Add notes..."
                   className="w-full bg-[#12141A] border border-white/[0.07] rounded-xl p-3 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none"
                 />
               </div>
@@ -2771,613 +2459,176 @@ export default function SunsamaWorkspace() {
         </div>
       )}
 
-      {/* 5. SUNSAMA MORNING PLANNING RITUAL MODAL */}
-      {activeModal === 'morning_plan' && (
-        <div className="fixed inset-0 z-50 bg-[#0E1015]/95 backdrop-blur-md flex items-center justify-center p-6">
-          <div className="w-full max-w-3xl rounded-2xl bg-[#161922] border border-white/10 shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
-            <div className="p-6 border-b border-white/[0.06] flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
-                  <Sun className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-white">
-                    Plan Your Day
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Pull high-leverage tasks from your Backlog into Today and timebox them onto your calendar.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveModal('none')}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-3">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Backlog ({backlogTasks.length})
-                </h3>
-                <div className="space-y-2">
-                  {backlogTasks.map((t) => (
-                    <div
-                      key={t.id}
-                      className="p-3 rounded-xl bg-[#1E222D] border border-white/[0.06] flex items-center justify-between gap-2"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs font-medium text-white truncate">
-                          {t.title}
-                        </p>
-                        <span className="text-[10px] text-slate-400">
-                          #{getChannelForTask(t, channels).label} • {t.estimatedMinutes}m
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => moveTaskToBucket(t, 'today')}
-                        className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold shrink-0"
-                      >
-                        + Today
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-indigo-400">
-                    Committed to Today (
-                    {todayTasks.filter((t) => t.status !== 'completed').length})
-                  </h3>
-                  <span className="text-xs font-mono text-slate-300">
-                    {formatDurationShort(todayPendingMinutes)} / 6h target
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  {todayTasks
-                    .filter((t) => t.status !== 'completed')
-                    .map((t) => (
-                      <div
-                        key={t.id}
-                        className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-between gap-2"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium text-white truncate">
-                            {t.title}
-                          </p>
-                          <span className="text-[10px] text-indigo-300">
-                            #{getChannelForTask(t, channels).label} •{' '}
-                            {t.estimatedMinutes}m
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => moveTaskToBucket(t, 'backlog')}
-                          className="text-[11px] text-slate-400 hover:text-white"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-5 border-t border-white/[0.06] flex items-center justify-between bg-[#13161E]">
-              <button
-                type="button"
-                onClick={async () => {
-                  await handleAutoTimeboxToday();
-                  setActiveModal('none');
-                }}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"
-              >
-                <Sparkles className="h-4 w-4" />
-                <span>Auto-Timebox Today & Finish Planning</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveModal('none')}
-                className="px-4 py-2 rounded-xl bg-white/[0.06] text-xs font-semibold text-slate-300"
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 6. SUNSAMA EVENING SHUTDOWN RITUAL MODAL */}
-      {activeModal === 'evening_shutdown' && (
-        <div className="fixed inset-0 z-50 bg-[#0E1015]/95 backdrop-blur-md flex items-center justify-center p-6">
-          <div className="w-full max-w-lg rounded-2xl bg-[#161922] border border-white/10 shadow-2xl overflow-hidden">
-            <div className="p-6 border-b border-white/[0.06] flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center">
-                  <Moon className="h-5 w-5" />
-                </div>
-                <div>
-                  <h2 className="text-lg font-bold text-white">
-                    Daily Shutdown Ritual
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Wrap up your workday and roll unfinished tasks to Tomorrow.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveModal('none')}
-                className="text-slate-400 hover:text-white"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <div className="p-6 space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-                  <div className="text-[10px] font-bold uppercase text-slate-400">
-                    Completed Today
-                  </div>
-                  <div className="text-2xl font-bold text-emerald-400 mt-1">
-                    {todayTasks.filter((t) => t.status === 'completed').length}{' '}
-                    tasks
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {formatDurationShort(todayCompletedMinutes)} total work
-                  </div>
-                </div>
-
-                <div className="p-4 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-                  <div className="text-[10px] font-bold uppercase text-slate-400">
-                    Remaining on Today
-                  </div>
-                  <div className="text-2xl font-bold text-amber-400 mt-1">
-                    {todayTasks.filter((t) => t.status !== 'completed').length}{' '}
-                    tasks
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {formatDurationShort(todayPendingMinutes)} remaining
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => handleShutdownRollover('tomorrow')}
-                  className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold"
-                >
-                  Roll Remaining Tasks to Tomorrow & Shut Down
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleShutdownRollover('backlog')}
-                  className="w-full py-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-semibold"
-                >
-                  Return Remaining Tasks to Backlog
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 7. SUNSAMA FOCUS MODE OVERLAY (ALWAYS OPENS + FULL QUEUE SWITCHER) */}
+      {/* 6. FOCUS MODE MODAL */}
       {activeModal === 'focus_mode' && (
-        <div className="fixed inset-0 z-50 bg-[#0D0F14] flex overflow-hidden">
-          {/* Left Focus Queue Sidebar so user can pick or switch any task in Focus Mode */}
-          <aside className="w-72 bg-[#13161E] border-r border-white/[0.06] flex flex-col shrink-0">
-            <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
-              <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-emerald-400">
-                  Focus Queue
-                </h3>
-                <p className="text-[11px] text-slate-500">
-                  {todayTasks.filter((t) => t.status !== 'completed').length > 0
-                    ? "Today's Planned Tasks"
-                    : 'Showing Backlog Tasks'}
-                </p>
-              </div>
-              <span className="text-xs font-mono text-slate-400">
-                {focusQueue.length}
-              </span>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-              {focusQueue.map((item, idx) => {
-                const isSelected = activeFocusTask?.id === item.id;
-                const ch = getChannelForTask(item, channels);
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      if (focusTaskId) {
-                        patchTask(focusTaskId, {
-                          actual_seconds: focusElapsedSeconds,
-                        });
-                      }
-                      setFocusTaskId(item.id);
-                      setFocusElapsedSeconds(item.actualSeconds || 0);
-                      setFocusRunning(true);
-                    }}
-                    className={`w-full text-left p-2.5 rounded-xl border transition-all flex items-start gap-2.5 ${
-                      isSelected
-                        ? 'bg-indigo-500/20 border-indigo-500/40 text-white'
-                        : 'bg-[#191D27] hover:bg-[#202532] border-white/[0.05] text-slate-300'
-                    }`}
-                  >
-                    <span className="text-[10px] font-mono text-slate-500 mt-0.5">
-                      {idx + 1}.
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-medium truncate">
-                        {item.title}
-                      </p>
-                      <div className="flex items-center gap-2 mt-1 text-[10px] text-slate-400">
-                        <span style={{ color: ch.color }}>#{ch.label}</span>
-                        <span>•</span>
-                        <span>{item.estimatedMinutes || 15}m</span>
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-
-              {focusQueue.length === 0 && (
-                <div className="text-center py-12 px-4 text-xs text-slate-500">
-                  No open tasks found. Add a task on the board to start focusing.
-                </div>
-              )}
-            </div>
-          </aside>
-
-          {/* Center Zen Focus Canvas */}
-          <div className="flex-1 flex flex-col items-center justify-center p-8 relative overflow-y-auto">
-            <button
-              type="button"
-              onClick={() => {
-                if (activeFocusTask) {
-                  patchTask(activeFocusTask.id, {
-                    actual_seconds: focusElapsedSeconds,
-                  });
-                }
-                setFocusRunning(false);
-                setActiveModal('none');
-              }}
-              className="absolute top-6 right-6 flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-xs font-semibold text-slate-200"
-            >
-              <X className="h-4 w-4" />
-              <span>Exit Focus Mode</span>
-            </button>
-
-            {activeFocusTask ? (
-              <div className="w-full max-w-xl text-center space-y-6">
-                <div className="flex items-center justify-center gap-2">
-                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.06] text-xs text-indigo-300 font-medium">
-                    #{getChannelForTask(activeFocusTask, channels).label}
-                  </span>
-
-                  {/* Duration Adjuster right inside Focus Mode (down to 5m) */}
-                  <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/[0.05] text-xs text-slate-300 font-mono">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSetDuration(
-                          activeFocusTask,
-                          Math.max(5, (activeFocusTask.estimatedMinutes || 15) - 5)
-                        )
-                      }
-                      className="px-1 hover:text-white"
-                    >
-                      −5m
-                    </button>
-                    <span>
-                      Target: {activeFocusTask.estimatedMinutes || 15}m
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleSetDuration(
-                          activeFocusTask,
-                          (activeFocusTask.estimatedMinutes || 15) + 5
-                        )
-                      }
-                      className="px-1 hover:text-white"
-                    >
-                      +5m
-                    </button>
-                  </div>
-                </div>
-
-                <h1 className="text-2xl md:text-3xl font-bold text-white leading-snug">
-                  {activeFocusTask.title}
-                </h1>
-
-                {/* Giant Zen Timer */}
-                <div className="py-2">
-                  <div className="text-6xl md:text-7xl font-mono font-bold tracking-tight text-indigo-400">
-                    {formatTimerClock(focusElapsedSeconds)}
-                  </div>
-                  <p className="text-xs text-slate-500 mt-2">
-                    {focusRunning ? 'Timer running...' : 'Timer paused'} • Planned{' '}
-                    {activeFocusTask.estimatedMinutes || 15} minutes
-                  </p>
-                </div>
-
-                {/* Timer Controls */}
-                <div className="flex items-center justify-center gap-3 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => setFocusRunning((r) => !r)}
-                    className="flex items-center gap-2 px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold shadow-lg shadow-indigo-600/30"
-                  >
-                    {focusRunning ? (
-                      <>
-                        <Pause className="h-4 w-4" />
-                        <span>Pause</span>
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-4 w-4 fill-current" />
-                        <span>Start Timer</span>
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFocusElapsedSeconds(0);
-                      patchTask(activeFocusTask.id, { actual_seconds: 0 });
-                    }}
-                    className="flex items-center gap-1.5 px-4 py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-sm font-semibold"
-                    title="Reset Timer"
-                  >
-                    <RotateCcw className="h-4 w-4" />
-                    <span>Reset</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      setFocusRunning(false);
-                      const nextIdx =
-                        focusQueue.findIndex(
-                          (t) => t.id === activeFocusTask.id
-                        ) + 1;
-                      const nextTask = focusQueue[nextIdx] || null;
-                      await handleToggleComplete(activeFocusTask);
-                      if (nextTask) {
-                        setFocusTaskId(nextTask.id);
-                        setFocusElapsedSeconds(nextTask.actualSeconds || 0);
-                        setFocusRunning(true);
-                      } else {
-                        setActiveModal('none');
-                      }
-                    }}
-                    className="flex items-center gap-2 px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold shadow-lg shadow-emerald-600/25"
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span>Complete & Next</span>
-                  </button>
-                </div>
-
-                {/* Subtasks Checklist + Quick Add in Focus Mode */}
-                <div className="mt-6 text-left bg-[#151821] border border-white/[0.07] rounded-2xl p-4 space-y-2.5">
-                  <div className="text-xs font-semibold text-slate-400">
-                    Steps & Subtasks
-                  </div>
-                  {(activeFocusTask.subtasks || []).map((sub) => (
-                    <div
-                      key={sub.id}
-                      onClick={() =>
-                        handleToggleSubtask(activeFocusTask, sub.id)
-                      }
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/[0.04] cursor-pointer text-sm"
-                    >
-                      <div
-                        className={`h-4 w-4 rounded border flex items-center justify-center ${
-                          sub.isCompleted
-                            ? 'bg-indigo-500 border-indigo-500 text-white'
-                            : 'border-slate-500'
-                        }`}
-                      >
-                        {sub.isCompleted && (
-                          <Check className="h-3 w-3 stroke-[3]" />
-                        )}
-                      </div>
-                      <span
-                        className={
-                          sub.isCompleted
-                            ? 'line-through text-slate-500'
-                            : 'text-slate-200'
-                        }
-                      >
-                        {sub.title}
-                      </span>
-                    </div>
-                  ))}
-
-                  <div className="flex items-center gap-2 pt-1">
-                    <input
-                      type="text"
-                      value={focusSubtaskInput}
-                      onChange={(e) => setFocusSubtaskInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && focusSubtaskInput.trim()) {
-                          handleAddSubtask(activeFocusTask, focusSubtaskInput);
-                          setFocusSubtaskInput('');
-                        }
-                      }}
-                      placeholder="Add a step while focusing..."
-                      className="flex-1 bg-[#101218] border border-white/[0.07] rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (focusSubtaskInput.trim()) {
-                          handleAddSubtask(activeFocusTask, focusSubtaskInput);
-                          setFocusSubtaskInput('');
-                        }
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] text-xs font-medium"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center space-y-3 max-w-md">
-                <CheckCircle2 className="h-12 w-12 text-emerald-400 mx-auto" />
-                <h2 className="text-xl font-bold text-white">
-                  All tasks completed!
-                </h2>
-                <p className="text-xs text-slate-400">
-                  Add a new task on your Daily Kanban board to start a focus session.
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* New Channel / Tag Modal */}
-      {isNewChannelModalOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
-          onClick={() => setIsNewChannelModalOpen(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-2xl bg-[#181B23] border border-white/10 shadow-2xl p-6"
-            onClick={(e) => e.stopPropagation()}
+        <div className="fixed inset-0 z-50 bg-[#0B0D12]/95 backdrop-blur-md flex flex-col items-center justify-center p-6">
+          <button
+            type="button"
+            onClick={() => {
+              setFocusRunning(false);
+              setActiveModal('none');
+            }}
+            className="absolute top-6 right-6 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.12] text-xs text-slate-300"
           >
-            <div className="flex items-center justify-between pb-4 border-b border-white/[0.06]">
-              <div className="flex items-center gap-2.5">
-                <div
-                  className="h-3 w-3 rounded-full shrink-0"
-                  style={{ backgroundColor: newChannelColor }}
+            <X className="h-4 w-4" />
+            <span>Exit Focus</span>
+          </button>
+
+          {activeFocusTask ? (
+            <div className="w-full max-w-xl text-center space-y-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.06] text-xs font-medium text-slate-300">
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{
+                    backgroundColor: getTaskProject(activeFocusTask).color,
+                  }}
                 />
-                <h2 className="text-sm font-semibold text-white">Create New Channel / Tag</h2>
+                <span>{getTaskProject(activeFocusTask).name}</span>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsNewChannelModalOpen(false)}
-                className="text-slate-400 hover:text-white transition-colors"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
 
-            <form onSubmit={handleCreateChannel} className="mt-4 space-y-4">
-              {channelError && (
-                <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
-                  {channelError}
+              <h1 className="text-3xl font-bold text-white leading-tight">
+                {activeFocusTask.title}
+              </h1>
+
+              <div className="py-4">
+                <div className="text-6xl font-mono font-bold tracking-tight text-white">
+                  {formatTimerClock(focusElapsedSeconds)}
                 </div>
-              )}
+                <div className="text-xs text-slate-400 mt-2 font-mono">
+                  Planned: {formatDurationShort(activeFocusTask.estimatedMinutes || 15)}
+                </div>
+              </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Channel Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Marketing, Fitness, Finances"
-                  value={newChannelName}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setNewChannelName(val);
-                    if (
-                      !newChannelTag ||
-                      newChannelTag ===
-                        newChannelName.toLowerCase().replace(/[^a-z0-9_-]/g, '')
-                    ) {
-                      setNewChannelTag(val.toLowerCase().replace(/[^a-z0-9_-]/g, ''));
+              <div className="flex items-center justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setFocusRunning((r) => !r)}
+                  className="px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm flex items-center gap-2"
+                >
+                  {focusRunning ? (
+                    <>
+                      <Pause className="h-4 w-4 fill-current" />
+                      <span>Pause</span>
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4 fill-current" />
+                      <span>Resume</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFocusElapsedSeconds(0);
+                    patchTask(activeFocusTask.id, { actual_seconds: 0 });
+                  }}
+                  className="p-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] text-slate-300"
+                  title="Reset Timer"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setFocusRunning(false);
+                    await patchTask(activeFocusTask.id, {
+                      status: 'completed',
+                      actual_seconds: focusElapsedSeconds,
+                    });
+                    const remaining = focusQueue.filter(
+                      (t) => t.id !== activeFocusTask.id
+                    );
+                    if (remaining.length > 0) {
+                      setFocusTaskId(remaining[0].id);
+                      setFocusElapsedSeconds(remaining[0].actualSeconds || 0);
+                      setFocusRunning(true);
+                    } else {
+                      setActiveModal('none');
                     }
                   }}
-                  autoFocus
-                  className="w-full px-3 py-2 bg-white/[0.05] border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                />
+                  className="px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm flex items-center gap-2"
+                >
+                  <CheckCircle2 className="h-4 w-4" />
+                  <span>Complete</span>
+                </button>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Hashtag / Tag Slug
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-slate-400 text-sm">#</span>
+              <div className="mt-6 rounded-2xl bg-[#151820] border border-white/[0.08] p-4 text-left space-y-2.5">
+                <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Subtasks
+                </div>
+                {(activeFocusTask.subtasks || []).map((sub) => (
+                  <div
+                    key={sub.id}
+                    onClick={() => handleToggleSubtask(activeFocusTask, sub.id)}
+                    className="flex items-center gap-2.5 p-1.5 rounded-lg hover:bg-white/[0.04] cursor-pointer text-sm"
+                  >
+                    <div
+                      className={`h-4 w-4 rounded border flex items-center justify-center ${
+                        sub.isCompleted
+                          ? 'bg-emerald-500 border-emerald-500 text-slate-950'
+                          : 'border-slate-500'
+                      }`}
+                    >
+                      {sub.isCompleted && <Check className="h-3 w-3 stroke-[3]" />}
+                    </div>
+                    <span
+                      className={
+                        sub.isCompleted
+                          ? 'line-through text-slate-500'
+                          : 'text-slate-200'
+                      }
+                    >
+                      {sub.title}
+                    </span>
+                  </div>
+                ))}
+
+                <div className="flex items-center gap-2 pt-1">
                   <input
                     type="text"
-                    placeholder="slug"
-                    value={newChannelTag}
-                    onChange={(e) =>
-                      setNewChannelTag(
-                        e.target.value
-                          .toLowerCase()
-                          .replace(/^#/, '')
-                          .replace(/[^a-z0-9_-]/g, '')
-                      )
-                    }
-                    className="w-full pl-7 pr-3 py-2 bg-white/[0.05] border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 font-mono text-xs"
+                    value={focusSubtaskInput}
+                    onChange={(e) => setFocusSubtaskInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && focusSubtaskInput.trim()) {
+                        handleAddSubtask(activeFocusTask, focusSubtaskInput);
+                        setFocusSubtaskInput('');
+                      }
+                    }}
+                    placeholder="Add a micro-step..."
+                    className="flex-1 bg-[#0E1015] border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:outline-none"
                   />
-                </div>
-                <p className="mt-1 text-[11px] text-slate-500">
-                  Tasks mentioning #{newChannelTag || 'tag'} will automatically be categorized under this channel.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Channel Color
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {CHANNEL_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setNewChannelColor(c)}
-                      className={`h-7 w-7 rounded-full transition-transform flex items-center justify-center cursor-pointer ${
-                        newChannelColor === c
-                          ? 'scale-110 ring-2 ring-white ring-offset-2 ring-offset-[#181B23]'
-                          : 'hover:scale-105'
-                      }`}
-                      style={{ backgroundColor: c }}
-                    >
-                      {newChannelColor === c && (
-                        <Check className="h-3.5 w-3.5 text-white" />
-                      )}
-                    </button>
-                  ))}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (focusSubtaskInput.trim()) {
+                        handleAddSubtask(activeFocusTask, focusSubtaskInput);
+                        setFocusSubtaskInput('');
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-white/[0.08] hover:bg-white/[0.12] text-xs font-medium text-white"
+                  >
+                    Add
+                  </button>
                 </div>
               </div>
-
-              <div className="pt-3 border-t border-white/[0.06] flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsNewChannelModalOpen(false)}
-                  className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-white/[0.05] transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creatingChannel || !newChannelName.trim()}
-                  className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white disabled:opacity-50 transition-colors cursor-pointer"
-                >
-                  {creatingChannel ? 'Creating...' : 'Create Channel'}
-                </button>
-              </div>
-            </form>
-          </div>
+            </div>
+          ) : (
+            <div className="text-center space-y-3">
+              <CheckCircle2 className="h-10 w-10 text-emerald-400 mx-auto" />
+              <p className="text-lg font-semibold text-white">No open tasks!</p>
+              <button
+                type="button"
+                onClick={() => setActiveModal('none')}
+                className="px-4 py-2 rounded-xl bg-white/[0.08] text-xs text-white"
+              >
+                Return to Planner
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

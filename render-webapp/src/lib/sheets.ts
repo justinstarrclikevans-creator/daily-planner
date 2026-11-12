@@ -2,10 +2,10 @@ import { GoogleSpreadsheet } from 'google-spreadsheet';
 import { JWT } from 'google-auth-library';
 import {
   cleanTaskTitle,
-  extractHashtags,
   extractSubtasks,
   Task,
   TaskPriority,
+  Project,
   SunsamaChannel,
 } from '@/lib/supabase';
 
@@ -14,6 +14,9 @@ let lastChannelsFetch = 0;
 
 let inMemorySheetTasks: Task[] | null = null;
 let lastSheetTasksFetch = 0;
+
+let inMemorySheetProjects: Project[] | null = null;
+let lastProjectsFetch = 0;
 
 export async function getSheetDoc() {
   if (
@@ -196,13 +199,7 @@ export async function fetchActiveRemindersFromSheet(): Promise<Task[]> {
                   prio = 'low';
                 }
 
-                const extractedTags = Array.from(
-                  new Set([
-                    ...(Array.isArray(item.tags) ? item.tags : []),
-                    ...extractHashtags(item.title),
-                    ...extractHashtags(desc),
-                  ])
-                );
+                const cleanDesc = desc.replace(/\s*#[a-zA-Z0-9_\-]+/g, '').trim();
 
                 const taskStatus: 'pending' | 'completed' =
                   (item.status === 'completed' || item.isCompleted) ? 'completed' : 'pending';
@@ -211,8 +208,8 @@ export async function fetchActiveRemindersFromSheet(): Promise<Task[]> {
                   id: item.id || item.appleReminderId || `sheet-${idx}`,
                   projectId: item.projectId || null,
                   title: cleanTaskTitle(item.title),
-                  description: desc,
-                  listName: item.listName || 'General',
+                  description: cleanDesc,
+                  listName: 'General',
                   status: taskStatus,
                   dueDate: item.dueDate || null,
                   source: 'apple_reminders',
@@ -222,7 +219,7 @@ export async function fetchActiveRemindersFromSheet(): Promise<Task[]> {
                   priority: prio,
                   inPlayQueue: Boolean(item.inPlayQueue),
                   subtasks: subs,
-                  tags: extractedTags,
+                  tags: [],
                   createdAt: item.createdAt || new Date().toISOString(),
                   completedAt: item.completedAt || null,
                 };
@@ -243,4 +240,67 @@ export async function fetchActiveRemindersFromSheet(): Promise<Task[]> {
   }
 
   return inMemorySheetTasks || [];
+}
+
+export async function fetchProjectsFromSheet(): Promise<Project[]> {
+  const now = Date.now();
+  if (inMemorySheetProjects && now - lastProjectsFetch < 15000) {
+    return inMemorySheetProjects;
+  }
+
+  try {
+    const doc = await getSheetDoc();
+    if (!doc) return inMemorySheetProjects || [];
+
+    const settingsSheet = doc.sheetsByTitle['Settings'];
+    if (settingsSheet) {
+      const rows = await settingsSheet.getRows();
+      const row = rows.find((r) => r.get('Key') === 'custom_projects');
+      if (row && row.get('Value')) {
+        const parsed = JSON.parse(row.get('Value'));
+        if (Array.isArray(parsed)) {
+          inMemorySheetProjects = parsed;
+          lastProjectsFetch = now;
+          return inMemorySheetProjects;
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Error reading custom projects from Google Sheets:', err);
+  }
+
+  return inMemorySheetProjects || [];
+}
+
+export async function saveProjectsToSheet(projects: Project[]): Promise<boolean> {
+  inMemorySheetProjects = projects;
+  lastProjectsFetch = Date.now();
+
+  try {
+    const doc = await getSheetDoc();
+    if (!doc) return false;
+
+    let settingsSheet = doc.sheetsByTitle['Settings'];
+    if (!settingsSheet) {
+      settingsSheet = await doc.addSheet({
+        title: 'Settings',
+        headerValues: ['Key', 'Value'],
+      });
+    }
+
+    const rows = await settingsSheet.getRows();
+    const row = rows.find((r) => r.get('Key') === 'custom_projects');
+    const serialized = JSON.stringify(projects);
+
+    if (row) {
+      row.set('Value', serialized);
+      await row.save();
+    } else {
+      await settingsSheet.addRow({ Key: 'custom_projects', Value: serialized });
+    }
+    return true;
+  } catch (err) {
+    console.warn('Error saving custom projects to Google Sheets:', err);
+    return false;
+  }
 }

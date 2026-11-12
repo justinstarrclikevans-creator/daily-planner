@@ -86,53 +86,9 @@ export const DEFAULT_PROJECTS: Project[] = [
     slug: 'general',
     color: '#6366F1',
     icon: 'folder',
-    goal: 'General workflows & inbox tasks',
-    keywords: ['general', 'workflow', 'review', 'inbox', 'admin', 'daily'],
-  },
-  {
-    id: '22222222-2222-2222-2222-222222222222',
-    name: 'Turn90',
-    slug: 'turn90',
-    color: '#EF4444',
-    icon: 'briefcase',
-    goal: 'Turn90 re-entry operations & case management',
-    keywords: ['turn90', 'turn 90', 't90', 'reentry', 'first shift', 'apricot', 'skillcat'],
-  },
-  {
-    id: '33333333-3333-3333-3333-333333333333',
-    name: '843FC',
-    slug: '843fc',
-    color: '#10B981',
-    icon: 'trophy',
-    goal: '843FC soccer club, leagues & tournaments',
-    keywords: ['843', '843fc', 'soccer', 'football', 'futsal'],
-  },
-  {
-    id: '44444444-4444-4444-4444-444444444444',
-    name: 'Personal',
-    slug: 'personal',
-    color: '#8B5CF6',
-    icon: 'user',
-    goal: 'Personal health, life, and family',
-    keywords: ['personal', 'cats', 'health', 'family', 'home'],
-  },
-  {
-    id: '55555555-5555-5555-5555-555555555555',
-    name: 'Nosa',
-    slug: 'nosa',
-    color: '#F59E0B',
-    icon: 'sparkles',
-    goal: 'Nosa product development & roadmap',
-    keywords: ['nosa', 'royvi', 'claire'],
-  },
-  {
-    id: '66666666-6666-6666-6666-666666666666',
-    name: 'Book (Memoir) and Synapse',
-    slug: 'book-memoir-and-synapse',
-    color: '#3B82F6',
-    icon: 'book',
-    goal: 'Memoir writing & Synapse AI coaching engine',
-    keywords: ['book', 'memoir', 'synapse'],
+    goal: 'Default open list for all unassigned tasks',
+    keywords: [],
+    instructions: 'Default list for tasks until assigned to a specific project.',
   },
 ];
 
@@ -313,15 +269,14 @@ export function getFallbackTasks(projects: Project[]): Task[] {
         priority = 'low';
       }
 
-      const fullText = `${item.title || ''} ${item.notes || ''}`;
-      const extractedTags = extractHashtags(fullText);
       const inPlayQueue = (item.notes || '').includes('[▶️ Queue]');
+      const cleanNotes = (item.notes || '').replace(/\s*#[a-zA-Z0-9_\-]+/g, '').trim();
 
       const task: Task = {
         id,
         projectId: null,
         title: cleanTaskTitle(item.title),
-        description: item.notes || '',
+        description: cleanNotes,
         listName: 'General',
         status: 'pending',
         dueDate: item.dueDate || null,
@@ -330,7 +285,7 @@ export function getFallbackTasks(projects: Project[]): Task[] {
         priority,
         inPlayQueue,
         subtasks,
-        tags: extractedTags,
+        tags: [],
         createdAt: new Date().toISOString(),
       };
       return task;
