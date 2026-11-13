@@ -1313,7 +1313,7 @@ export default function ProjectPlannerWorkspace() {
           </div>
 
           <div
-            className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0"
+            className="opacity-100 xl:opacity-0 xl:group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -1333,17 +1333,17 @@ export default function ProjectPlannerWorkspace() {
                 }
                 setSchedulingTaskId(task.id);
               }}
-              className="p-1.5 md:p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
+              className="p-1.5 xl:p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
             >
-              <CalendarIcon className="h-3.5 w-3.5 md:h-3 md:w-3" />
+              <CalendarIcon className="h-3.5 w-3.5 xl:h-3 xl:w-3" />
             </button>
             <button
               type="button"
               title="Enter Focus Mode"
               onClick={() => openFocusMode(task)}
-              className="p-1.5 md:p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
+              className="p-1.5 xl:p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
             >
-              <Play className="h-3.5 w-3.5 md:h-3 md:w-3 fill-current" />
+              <Play className="h-3.5 w-3.5 xl:h-3 xl:w-3 fill-current" />
             </button>
           </div>
         </div>
@@ -1429,9 +1429,9 @@ export default function ProjectPlannerWorkspace() {
   };
 
   return (
-    <div className="h-[100dvh] w-screen flex flex-col md:flex-row bg-[#111318] text-slate-100 font-sans overflow-hidden pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-0">
+    <div className="h-[100dvh] w-screen flex flex-col xl:flex-row bg-[#111318] text-slate-100 font-sans overflow-hidden pb-[calc(4.25rem+env(safe-area-inset-bottom))] xl:pb-0">
       {/* 1. LEFT NAVIGATION RAIL & USER PROJECTS (Desktop) */}
-      <aside className="hidden md:flex w-64 bg-[#151820] border-r border-white/[0.06] flex-col justify-between shrink-0 select-none">
+      <aside className="hidden xl:flex w-64 bg-[#151820] border-r border-white/[0.06] flex-col justify-between shrink-0 select-none">
         <div className="p-3.5 space-y-5 overflow-y-auto">
           {/* Header & Sync */}
           <div className="flex items-center justify-between px-1">
@@ -1640,11 +1640,11 @@ export default function ProjectPlannerWorkspace() {
           {/* 2. CENTER WORKSPACE: OPEN TASKS GROUPED BY PROJECT */}
           <main
             className={`${
-              mobileTab === 'tasks' ? 'flex' : 'hidden md:flex'
+              mobileTab === 'tasks' ? 'flex' : 'hidden xl:flex'
             } flex-1 min-h-0 flex-col overflow-hidden bg-[#111318]`}
           >
         {/* Top Bar */}
-        <header className="px-4 md:px-5 py-3 md:py-3.5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 shrink-0">
+        <header className="px-4 xl:px-5 py-3 xl:py-3.5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 shrink-0">
           <div className="flex items-center justify-between gap-2">
             <div>
               <h1 className="text-base font-bold text-white flex items-center gap-2">
@@ -1667,7 +1667,7 @@ export default function ProjectPlannerWorkspace() {
                 setTranscriptStatusMsg(null);
                 setActiveModal('transcript_plan');
               }}
-              className="sm:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold shrink-0"
+              className="xl:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold shrink-0"
             >
               <FileText className="h-3.5 w-3.5" />
               <span>Plan</span>
@@ -1901,7 +1901,7 @@ export default function ProjectPlannerWorkspace() {
               ? 'flex w-full flex-1 min-h-0 overflow-hidden'
               : 'hidden'
           } ${
-            showCalendarPane ? 'md:flex md:w-[370px] md:flex-none md:min-h-0' : 'md:hidden'
+            showCalendarPane ? 'xl:flex xl:w-[370px] xl:flex-none xl:min-h-0' : 'xl:hidden'
           } bg-[#151820] border-l border-white/[0.06] flex-col shrink-0 select-none`}
         >
           <div className="p-3.5 border-b border-white/[0.06] space-y-2.5">
@@ -2759,10 +2759,10 @@ export default function ProjectPlannerWorkspace() {
         </div>
       )}
 
-      {/* 6. MOBILE BOTTOM TAB BAR (< md) */}
+      {/* 6. MOBILE / TABLET BOTTOM TAB BAR (< xl) */}
       <nav
         aria-label="Mobile Navigation"
-        className="md:hidden fixed bottom-0 inset-x-0 border-t border-white/[0.08] bg-[#151820]/95 backdrop-blur-md px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] grid grid-cols-4 gap-1 z-40"
+        className="xl:hidden fixed bottom-0 inset-x-0 border-t border-white/[0.08] bg-[#151820]/95 backdrop-blur-md px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] grid grid-cols-4 gap-1 z-40"
       >
         <button
           type="button"
@@ -2822,10 +2822,10 @@ export default function ProjectPlannerWorkspace() {
         </button>
       </nav>
 
-      {/* 7. MOBILE SLIDE-OVER PROJECTS & PLAN DRAWER */}
+      {/* 7. MOBILE / TABLET SLIDE-OVER PROJECTS & PLAN DRAWER */}
       {mobileMenuOpen && (
         <div
-          className="md:hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex"
+          className="xl:hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex"
           onClick={() => setMobileMenuOpen(false)}
         >
           <div

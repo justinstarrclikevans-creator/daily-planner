@@ -267,8 +267,8 @@ export default function NotesWorkspace({
         {/* Note List Column */}
         <div
           className={`${
-            mobileShowEditor ? 'hidden md:flex' : 'flex'
-          } w-full md:w-80 min-h-0 border-r border-white/[0.06] flex-col bg-[#13161E] shrink-0`}
+            mobileShowEditor ? 'hidden xl:flex' : 'flex'
+          } w-full xl:w-80 min-h-0 border-r border-white/[0.06] flex-col bg-[#13161E] shrink-0`}
         >
           {folders.length > 2 && (
             <div className="p-2.5 border-b border-white/[0.06] flex items-center gap-1.5 overflow-x-auto">
@@ -349,17 +349,17 @@ export default function NotesWorkspace({
         {/* Note Editor Column */}
         <div
           className={`${
-            mobileShowEditor ? 'flex' : 'hidden md:flex'
+            mobileShowEditor ? 'flex' : 'hidden xl:flex'
           } flex-1 min-h-0 flex-col overflow-hidden bg-[#111318]`}
         >
           {selectedNote ? (
             <>
-              <div className="px-3 md:px-6 py-2.5 md:py-3 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <div className="px-3 xl:px-6 py-2.5 xl:py-3 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2 shrink-0">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <button
                     type="button"
                     onClick={() => setMobileShowEditor(false)}
-                    className="md:hidden p-1.5 -ml-1 rounded-lg text-slate-300 hover:bg-white/[0.06] shrink-0"
+                    className="xl:hidden p-1.5 -ml-1 rounded-lg text-slate-300 hover:bg-white/[0.06] shrink-0"
                     aria-label="Back to notes list"
                   >
                     <ArrowLeft className="h-4 w-4" />
