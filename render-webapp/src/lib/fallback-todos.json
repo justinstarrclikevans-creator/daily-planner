@@ -32,19 +32,19 @@
     "appleReminderId": "ACFED9C3-B054-425B-ADA3-A644B49F0734"
   },
   {
-    "title": "Get Shawn the apricot data",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": "2026-11-12T23:33:12Z",
-    "appleReminderId": "FFA7FF68-C863-4078-934D-EFE8B510C1BA"
-  },
-  {
     "title": "Ask USAA about increasing my credit limit",
     "notes": "",
     "listName": "General",
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "9A46295A-676B-4339-A3D8-B483E9056D09"
+  },
+  {
+    "title": "Pay neighbors",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "DA1DB5CB-1A41-43D6-9ED9-AC2E1A4167B2"
   }
 ]
