@@ -142,5 +142,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "5F8918C6-585A-4684-82F5-A9E7B84170B5"
+  },
+  {
+    "title": "See if I can restrict the API and the app to make sure it doesn't use the expensive model",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "C17B08C8-413E-4766-9E62-C31F1BDA1593"
   }
 ]
