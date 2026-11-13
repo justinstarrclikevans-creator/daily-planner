@@ -35,6 +35,7 @@ import {
   Undo2,
   FileText,
   Wand2,
+  Menu,
 } from 'lucide-react';
 
 type ActiveModal = 'none' | 'transcript_plan' | 'focus_mode';
@@ -125,6 +126,11 @@ export default function ProjectPlannerWorkspace() {
 
   // Navigation & Filters
   const [activeWorkspace, setActiveWorkspace] = useState<'tasks' | 'notes'>('tasks');
+  const [mobileTab, setMobileTab] = useState<'tasks' | 'schedule' | 'notes'>('tasks');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [schedulingTaskId, setSchedulingTaskId] = useState<string | null>(null);
+  const [scheduleDayChoice, setScheduleDayChoice] = useState<'today' | 'tomorrow'>('today');
+  const [scheduleTimeChoice, setScheduleTimeChoice] = useState<string>('09:00');
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('all'); // 'all' | 'general' | project.id
   const [taskSearch, setTaskSearch] = useState<string>('');
@@ -1291,16 +1297,37 @@ export default function ProjectPlannerWorkspace() {
           </div>
 
           <div
-            className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0"
+            className="opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
+              title="Schedule onto calendar"
+              onClick={() => {
+                setScheduleDayChoice('today');
+                if (task.dueDate) {
+                  const d = new Date(task.dueDate);
+                  if (!Number.isNaN(d.getTime())) {
+                    const hh = String(d.getHours()).padStart(2, '0');
+                    const mm = String(d.getMinutes()).padStart(2, '0');
+                    setScheduleTimeChoice(`${hh}:${mm}`);
+                  }
+                } else {
+                  setScheduleTimeChoice('09:00');
+                }
+                setSchedulingTaskId(task.id);
+              }}
+              className="p-1.5 md:p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
+            >
+              <CalendarIcon className="h-3.5 w-3.5 md:h-3 md:w-3" />
+            </button>
+            <button
+              type="button"
               title="Enter Focus Mode"
               onClick={() => openFocusMode(task)}
-              className="p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
+              className="p-1.5 md:p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
             >
-              <Play className="h-3 w-3 fill-current" />
+              <Play className="h-3.5 w-3.5 md:h-3 md:w-3 fill-current" />
             </button>
           </div>
         </div>
@@ -1386,9 +1413,9 @@ export default function ProjectPlannerWorkspace() {
   };
 
   return (
-    <div className="h-screen w-screen flex bg-[#111318] text-slate-100 font-sans overflow-hidden">
-      {/* 1. LEFT NAVIGATION RAIL & USER PROJECTS */}
-      <aside className="w-64 bg-[#151820] border-r border-white/[0.06] flex flex-col justify-between shrink-0 select-none">
+    <div className="h-[100dvh] w-screen flex flex-col md:flex-row bg-[#111318] text-slate-100 font-sans overflow-hidden">
+      {/* 1. LEFT NAVIGATION RAIL & USER PROJECTS (Desktop) */}
+      <aside className="hidden md:flex w-64 bg-[#151820] border-r border-white/[0.06] flex-col justify-between shrink-0 select-none">
         <div className="p-3.5 space-y-5 overflow-y-auto">
           {/* Header & Sync */}
           <div className="flex items-center justify-between px-1">
@@ -1595,42 +1622,59 @@ export default function ProjectPlannerWorkspace() {
       ) : (
         <>
           {/* 2. CENTER WORKSPACE: OPEN TASKS GROUPED BY PROJECT */}
-          <main className="flex-1 flex flex-col overflow-hidden bg-[#111318]">
+          <main
+            className={`${
+              mobileTab === 'tasks' ? 'flex' : 'hidden md:flex'
+            } flex-1 flex-col overflow-hidden bg-[#111318]`}
+          >
         {/* Top Bar */}
-        <header className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between gap-4 shrink-0">
-          <div>
-            <h1 className="text-base font-bold text-white flex items-center gap-2">
-              <span>Open Tasks by Project</span>
-              <span className="text-xs font-normal text-slate-400">
-                {now.toLocaleDateString('en-US', {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                })}
-              </span>
-            </h1>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Click any project title to rename it, add classification instructions, or drag tasks onto the calendar.
-            </p>
+        <header className="px-4 md:px-5 py-3 md:py-3.5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 shrink-0">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h1 className="text-base font-bold text-white flex items-center gap-2">
+                <span>Open Tasks by Project</span>
+                <span className="text-xs font-normal text-slate-400">
+                  {now.toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </span>
+              </h1>
+              <p className="hidden sm:block text-[11px] text-slate-500 mt-0.5">
+                Click any project title to rename it, add classification instructions, or drag tasks onto the calendar.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setTranscriptStatusMsg(null);
+                setActiveModal('transcript_plan');
+              }}
+              className="sm:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold shrink-0"
+            >
+              <FileText className="h-3.5 w-3.5" />
+              <span>Plan</span>
+            </button>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="relative w-64">
-              <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-2" />
+          <div className="flex items-center gap-2.5">
+            <div className="relative flex-1 sm:w-64 sm:flex-none">
+              <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-2.5 md:top-2" />
               <input
                 type="text"
                 value={taskSearch}
                 onChange={(e) => setTaskSearch(e.target.value)}
                 placeholder="Search open tasks..."
-                className="w-full bg-[#1B1E26] border border-white/[0.06] rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50"
+                className="w-full bg-[#1B1E26] border border-white/[0.06] rounded-lg pl-8 pr-3 py-1.5 text-base md:text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50"
               />
             </div>
 
-            <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 bg-[#1B1E26] px-2.5 py-1.5 rounded-lg border border-white/[0.06]">
+            <div className="flex items-center gap-1.5 text-[11px] font-mono text-slate-400 bg-[#1B1E26] px-2.5 py-1.5 rounded-lg border border-white/[0.06] shrink-0">
               {todayScheduledMinutes > DAILY_TARGET_MINUTES && (
                 <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
               )}
-              <span>Scheduled Today:</span>
+              <span className="hidden sm:inline">Scheduled Today:</span>
               <strong className="text-white">
                 {formatDurationShort(todayScheduledMinutes)}
               </strong>
@@ -1834,8 +1878,16 @@ export default function ProjectPlannerWorkspace() {
       </main>
 
       {/* 3. RIGHT 15-MINUTE INTERACTIVE CALENDAR TIMELINE */}
-      {showCalendarPane && (
-        <aside className="w-[370px] bg-[#151820] border-l border-white/[0.06] flex flex-col shrink-0 select-none">
+      {(showCalendarPane || mobileTab === 'schedule') && (
+        <aside
+          className={`${
+            mobileTab === 'schedule'
+              ? 'flex w-full flex-1'
+              : 'hidden'
+          } ${
+            showCalendarPane ? 'md:flex md:w-[370px] md:flex-none' : 'md:hidden'
+          } bg-[#151820] border-l border-white/[0.06] flex-col shrink-0 select-none`}
+        >
           <div className="p-3.5 border-b border-white/[0.06] space-y-2.5">
             <div className="flex items-center justify-between">
               <div>
@@ -2690,6 +2742,347 @@ export default function ProjectPlannerWorkspace() {
           )}
         </div>
       )}
+
+      {/* 6. MOBILE BOTTOM TAB BAR (< md) */}
+      <nav
+        aria-label="Mobile Navigation"
+        className="md:hidden shrink-0 border-t border-white/[0.08] bg-[#151820] px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] grid grid-cols-4 gap-1 z-30"
+      >
+        <button
+          type="button"
+          onClick={() => {
+            setMobileTab('tasks');
+            setActiveWorkspace('tasks');
+          }}
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-[11px] font-medium transition-colors ${
+            mobileTab === 'tasks'
+              ? 'text-indigo-400 bg-indigo-500/10'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <CheckCircle2 className="h-5 w-5 mb-0.5" />
+          <span>Tasks ({openTasks.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMobileTab('schedule');
+            setActiveWorkspace('tasks');
+          }}
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-[11px] font-medium transition-colors ${
+            mobileTab === 'schedule'
+              ? 'text-indigo-400 bg-indigo-500/10'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <CalendarIcon className="h-5 w-5 mb-0.5" />
+          <span>Schedule ({timeboxedTimelineBlocks.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMobileTab('notes');
+            setActiveWorkspace('notes');
+          }}
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-[11px] font-medium transition-colors ${
+            mobileTab === 'notes'
+              ? 'text-indigo-400 bg-indigo-500/10'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <FileText className="h-5 w-5 mb-0.5" />
+          <span>Notes ({notes.length})</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen(true)}
+          className="flex flex-col items-center justify-center py-1.5 rounded-xl text-[11px] font-medium text-slate-400 hover:text-slate-200 transition-colors"
+        >
+          <Menu className="h-5 w-5 mb-0.5" />
+          <span>Projects</span>
+        </button>
+      </nav>
+
+      {/* 7. MOBILE SLIDE-OVER PROJECTS & PLAN DRAWER */}
+      {mobileMenuOpen && (
+        <div
+          className="md:hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex"
+          onClick={() => setMobileMenuOpen(false)}
+        >
+          <div
+            className="w-80 max-w-[85vw] h-full bg-[#151820] border-r border-white/[0.08] p-4 flex flex-col justify-between overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="h-6 w-6 rounded-lg bg-gradient-to-tr from-indigo-500 to-violet-500 flex items-center justify-center text-white font-bold text-xs shadow">
+                    P
+                  </div>
+                  <span className="text-sm font-semibold text-white">Day Planner</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.06]"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    setTranscriptStatusMsg(null);
+                    setActiveModal('transcript_plan');
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  <span>Paste Transcript / Plan Day</span>
+                </button>
+
+                {customProjects.length > 0 && (
+                  <button
+                    type="button"
+                    disabled={isPlanningTranscript}
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      runTranscriptPlanner('classify_only');
+                    }}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-white/[0.05] text-slate-200 text-xs font-medium"
+                  >
+                    <Wand2 className="h-3.5 w-3.5 text-amber-400" />
+                    <span>Classify General by Rules</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMobileMenuOpen(false);
+                    openFocusMode();
+                  }}
+                  className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.04] text-slate-200 text-xs font-medium"
+                >
+                  <Play className="h-3.5 w-3.5 text-emerald-400 fill-current" />
+                  <span>Focus Mode</span>
+                </button>
+              </div>
+
+              <div className="space-y-1.5 pt-2 border-t border-white/[0.06]">
+                <div className="px-1 flex items-center justify-between">
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                    Projects
+                  </span>
+                  <span className="text-[10px] text-slate-500">{openTasks.length} open</span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedProjectFilter('all');
+                    setMobileTab('tasks');
+                    setActiveWorkspace('tasks');
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs ${
+                    selectedProjectFilter === 'all'
+                      ? 'bg-white/[0.08] text-white font-medium'
+                      : 'text-slate-300 hover:bg-white/[0.04]'
+                  }`}
+                >
+                  <span className="flex items-center gap-2">
+                    <Folder className="h-3.5 w-3.5 text-slate-400" />
+                    <span>All Open Tasks</span>
+                  </span>
+                  <span className="text-[10px] text-slate-500">{openTasks.length}</span>
+                </button>
+
+                {orderedProjects.map((proj) => {
+                  const count = openTasks.filter((t) => getTaskProject(t).id === proj.id).length;
+                  return (
+                    <button
+                      key={proj.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedProjectFilter(proj.id);
+                        setMobileTab('tasks');
+                        setActiveWorkspace('tasks');
+                        setMobileMenuOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-2.5 py-2 rounded-lg text-xs ${
+                        selectedProjectFilter === proj.id
+                          ? 'bg-white/[0.08] text-white font-medium'
+                          : 'text-slate-300 hover:bg-white/[0.04]'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <span
+                          className="h-2 w-2 rounded-full shrink-0"
+                          style={{ backgroundColor: proj.color }}
+                        />
+                        <span className="truncate">{proj.name}</span>
+                      </span>
+                      <span className="text-[10px] text-slate-500">{count}</span>
+                    </button>
+                  );
+                })}
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (newProjectName.trim()) {
+                      handleCreateProject(newProjectName);
+                    }
+                  }}
+                  className="pt-2 flex items-center gap-1.5"
+                >
+                  <input
+                    type="text"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    placeholder="+ New project..."
+                    className="flex-1 bg-[#1B1E26] border border-white/[0.08] rounded-lg px-2.5 py-1.5 text-base md:text-xs text-white placeholder:text-slate-500 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!newProjectName.trim()}
+                    className="px-2.5 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold disabled:opacity-40"
+                  >
+                    Add
+                  </button>
+                </form>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                loadData();
+                loadNotes();
+              }}
+              className="mt-4 w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-white/[0.05] text-xs text-slate-300"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+              <span>Sync Now</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 8. TAP-TO-SCHEDULE MODAL (Touch-friendly alternative to drag-and-drop) */}
+      {schedulingTaskId && (() => {
+        const targetTask = tasks.find((t) => t.id === schedulingTaskId);
+        if (!targetTask) return null;
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4"
+            onClick={() => setSchedulingTaskId(null)}
+          >
+            <div
+              className="w-full sm:max-w-sm bg-[#171A23] border border-white/[0.08] rounded-t-2xl sm:rounded-2xl p-5 space-y-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Schedule Task</h3>
+                  <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                    {targetTask.title}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSchedulingTaskId(null)}
+                  className="p-1 text-slate-400 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                {(['today', 'tomorrow'] as const).map((day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => setScheduleDayChoice(day)}
+                    className={`py-2 rounded-xl text-xs font-semibold capitalize border transition-colors ${
+                      scheduleDayChoice === day
+                        ? 'bg-indigo-600 text-white border-indigo-500'
+                        : 'bg-[#111318] text-slate-300 border-white/[0.08]'
+                    }`}
+                  >
+                    {day}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-medium text-slate-400">
+                  Start Time
+                </label>
+                <input
+                  type="time"
+                  value={scheduleTimeChoice}
+                  onChange={(e) => setScheduleTimeChoice(e.target.value)}
+                  className="w-full bg-[#111318] border border-white/[0.08] rounded-xl px-3 py-2 text-base md:text-sm text-white focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                {targetTask.dueDate && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await moveTaskBackToOpen(targetTask);
+                      setSchedulingTaskId(null);
+                    }}
+                    className="px-3 py-2.5 rounded-xl bg-white/[0.06] text-xs text-slate-300 hover:text-white"
+                  >
+                    Move to Open
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const [hhStr, mmStr] = (scheduleTimeChoice || '09:00').split(':');
+                    const hh = parseInt(hhStr, 10) || 9;
+                    const mm = parseInt(mmStr, 10) || 0;
+                    const base = new Date();
+                    if (scheduleDayChoice === 'tomorrow') {
+                      base.setDate(base.getDate() + 1);
+                    }
+                    base.setHours(hh, mm, 0, 0);
+                    const isTodayTarget = scheduleDayChoice === 'today';
+                    const nextDesc = buildTaskDescription({
+                      cleanNotes: extractCleanNotes(targetTask.description),
+                      estimatedMinutes: targetTask.estimatedMinutes || 15,
+                      inPlayQueue: isTodayTarget,
+                      subtasks: targetTask.subtasks,
+                      tags: [],
+                    });
+                    await patchTask(targetTask.id, {
+                      due_date: base.toISOString(),
+                      in_play_queue: isTodayTarget,
+                      description: nextDesc,
+                    });
+                    setTimelineDayBucket(scheduleDayChoice);
+                    setSchedulingTaskId(null);
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
+                >
+                  Save to Schedule
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

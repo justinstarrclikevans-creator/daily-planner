@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -12,9 +12,21 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#111318",
+};
+
 export const metadata: Metadata = {
-  title: "Sunsama | Daily Planner",
-  description: "Guided daily planning, multi-day kanban, and calendar timeboxing synced with Mac Daemon.",
+  title: "Day Planner",
+  description: "Guided daily planning, projects, notes, and calendar timeboxing.",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Day Planner",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

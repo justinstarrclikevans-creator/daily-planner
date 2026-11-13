@@ -11,6 +11,7 @@ import {
   Folder,
   Check,
   Send,
+  ArrowLeft,
 } from 'lucide-react';
 
 type NotesWorkspaceProps = {
@@ -27,6 +28,7 @@ export default function NotesWorkspace({
   const [selectedNoteId, setSelectedNoteId] = useState<string | null>(
     notes[0]?.id || null
   );
+  const [mobileShowEditor, setMobileShowEditor] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolder, setSelectedFolder] = useState<string>('All');
 
@@ -117,6 +119,7 @@ export default function NotesWorkspace({
       if (res.ok && json.note) {
         onNotesChange((prev) => [json.note, ...prev]);
         setSelectedNoteId(json.note.id);
+        setMobileShowEditor(true);
         setDraftTitle(json.note.title);
         setDraftFolder(json.note.folder);
         setDraftContent(json.note.content);
@@ -190,6 +193,7 @@ export default function NotesWorkspace({
     if (selectedNoteId === id) {
       const next = notes.find((n) => n.id !== id);
       setSelectedNoteId(next?.id || null);
+      setMobileShowEditor(false);
     }
 
     await fetch(`/api/notes?id=${encodeURIComponent(id)}`, {
@@ -200,36 +204,48 @@ export default function NotesWorkspace({
   return (
     <main className="flex-1 flex flex-col overflow-hidden bg-[#111318]">
       {/* Header */}
-      <header className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between gap-4 shrink-0">
-        <div>
-          <h1 className="text-base font-bold text-white flex items-center gap-2">
-            <FileText className="h-4 w-4 text-indigo-400" />
-            <span>Notes</span>
-            <span className="text-xs font-normal text-slate-400">
-              ({notes.length})
-            </span>
-          </h1>
-          <p className="text-[11px] text-slate-500 mt-0.5">
-            Create, edit, append to, and organize your notes directly in Supabase.
-          </p>
+      <header className="px-4 md:px-5 py-3 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-base font-bold text-white flex items-center gap-2">
+              <FileText className="h-4 w-4 text-indigo-400" />
+              <span>Notes</span>
+              <span className="text-xs font-normal text-slate-400">
+                ({notes.length})
+              </span>
+            </h1>
+            <p className="hidden sm:block text-[11px] text-slate-500 mt-0.5">
+              Create, edit, append to, and organize your notes directly in Supabase.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleCreateNote}
+            disabled={isCreating}
+            className="sm:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors disabled:opacity-50"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>New</span>
+          </button>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <div className="relative w-64">
-            <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-2" />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 sm:w-64 sm:flex-none">
+            <Search className="h-3.5 w-3.5 text-slate-500 absolute left-2.5 top-2.5 md:top-2" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search notes..."
-              className="w-full bg-[#1B1E26] border border-white/[0.06] rounded-lg pl-8 pr-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50"
+              className="w-full bg-[#1B1E26] border border-white/[0.06] rounded-lg pl-8 pr-3 py-1.5 text-base md:text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50"
             />
           </div>
 
           <button
             type="button"
             onClick={onRefresh}
-            className="px-2.5 py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-xs text-slate-300 transition-colors"
+            className="px-2.5 py-2 md:py-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-xs text-slate-300 transition-colors shrink-0"
           >
             Refresh
           </button>
@@ -238,7 +254,7 @@ export default function NotesWorkspace({
             type="button"
             onClick={handleCreateNote}
             disabled={isCreating}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors disabled:opacity-50"
+            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition-colors disabled:opacity-50 shrink-0"
           >
             <Plus className="h-3.5 w-3.5" />
             <span>New Note</span>
@@ -249,7 +265,11 @@ export default function NotesWorkspace({
       {/* Body: Note List + Note Editor */}
       <div className="flex-1 flex overflow-hidden">
         {/* Note List Column */}
-        <div className="w-80 border-r border-white/[0.06] flex flex-col bg-[#13161E] shrink-0">
+        <div
+          className={`${
+            mobileShowEditor ? 'hidden md:flex' : 'flex'
+          } w-full md:w-80 border-r border-white/[0.06] flex-col bg-[#13161E] shrink-0`}
+        >
           {folders.length > 2 && (
             <div className="p-2.5 border-b border-white/[0.06] flex items-center gap-1.5 overflow-x-auto">
               {folders.map((folder) => (
@@ -294,7 +314,10 @@ export default function NotesWorkspace({
                   <button
                     key={note.id}
                     type="button"
-                    onClick={() => setSelectedNoteId(note.id)}
+                    onClick={() => {
+                      setSelectedNoteId(note.id);
+                      setMobileShowEditor(true);
+                    }}
                     className={`w-full text-left p-2.5 rounded-xl border transition-colors ${
                       isSelected
                         ? 'bg-indigo-600/15 border-indigo-500/40'
@@ -324,26 +347,38 @@ export default function NotesWorkspace({
         </div>
 
         {/* Note Editor Column */}
-        <div className="flex-1 flex flex-col overflow-hidden bg-[#111318]">
+        <div
+          className={`${
+            mobileShowEditor ? 'flex' : 'hidden md:flex'
+          } flex-1 flex-col overflow-hidden bg-[#111318]`}
+        >
           {selectedNote ? (
             <>
-              <div className="px-6 py-3 border-b border-white/[0.06] flex items-center justify-between gap-3 shrink-0">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
+              <div className="px-3 md:px-6 py-2.5 md:py-3 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-2 shrink-0">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setMobileShowEditor(false)}
+                    className="md:hidden p-1.5 -ml-1 rounded-lg text-slate-300 hover:bg-white/[0.06] shrink-0"
+                    aria-label="Back to notes list"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
                   <input
                     type="text"
                     value={draftTitle}
                     onChange={(e) => setDraftTitle(e.target.value)}
                     placeholder="Note title..."
-                    className="flex-1 bg-transparent text-base font-bold text-white placeholder:text-slate-600 focus:outline-none"
+                    className="flex-1 min-w-[120px] bg-transparent text-base font-bold text-white placeholder:text-slate-600 focus:outline-none"
                   />
-                  <div className="flex items-center gap-1.5 bg-[#1B1E26] border border-white/[0.06] rounded-lg px-2 py-1">
+                  <div className="hidden sm:flex items-center gap-1.5 bg-[#1B1E26] border border-white/[0.06] rounded-lg px-2 py-1">
                     <Folder className="h-3 w-3 text-slate-500" />
                     <input
                       type="text"
                       value={draftFolder}
                       onChange={(e) => setDraftFolder(e.target.value)}
                       placeholder="Folder"
-                      className="w-24 bg-transparent text-[11px] text-slate-300 focus:outline-none"
+                      className="w-24 bg-transparent text-base md:text-[11px] text-slate-300 focus:outline-none"
                     />
                   </div>
                 </div>
@@ -379,7 +414,7 @@ export default function NotesWorkspace({
                 </div>
               </div>
 
-              <div className="flex-1 p-6 overflow-y-auto flex flex-col">
+              <div className="flex-1 p-4 md:p-6 overflow-y-auto flex flex-col">
                 <textarea
                   value={draftContent}
                   onChange={(e) => setDraftContent(e.target.value)}
@@ -390,29 +425,30 @@ export default function NotesWorkspace({
                     }
                   }}
                   placeholder="Write or paste your note here..."
-                  className="flex-1 w-full bg-transparent text-sm leading-relaxed text-slate-200 placeholder:text-slate-600 focus:outline-none resize-none font-sans"
+                  className="flex-1 w-full bg-transparent text-base md:text-sm leading-relaxed text-slate-200 placeholder:text-slate-600 focus:outline-none resize-none font-sans"
                 />
               </div>
 
               {/* Quick Append Bar */}
               <form
                 onSubmit={handleAppendLine}
-                className="px-6 py-3 border-t border-white/[0.06] bg-[#151820] flex items-center gap-2 shrink-0"
+                className="px-3 md:px-6 py-2.5 md:py-3 border-t border-white/[0.06] bg-[#151820] flex items-center gap-2 shrink-0"
               >
                 <input
                   type="text"
                   value={appendLine}
                   onChange={(e) => setAppendLine(e.target.value)}
-                  placeholder="Quickly add/append a line to this note and press Enter..."
-                  className="flex-1 bg-[#1B1E26] border border-white/[0.08] rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50"
+                  placeholder="Add to this note..."
+                  className="flex-1 bg-[#1B1E26] border border-white/[0.08] rounded-lg px-3 py-1.5 text-base md:text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500/50"
                 />
                 <button
                   type="submit"
                   disabled={!appendLine.trim() || isSaving}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium disabled:opacity-40 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium disabled:opacity-40 transition-colors shrink-0"
                 >
                   <Send className="h-3 w-3" />
-                  <span>Add to Note</span>
+                  <span className="hidden sm:inline">Add to Note</span>
+                  <span className="sm:hidden">Add</span>
                 </button>
               </form>
             </>
