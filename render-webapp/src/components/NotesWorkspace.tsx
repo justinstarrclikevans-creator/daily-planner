@@ -202,7 +202,7 @@ export default function NotesWorkspace({
   };
 
   return (
-    <main className="flex-1 flex flex-col overflow-hidden bg-[#111318]">
+    <main className="flex-1 min-h-0 flex flex-col overflow-hidden bg-[#111318]">
       {/* Header */}
       <header className="px-4 md:px-5 py-3 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0">
         <div className="flex items-center justify-between">
@@ -263,12 +263,12 @@ export default function NotesWorkspace({
       </header>
 
       {/* Body: Note List + Note Editor */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* Note List Column */}
         <div
           className={`${
             mobileShowEditor ? 'hidden md:flex' : 'flex'
-          } w-full md:w-80 border-r border-white/[0.06] flex-col bg-[#13161E] shrink-0`}
+          } w-full md:w-80 min-h-0 border-r border-white/[0.06] flex-col bg-[#13161E] shrink-0`}
         >
           {folders.length > 2 && (
             <div className="p-2.5 border-b border-white/[0.06] flex items-center gap-1.5 overflow-x-auto">
@@ -350,7 +350,7 @@ export default function NotesWorkspace({
         <div
           className={`${
             mobileShowEditor ? 'flex' : 'hidden md:flex'
-          } flex-1 flex-col overflow-hidden bg-[#111318]`}
+          } flex-1 min-h-0 flex-col overflow-hidden bg-[#111318]`}
         >
           {selectedNote ? (
             <>

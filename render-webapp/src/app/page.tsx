@@ -224,13 +224,29 @@ export default function ProjectPlannerWorkspace() {
   const loadNotes = useCallback(async () => {
     try {
       const res = await fetch('/api/notes', { cache: 'no-store' });
-      if (!res.ok) return;
-      const json = await res.json();
-      if (Array.isArray(json.notes)) {
-        setNotes(json.notes);
+      if (res.ok) {
+        const json = await res.json();
+        if (Array.isArray(json.notes)) {
+          setNotes(json.notes);
+          return;
+        }
+      }
+      const { data, error } = await supabase
+        .from('notes')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      if (!error && Array.isArray(data)) {
+        setNotes(data as Note[]);
       }
     } catch (err) {
-      console.warn('Notes fetch error:', err);
+      console.warn('Notes fetch error, trying direct Supabase client:', err);
+      const { data } = await supabase
+        .from('notes')
+        .select('*')
+        .order('updated_at', { ascending: false });
+      if (Array.isArray(data)) {
+        setNotes(data as Note[]);
+      }
     }
   }, []);
 
@@ -1413,7 +1429,7 @@ export default function ProjectPlannerWorkspace() {
   };
 
   return (
-    <div className="h-[100dvh] w-screen flex flex-col md:flex-row bg-[#111318] text-slate-100 font-sans overflow-hidden">
+    <div className="h-[100dvh] w-screen flex flex-col md:flex-row bg-[#111318] text-slate-100 font-sans overflow-hidden pb-[calc(4.25rem+env(safe-area-inset-bottom))] md:pb-0">
       {/* 1. LEFT NAVIGATION RAIL & USER PROJECTS (Desktop) */}
       <aside className="hidden md:flex w-64 bg-[#151820] border-r border-white/[0.06] flex-col justify-between shrink-0 select-none">
         <div className="p-3.5 space-y-5 overflow-y-auto">
@@ -1625,7 +1641,7 @@ export default function ProjectPlannerWorkspace() {
           <main
             className={`${
               mobileTab === 'tasks' ? 'flex' : 'hidden md:flex'
-            } flex-1 flex-col overflow-hidden bg-[#111318]`}
+            } flex-1 min-h-0 flex-col overflow-hidden bg-[#111318]`}
           >
         {/* Top Bar */}
         <header className="px-4 md:px-5 py-3 md:py-3.5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 shrink-0">
@@ -1882,10 +1898,10 @@ export default function ProjectPlannerWorkspace() {
         <aside
           className={`${
             mobileTab === 'schedule'
-              ? 'flex w-full flex-1'
+              ? 'flex w-full flex-1 min-h-0 overflow-hidden'
               : 'hidden'
           } ${
-            showCalendarPane ? 'md:flex md:w-[370px] md:flex-none' : 'md:hidden'
+            showCalendarPane ? 'md:flex md:w-[370px] md:flex-none md:min-h-0' : 'md:hidden'
           } bg-[#151820] border-l border-white/[0.06] flex-col shrink-0 select-none`}
         >
           <div className="p-3.5 border-b border-white/[0.06] space-y-2.5">
@@ -2746,7 +2762,7 @@ export default function ProjectPlannerWorkspace() {
       {/* 6. MOBILE BOTTOM TAB BAR (< md) */}
       <nav
         aria-label="Mobile Navigation"
-        className="md:hidden shrink-0 border-t border-white/[0.08] bg-[#151820] px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] grid grid-cols-4 gap-1 z-30"
+        className="md:hidden fixed bottom-0 inset-x-0 border-t border-white/[0.08] bg-[#151820]/95 backdrop-blur-md px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] grid grid-cols-4 gap-1 z-40"
       >
         <button
           type="button"

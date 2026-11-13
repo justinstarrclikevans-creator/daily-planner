@@ -21,7 +21,7 @@ async function supabaseFetch(path: string, options: RequestInit = {}) {
     ...((options.headers as Record<string, string>) || {}),
   };
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 4000);
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
   try {
     const res = await fetch(url, { ...options, headers, signal: controller.signal });
     clearTimeout(timeoutId);
