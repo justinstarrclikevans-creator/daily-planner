@@ -46,5 +46,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "DA1DB5CB-1A41-43D6-9ED9-AC2E1A4167B2"
+  },
+  {
+    "title": "Shopping list",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "3A4DD667-69B4-44DC-8725-28B57ABAEEB1"
   }
 ]
