@@ -8,7 +8,7 @@ const { getRecentSlackMessages } = require('./slack');
 const { getRecentEmails, getTodaysCalendarEvents } = require('./google');
 const { getRecentLetterlyNotes } = require('./letterly');
 const { extractTodos } = require('./ai');
-const { syncTaskToSupabase, getCompletedTasksFromSupabase } = require('./supabase');
+const { supabase, syncTaskToSupabase, getCompletedTasksFromSupabase } = require('./supabase');
 
 const STATE_FILE = path.join(__dirname, 'state.json');
 
@@ -258,6 +258,53 @@ async function runFastReminderSync() {
 async function syncAllRemindersToCloud(events = [], incomingReminders = null) {
     try {
         const reminders = incomingReminders || await getIncompleteReminders();
+
+        // 0. Sync any new incomplete Apple Reminders to Supabase (without overwriting existing tasks)
+        if (supabase && reminders.length > 0) {
+            try {
+                const { data: existingRows, error: fetchErr } = await supabase
+                    .from('tasks')
+                    .select('apple_reminder_id, title');
+                if (!fetchErr && Array.isArray(existingRows)) {
+                    const existingIds = new Set(existingRows.map(r => r.apple_reminder_id).filter(Boolean));
+                    const existingTitles = new Set(existingRows.map(r => normalizeTitle(r.title)).filter(Boolean));
+                    let insertedCount = 0;
+
+                    for (const r of reminders) {
+                        if ((r.description || '').includes('[Calendar Event]')) continue;
+                        const cleanTitle = (r.title || '')
+                            .replace(/!+/g, '')
+                            .replace(/#\w[\w-]*/g, '')
+                            .replace(/\[⏱\s*\d+m\]/g, '')
+                            .trim() || r.title;
+                        const norm = normalizeTitle(cleanTitle);
+                        if (existingIds.has(r.id) || (norm && existingTitles.has(norm))) continue;
+
+                        const saved = await syncTaskToSupabase({
+                            id: r.id,
+                            title: cleanTitle,
+                            description: r.description || '',
+                            listName: 'General',
+                            status: 'pending',
+                            dueDate: r.dueDate || null,
+                            source: 'apple-reminders',
+                            projectId: null
+                        }, r.id);
+
+                        if (saved && saved.id) {
+                            insertedCount++;
+                            existingIds.add(r.id);
+                            if (norm) existingTitles.add(norm);
+                        }
+                    }
+                    if (insertedCount > 0) {
+                        console.log(`[Supabase Sync] Synced ${insertedCount} new Apple Reminder(s) to Supabase.`);
+                    }
+                }
+            } catch (supaErr) {
+                console.error("[Supabase Sync] Error syncing Apple Reminders:", supaErr.message);
+            }
+        }
 
         // 1. Direct push to local webapp if running
         try {
