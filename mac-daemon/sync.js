@@ -5,7 +5,7 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 const { getIncompleteReminders, getRecentCompletedReminders, addReminder, completeReminder } = require('./reminders');
 const { exec } = require('child_process');
 const { getRecentSlackMessages } = require('./slack');
-const { getRecentEmails, getTodaysCalendarEvents } = require('./google');
+const { getRecentEmails, getTodaysCalendarEvents, upsertTaskCalendarEvent, deleteTaskCalendarEvent } = require('./google');
 const { getRecentLetterlyNotes } = require('./letterly');
 const { extractTodos } = require('./ai');
 const { supabase, syncTaskToSupabase, getCompletedTasksFromSupabase } = require('./supabase');
@@ -236,6 +236,7 @@ async function runHourlySync() {
         }
 
         // Sync open Apple Reminders + Calendar timeline feed to Render webapp & cloud
+        await syncTwoWayCalendarWithSupabase(events);
         await syncAllRemindersToCloud(events);
 
         console.log(`[${new Date().toLocaleString()}] Hourly Sync cycle completed.`);
@@ -244,11 +245,124 @@ async function runHourlySync() {
     }
 }
 
+async function syncTwoWayCalendarWithSupabase(events = []) {
+    if (!supabase) return;
+    try {
+        const state = loadState();
+        state.calendarTaskMap = state.calendarTaskMap || {};
+        let stateChanged = false;
+
+        const { data: allTasks, error } = await supabase
+            .from('tasks')
+            .select('id, title, description, status, due_date, estimated_minutes');
+        if (error || !Array.isArray(allTasks)) return;
+
+        const taskById = new Map(allTasks.map(t => [String(t.id), t]));
+
+        // 1. Google Calendar -> App: if a linked event was moved/resized in Google Calendar, update Supabase
+        for (const ev of (events || [])) {
+            if (!ev.plannerTaskId || !ev.start) continue;
+            const taskId = String(ev.plannerTaskId);
+            const task = taskById.get(taskId);
+            const entry = state.calendarTaskMap[taskId];
+            if (!task || task.status === 'completed' || !entry) continue;
+
+            const calStartMs = new Date(ev.start).getTime();
+            const entryStartMs = entry.dueDate ? new Date(entry.dueDate).getTime() : 0;
+            const calDuration = ev.durationMinutes || 15;
+
+            if (Math.abs(calStartMs - entryStartMs) >= 60000 || calDuration !== (entry.estimatedMinutes || 15)) {
+                const nextDueIso = new Date(ev.start).toISOString();
+                const { error: upErr } = await supabase
+                    .from('tasks')
+                    .update({
+                        due_date: nextDueIso,
+                        estimated_minutes: calDuration,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', task.id);
+
+                if (!upErr) {
+                    task.due_date = nextDueIso;
+                    task.estimated_minutes = calDuration;
+                    state.calendarTaskMap[taskId] = {
+                        ...entry,
+                        dueDate: nextDueIso,
+                        estimatedMinutes: calDuration
+                    };
+                    stateChanged = true;
+                    console.log(`[Calendar -> App] Updated "${task.title}" to ${nextDueIso} (${calDuration}m)`);
+                }
+            }
+        }
+
+        // 2. App -> Google Calendar (justin@turnninety.com): create/update events for scheduled pending tasks
+        for (const task of allTasks) {
+            if (task.status !== 'pending' || !task.due_date) continue;
+            const taskId = String(task.id);
+            const entry = state.calendarTaskMap[taskId];
+            const estMins = Math.max(5, Number(task.estimated_minutes) || 15);
+            const taskDueMs = new Date(task.due_date).getTime();
+            const entryDueMs = entry?.dueDate ? new Date(entry.dueDate).getTime() : 0;
+
+            const needsSync =
+                !entry ||
+                !entry.eventId ||
+                Math.abs(taskDueMs - entryDueMs) >= 60000 ||
+                estMins !== (entry.estimatedMinutes || 15) ||
+                task.title !== entry.title;
+
+            if (needsSync) {
+                const res = await upsertTaskCalendarEvent(task, entry?.eventId || null);
+                if (res.ok && res.eventId) {
+                    state.calendarTaskMap[taskId] = {
+                        eventId: res.eventId,
+                        dueDate: new Date(task.due_date).toISOString(),
+                        estimatedMinutes: estMins,
+                        title: task.title
+                    };
+                    stateChanged = true;
+                    console.log(`[App -> Calendar] Synced "${task.title}" to justin@turnninety.com`);
+                } else if (res.needsReauth) {
+                    if (!state.calendarReauthWarned) {
+                        console.log('[Calendar Sync] justin@turnninety.com needs calendar.events write scope. Run auth-calendar-write.js.');
+                        state.calendarReauthWarned = true;
+                        stateChanged = true;
+                    }
+                    break;
+                }
+            }
+        }
+
+        // 3. Delete calendar events for tasks that were unscheduled, completed, or deleted
+        for (const [taskId, entry] of Object.entries(state.calendarTaskMap)) {
+            const task = taskById.get(taskId);
+            if (!task || task.status === 'completed' || !task.due_date) {
+                if (entry?.eventId) {
+                    const delRes = await deleteTaskCalendarEvent(entry.eventId);
+                    if (delRes.ok) {
+                        console.log(`[App -> Calendar] Removed event for "${entry.title || taskId}"`);
+                    }
+                }
+                delete state.calendarTaskMap[taskId];
+                stateChanged = true;
+            }
+        }
+
+        if (stateChanged) {
+            saveState(state);
+        }
+    } catch (e) {
+        console.error("[Two-Way Calendar Sync] Error:", e.message);
+    }
+}
+
 async function runFastReminderSync() {
     try {
         await syncWebCompletionsToAppleReminders();
         const reminders = await getIncompleteReminders();
         const events = await getTodaysCalendarEvents().catch(() => []);
+        await syncTwoWayCalendarWithSupabase(events);
         await syncAllRemindersToCloud(events, reminders);
     } catch (e) {
         console.error("[Fast Sync] Error:", e.message);
@@ -332,7 +446,7 @@ async function syncAllRemindersToCloud(events = [], incomingReminders = null) {
                 }));
 
             const calendarPayload = (events || [])
-                .filter(ev => ev && ev.summary && ev.start && !ev.isAllDay)
+                .filter(ev => ev && ev.summary && ev.start && !ev.isAllDay && !ev.plannerTaskId)
                 .map(ev => ({
                     id: ev.id,
                     title: ev.summary,

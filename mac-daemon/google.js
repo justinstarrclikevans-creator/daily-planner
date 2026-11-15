@@ -164,7 +164,8 @@ async function getTodaysCalendarEvents(daysAhead = 3) {
                             calendarName: calInfo.summary || 'Calendar',
                             isAllDay: !event.start.dateTime,
                             description: event.description || '',
-                            location: event.location || ''
+                            location: event.location || '',
+                            plannerTaskId: event.extendedProperties?.private?.plannerTaskId || null
                         });
                     }
                 } catch (calErr) {
@@ -218,8 +219,87 @@ async function getUpcomingCalendarEvents(minutesAhead = 15) {
     return eventsData;
 }
 
+async function getTurnNinetyCalendarClient() {
+    const credPath = path.join(__dirname, 'credentials.json');
+    const tokPath = path.join(__dirname, 'token_2.json');
+    if (!fs.existsSync(credPath) || !fs.existsSync(tokPath)) return null;
+    const credentials = JSON.parse(fs.readFileSync(credPath, 'utf8'));
+    const { client_secret, client_id, redirect_uris } = credentials.installed;
+    const token = JSON.parse(fs.readFileSync(tokPath, 'utf8'));
+    const oAuth2Client = new OAuth2Client(client_id, client_secret, redirect_uris[0]);
+    oAuth2Client.setCredentials(token);
+    return getCalendarClient({ version: 'v3', auth: oAuth2Client });
+}
+
+async function upsertTaskCalendarEvent(task, existingEventId = null) {
+    try {
+        const calendar = await getTurnNinetyCalendarClient();
+        if (!calendar || !task.due_date) return { ok: false, error: 'Missing client or due_date' };
+
+        const startDate = new Date(task.due_date);
+        if (Number.isNaN(startDate.getTime())) return { ok: false, error: 'Invalid due_date' };
+        const durationMins = Math.max(5, Number(task.estimated_minutes) || 15);
+        const endDate = new Date(startDate.getTime() + durationMins * 60000);
+
+        const requestBody = {
+            summary: task.title,
+            description: (task.description || '').trim(),
+            start: { dateTime: startDate.toISOString() },
+            end: { dateTime: endDate.toISOString() },
+            extendedProperties: {
+                private: {
+                    plannerTaskId: String(task.id)
+                }
+            }
+        };
+
+        if (existingEventId) {
+            try {
+                const res = await calendar.events.patch({
+                    calendarId: 'primary',
+                    eventId: existingEventId,
+                    requestBody
+                });
+                return { ok: true, eventId: res.data.id };
+            } catch (patchErr) {
+                if (patchErr.code !== 404 && patchErr.code !== 410) {
+                    throw patchErr;
+                }
+            }
+        }
+
+        const res = await calendar.events.insert({
+            calendarId: 'primary',
+            requestBody
+        });
+        return { ok: true, eventId: res.data.id };
+    } catch (e) {
+        const msg = e.message || String(e);
+        const needsReauth = msg.includes('Insufficient Permission') || e.code === 403;
+        return { ok: false, needsReauth, error: msg };
+    }
+}
+
+async function deleteTaskCalendarEvent(eventId) {
+    if (!eventId) return { ok: false };
+    try {
+        const calendar = await getTurnNinetyCalendarClient();
+        if (!calendar) return { ok: false };
+        await calendar.events.delete({
+            calendarId: 'primary',
+            eventId
+        });
+        return { ok: true };
+    } catch (e) {
+        if (e.code === 404 || e.code === 410) return { ok: true };
+        return { ok: false, error: e.message };
+    }
+}
+
 module.exports = {
     getRecentEmails,
     getTodaysCalendarEvents,
-    getUpcomingCalendarEvents
+    getUpcomingCalendarEvents,
+    upsertTaskCalendarEvent,
+    deleteTaskCalendarEvent
 };
