@@ -131,6 +131,14 @@ export default function ProjectPlannerWorkspace() {
   const [schedulingTaskId, setSchedulingTaskId] = useState<string | null>(null);
   const [scheduleDayChoice, setScheduleDayChoice] = useState<'today' | 'tomorrow'>('today');
   const [scheduleTimeChoice, setScheduleTimeChoice] = useState<string>('09:00');
+  const [noteTargetTaskId, setNoteTargetTaskId] = useState<string | null>(null);
+  const [noteActionMode, setNoteActionMode] = useState<'new' | 'existing'>('new');
+  const [noteNewTitle, setNoteNewTitle] = useState<string>('');
+  const [noteNewFolder, setNoteNewFolder] = useState<string>('Notes');
+  const [noteExistingId, setNoteExistingId] = useState<string>('');
+  const [noteExistingSearch, setNoteExistingSearch] = useState<string>('');
+  const [noteCompleteTask, setNoteCompleteTask] = useState<boolean>(false);
+  const [isSavingTaskToNote, setIsSavingTaskToNote] = useState<boolean>(false);
   const [notes, setNotes] = useState<Note[]>([]);
   const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('all'); // 'all' | 'general' | project.id
   const [taskSearch, setTaskSearch] = useState<string>('');
@@ -1131,6 +1139,184 @@ export default function ProjectPlannerWorkspace() {
     return null;
   }, [tasks, calendarEvents, inspectingTaskId]);
 
+  const formatTaskAsNoteBlock = useCallback(
+    (task: Task, includeHeading: boolean = true) => {
+      const proj = getTaskProject(task);
+      const cleanNotes = extractCleanNotes(task.description);
+      const lines: string[] = [];
+
+      if (includeHeading) {
+        lines.push(`## ${task.title}`);
+      }
+
+      const meta: string[] = [];
+      if (proj?.name) meta.push(`Project: ${proj.name}`);
+      meta.push(`Status: ${task.status}`);
+      meta.push(`Duration: ${task.estimatedMinutes || 15}m`);
+      if (task.dueDate) {
+        const d = new Date(task.dueDate);
+        if (!Number.isNaN(d.getTime())) {
+          meta.push(`Scheduled: ${d.toLocaleString()}`);
+        }
+      }
+      if (task.source) meta.push(`Source: ${task.source}`);
+      lines.push(meta.join(' • '));
+
+      if (cleanNotes) {
+        lines.push('');
+        lines.push(cleanNotes);
+      }
+
+      if (task.subtasks && task.subtasks.length > 0) {
+        lines.push('');
+        lines.push('Subtasks:');
+        for (const st of task.subtasks) {
+          lines.push(`- [${st.isCompleted ? 'x' : ' '}] ${st.title}`);
+        }
+      }
+
+      return lines.join('\n').trim();
+    },
+    [getTaskProject]
+  );
+
+  const openSendTaskToNoteModal = useCallback(
+    (task: Task) => {
+      const proj = getTaskProject(task);
+      setNoteTargetTaskId(task.id);
+      setNoteActionMode('new');
+      setNoteNewTitle(task.title);
+      setNoteNewFolder(proj.name && proj.name !== 'General' ? proj.name : 'Notes');
+      setNoteExistingId(notes[0]?.id || '');
+      setNoteExistingSearch('');
+      setNoteCompleteTask(false);
+    },
+    [getTaskProject, notes]
+  );
+
+  const handleSaveTaskToNote = useCallback(async () => {
+    const targetTask = tasks.find((t) => t.id === noteTargetTaskId);
+    if (!targetTask || isSavingTaskToNote) return;
+
+    setIsSavingTaskToNote(true);
+    try {
+      let savedTitle = '';
+
+      if (noteActionMode === 'new') {
+        const title = noteNewTitle.trim() || targetTask.title || 'Untitled Note';
+        const folder = noteNewFolder.trim() || 'Notes';
+        const content = formatTaskAsNoteBlock(targetTask, false);
+
+        let createdNote: Note | null = null;
+        try {
+          const res = await fetch('/api/notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, content, folder, source: 'task-export' }),
+          });
+          if (res.ok) {
+            const json = await res.json();
+            createdNote = json.note || null;
+          }
+        } catch {}
+
+        if (!createdNote) {
+          const nowIso = new Date().toISOString();
+          const { data } = await supabase
+            .from('notes')
+            .insert([
+              {
+                id: crypto.randomUUID(),
+                title,
+                content,
+                folder,
+                source: 'task-export',
+                created_at: nowIso,
+                updated_at: nowIso,
+              },
+            ])
+            .select();
+          if (Array.isArray(data) && data[0]) {
+            createdNote = data[0] as Note;
+          }
+        }
+
+        if (createdNote) {
+          setNotes((prev) => [createdNote!, ...prev]);
+          savedTitle = createdNote.title;
+        }
+      } else {
+        const existing = notes.find((n) => n.id === noteExistingId);
+        if (!existing) return;
+
+        const block = formatTaskAsNoteBlock(targetTask, true);
+        const nextContent = existing.content?.trim()
+          ? `${existing.content.replace(/\s+$/, '')}\n\n---\n\n${block}`
+          : block;
+
+        let updatedNote: Note | null = null;
+        try {
+          const res = await fetch('/api/notes', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: existing.id, content: nextContent }),
+          });
+          if (res.ok) {
+            const json = await res.json();
+            updatedNote = json.note || null;
+          }
+        } catch {}
+
+        if (!updatedNote) {
+          const { data } = await supabase
+            .from('notes')
+            .update({ content: nextContent, updated_at: new Date().toISOString() })
+            .eq('id', existing.id)
+            .select();
+          if (Array.isArray(data) && data[0]) {
+            updatedNote = data[0] as Note;
+          }
+        }
+
+        if (updatedNote) {
+          setNotes((prev) =>
+            prev
+              .map((n) => (n.id === existing.id ? updatedNote! : n))
+              .sort(
+                (a, b) =>
+                  new Date(b.updated_at || 0).getTime() -
+                  new Date(a.updated_at || 0).getTime()
+              )
+          );
+          savedTitle = existing.title;
+        }
+      }
+
+      if (noteCompleteTask && targetTask.status !== 'completed') {
+        await patchTask(targetTask.id, { status: 'completed' });
+      }
+
+      setNoteTargetTaskId(null);
+      if (savedTitle) {
+        setTranscriptStatusMsg(`Saved "${targetTask.title}" to note "${savedTitle}".`);
+      }
+    } finally {
+      setIsSavingTaskToNote(false);
+    }
+  }, [
+    tasks,
+    noteTargetTaskId,
+    isSavingTaskToNote,
+    noteActionMode,
+    noteNewTitle,
+    noteNewFolder,
+    noteExistingId,
+    notes,
+    noteCompleteTask,
+    formatTaskAsNoteBlock,
+    patchTask,
+  ]);
+
   // Focus Mode Queue
   const focusQueue = useMemo(() => {
     const scheduledToday = openTasks.filter(
@@ -1316,6 +1502,14 @@ export default function ProjectPlannerWorkspace() {
             className="opacity-100 xl:opacity-0 xl:group-hover:opacity-100 transition-opacity flex items-center gap-1 shrink-0"
             onClick={(e) => e.stopPropagation()}
           >
+            <button
+              type="button"
+              title="Add to Note or Create Note"
+              onClick={() => openSendTaskToNoteModal(task)}
+              className="p-1.5 xl:p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
+            >
+              <FileText className="h-3.5 w-3.5 xl:h-3 xl:w-3" />
+            </button>
             <button
               type="button"
               title="Schedule onto calendar"
@@ -2578,9 +2772,25 @@ export default function ProjectPlannerWorkspace() {
                     patchTask(inspectingTask.id, { description: nextDesc });
                   }}
                   placeholder="Add notes..."
-                  className="w-full bg-[#12141A] border border-white/[0.07] rounded-xl p-3 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none"
+                  className="w-full bg-[#12141A] border border-white/[0.07] rounded-xl p-3 text-base xl:text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none"
                 />
               </div>
+
+              {!String(inspectingTask.id).startsWith('cal-event-') && (
+                <div className="pt-2 border-t border-white/[0.06] flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInspectingTaskId(null);
+                      openSendTaskToNoteModal(inspectingTask);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-xs font-semibold text-indigo-300"
+                  >
+                    <FileText className="h-3.5 w-3.5" />
+                    <span>Add to Note or Create Note</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -3093,6 +3303,182 @@ export default function ProjectPlannerWorkspace() {
                   className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold"
                 >
                   Save to Schedule
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 9. ADD TASK TO NOTE / CREATE NOTE MODAL */}
+      {noteTargetTaskId && (() => {
+        const targetTask = tasks.find((t) => t.id === noteTargetTaskId);
+        if (!targetTask) return null;
+        const filteredNotes = notes.filter((n) => {
+          const q = noteExistingSearch.trim().toLowerCase();
+          if (!q) return true;
+          return (
+            n.title.toLowerCase().includes(q) ||
+            (n.folder || '').toLowerCase().includes(q)
+          );
+        });
+
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4"
+            onClick={() => setNoteTargetTaskId(null)}
+          >
+            <div
+              className="w-full sm:max-w-lg bg-[#171A23] border border-white/[0.08] rounded-t-2xl sm:rounded-2xl p-5 space-y-4 max-h-[90dvh] overflow-y-auto pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-indigo-400" />
+                    <span>Add Task to Note</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5 line-clamp-1">
+                    {targetTask.title}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNoteTargetTaskId(null)}
+                  className="p-1 text-slate-400 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNoteActionMode('new')}
+                  className={`py-2 rounded-xl text-xs font-semibold border transition-colors ${
+                    noteActionMode === 'new'
+                      ? 'bg-indigo-600 text-white border-indigo-500'
+                      : 'bg-[#111318] text-slate-300 border-white/[0.08]'
+                  }`}
+                >
+                  Create New Note
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNoteActionMode('existing');
+                    if (!noteExistingId && notes[0]) {
+                      setNoteExistingId(notes[0].id);
+                    }
+                  }}
+                  disabled={notes.length === 0}
+                  className={`py-2 rounded-xl text-xs font-semibold border transition-colors disabled:opacity-40 ${
+                    noteActionMode === 'existing'
+                      ? 'bg-indigo-600 text-white border-indigo-500'
+                      : 'bg-[#111318] text-slate-300 border-white/[0.08]'
+                  }`}
+                >
+                  Add to Existing ({notes.length})
+                </button>
+              </div>
+
+              {noteActionMode === 'new' ? (
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-slate-400">
+                      Note Title
+                    </label>
+                    <input
+                      type="text"
+                      value={noteNewTitle}
+                      onChange={(e) => setNoteNewTitle(e.target.value)}
+                      placeholder="Note title..."
+                      className="w-full bg-[#111318] border border-white/[0.08] rounded-xl px-3 py-2 text-base xl:text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-medium text-slate-400">
+                      Folder
+                    </label>
+                    <input
+                      type="text"
+                      value={noteNewFolder}
+                      onChange={(e) => setNoteNewFolder(e.target.value)}
+                      placeholder="Notes"
+                      className="w-full bg-[#111318] border border-white/[0.08] rounded-xl px-3 py-2 text-base xl:text-xs text-white focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={noteExistingSearch}
+                    onChange={(e) => setNoteExistingSearch(e.target.value)}
+                    placeholder="Filter existing notes..."
+                    className="w-full bg-[#111318] border border-white/[0.08] rounded-xl px-3 py-2 text-base xl:text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
+                  />
+                  <div className="max-h-40 overflow-y-auto space-y-1 border border-white/[0.06] rounded-xl p-1.5 bg-[#111318]">
+                    {filteredNotes.map((n) => (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => setNoteExistingId(n.id)}
+                        className={`w-full text-left px-2.5 py-2 rounded-lg text-xs flex items-center justify-between gap-2 transition-colors ${
+                          noteExistingId === n.id
+                            ? 'bg-indigo-600/25 text-white border border-indigo-500/40'
+                            : 'text-slate-300 hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <span className="truncate font-medium">{n.title}</span>
+                        <span className="text-[10px] text-slate-500 shrink-0">{n.folder || 'Notes'}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <div className="text-[11px] font-medium text-slate-400">
+                  Content Preview (includes task details &amp; notes)
+                </div>
+                <pre className="w-full bg-[#111318] border border-white/[0.06] rounded-xl p-3 text-[11px] text-slate-300 whitespace-pre-wrap font-sans max-h-36 overflow-y-auto">
+                  {formatTaskAsNoteBlock(targetTask, noteActionMode === 'existing')}
+                </pre>
+              </div>
+
+              <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={noteCompleteTask}
+                  onChange={(e) => setNoteCompleteTask(e.target.checked)}
+                  className="rounded border-white/20 bg-[#111318] text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>Mark task completed after saving to note</span>
+              </label>
+
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setNoteTargetTaskId(null)}
+                  className="px-4 py-2.5 rounded-xl bg-white/[0.06] text-xs text-slate-300 hover:text-white"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    isSavingTaskToNote ||
+                    (noteActionMode === 'existing' && !noteExistingId)
+                  }
+                  onClick={handleSaveTaskToNote}
+                  className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold disabled:opacity-50"
+                >
+                  {isSavingTaskToNote
+                    ? 'Saving...'
+                    : noteActionMode === 'new'
+                    ? 'Create Note'
+                    : 'Append to Note'}
                 </button>
               </div>
             </div>
