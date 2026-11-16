@@ -32,22 +32,6 @@
     "appleReminderId": "EE3DEFC1-4B94-4FE2-9065-365991D238DA"
   },
   {
-    "title": "Create claude project for case management.",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "D2226B01-7820-4C66-A2F3-F0D1039F104F"
-  },
-  {
-    "title": "Look up how to build Claude project",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "5F8918C6-585A-4684-82F5-A9E7B84170B5"
-  },
-  {
     "title": "See if I can restrict the API and the app to make sure it doesn't use the expensive model",
     "notes": "",
     "listName": "General",
