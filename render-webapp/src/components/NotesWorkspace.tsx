@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
-import { Note } from '@/lib/supabase';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { Note, supabase } from '@/lib/supabase';
 import {
   FileText,
   Plus,
@@ -130,46 +130,84 @@ export default function NotesWorkspace({
     }
   };
 
-  const handleSaveNote = async (overrideContent?: string) => {
-    if (!selectedNote) return;
-    setIsSaving(true);
-    setSaveMessage(null);
-    const contentToSave =
-      overrideContent !== undefined ? overrideContent : draftContent;
+  const handleSaveNote = useCallback(
+    async (overrideContent?: string) => {
+      if (!selectedNote) return;
+      setIsSaving(true);
+      setSaveMessage(null);
+      const noteId = selectedNote.id;
+      const titleToSave = draftTitle.trim() || 'Untitled Note';
+      const folderToSave = draftFolder.trim() || 'Notes';
+      const contentToSave =
+        overrideContent !== undefined ? overrideContent : draftContent;
 
-    try {
-      const res = await fetch('/api/notes', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: selectedNote.id,
-          title: draftTitle.trim() || 'Untitled Note',
-          folder: draftFolder.trim() || 'Notes',
-          content: contentToSave,
-        }),
-      });
-      const json = await res.json();
-      if (res.ok && json.note) {
-        onNotesChange((prev) =>
-          prev
-            .map((n) => (n.id === selectedNote.id ? json.note : n))
-            .sort(
-              (a, b) =>
-                new Date(b.updated_at || 0).getTime() -
-                new Date(a.updated_at || 0).getTime()
-            )
-        );
-        setSaveMessage('Saved');
-        setTimeout(() => setSaveMessage(null), 2000);
-      } else {
-        setSaveMessage(json.error || 'Failed to save');
+      try {
+        let savedNote: Note | null = null;
+        try {
+          const res = await fetch('/api/notes', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: noteId,
+              title: titleToSave,
+              folder: folderToSave,
+              content: contentToSave,
+            }),
+          });
+          if (res.ok) {
+            const json = await res.json();
+            savedNote = json.note || null;
+          }
+        } catch {}
+
+        if (!savedNote) {
+          const { data } = await supabase
+            .from('notes')
+            .update({
+              title: titleToSave,
+              folder: folderToSave,
+              content: contentToSave,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', noteId)
+            .select();
+          if (Array.isArray(data) && data[0]) {
+            savedNote = data[0] as Note;
+          }
+        }
+
+        if (savedNote) {
+          onNotesChange((prev) =>
+            prev
+              .map((n) => (n.id === noteId ? savedNote! : n))
+              .sort(
+                (a, b) =>
+                  new Date(b.updated_at || 0).getTime() -
+                  new Date(a.updated_at || 0).getTime()
+              )
+          );
+          setSaveMessage('Saved');
+          setTimeout(() => setSaveMessage(null), 2000);
+        } else {
+          setSaveMessage('Failed to save');
+        }
+      } catch {
+        setSaveMessage('Error saving note');
+      } finally {
+        setIsSaving(false);
       }
-    } catch {
-      setSaveMessage('Error saving note');
-    } finally {
-      setIsSaving(false);
-    }
-  };
+    },
+    [selectedNote, draftTitle, draftFolder, draftContent, onNotesChange]
+  );
+
+  // Debounced autosave (800ms after typing stops)
+  useEffect(() => {
+    if (!selectedNote || !isDirty || isSaving) return;
+    const timer = setTimeout(() => {
+      handleSaveNote();
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [selectedNote?.id, isDirty, isSaving, draftTitle, draftFolder, draftContent, handleSaveNote]);
 
   const handleAppendLine = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -368,6 +406,9 @@ export default function NotesWorkspace({
                     type="text"
                     value={draftTitle}
                     onChange={(e) => setDraftTitle(e.target.value)}
+                    onBlur={() => {
+                      if (isDirty && !isSaving) handleSaveNote();
+                    }}
                     placeholder="Note title..."
                     className="flex-1 min-w-[120px] bg-transparent text-base font-bold text-white placeholder:text-slate-600 focus:outline-none"
                   />
@@ -377,6 +418,9 @@ export default function NotesWorkspace({
                       type="text"
                       value={draftFolder}
                       onChange={(e) => setDraftFolder(e.target.value)}
+                      onBlur={() => {
+                        if (isDirty && !isSaving) handleSaveNote();
+                      }}
                       placeholder="Folder"
                       className="w-24 bg-transparent text-base md:text-[11px] text-slate-300 focus:outline-none"
                     />
@@ -418,6 +462,9 @@ export default function NotesWorkspace({
                 <textarea
                   value={draftContent}
                   onChange={(e) => setDraftContent(e.target.value)}
+                  onBlur={() => {
+                    if (isDirty && !isSaving) handleSaveNote();
+                  }}
                   onKeyDown={(e) => {
                     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
                       e.preventDefault();
