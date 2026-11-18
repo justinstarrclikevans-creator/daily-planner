@@ -158,6 +158,7 @@ export default function ProjectPlannerWorkspace() {
 
   // Task Detail Modal / Inspector
   const [inspectingTaskId, setInspectingTaskId] = useState<string | null>(null);
+  const [inspectingTitleDraft, setInspectingTitleDraft] = useState<string>('');
   const [newSubtaskText, setNewSubtaskText] = useState<string>('');
 
   // Transcript Planner & Focus Mode
@@ -261,16 +262,23 @@ export default function ProjectPlannerWorkspace() {
   useEffect(() => {
     loadData();
     loadNotes();
+    let tasksReloadTimer: ReturnType<typeof setTimeout> | null = null;
+    let notesReloadTimer: ReturnType<typeof setTimeout> | null = null;
+
     const channel = supabase
       .channel('planner-realtime-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, () => {
-        loadData();
+        if (tasksReloadTimer) clearTimeout(tasksReloadTimer);
+        tasksReloadTimer = setTimeout(() => loadData(), 400);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notes' }, () => {
-        loadNotes();
+        if (notesReloadTimer) clearTimeout(notesReloadTimer);
+        notesReloadTimer = setTimeout(() => loadNotes(), 400);
       })
       .subscribe();
     return () => {
+      if (tasksReloadTimer) clearTimeout(tasksReloadTimer);
+      if (notesReloadTimer) clearTimeout(notesReloadTimer);
       supabase.removeChannel(channel);
     };
   }, [loadData, loadNotes]);
@@ -1138,6 +1146,10 @@ export default function ProjectPlannerWorkspace() {
     }
     return null;
   }, [tasks, calendarEvents, inspectingTaskId]);
+
+  useEffect(() => {
+    setInspectingTitleDraft(inspectingTask?.title || '');
+  }, [inspectingTask?.id]);
 
   const formatTaskAsNoteBlock = useCallback(
     (task: Task, includeHeading: boolean = true) => {
@@ -2627,10 +2639,19 @@ export default function ProjectPlannerWorkspace() {
                 </button>
                 <input
                   type="text"
-                  value={inspectingTask.title}
-                  onChange={(e) =>
-                    patchTask(inspectingTask.id, { title: e.target.value })
-                  }
+                  value={inspectingTitleDraft}
+                  onChange={(e) => setInspectingTitleDraft(e.target.value)}
+                  onBlur={() => {
+                    const trimmed = inspectingTitleDraft.trim();
+                    if (trimmed && trimmed !== inspectingTask.title) {
+                      patchTask(inspectingTask.id, { title: trimmed });
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                    }
+                  }}
                   className="w-full bg-transparent text-base font-semibold text-white focus:outline-none"
                 />
               </div>
