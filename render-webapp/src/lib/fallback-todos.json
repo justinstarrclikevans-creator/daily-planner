@@ -174,5 +174,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "792FE6FB-7FC6-42D1-9B36-22479137A095"
+  },
+  {
+    "title": "Send phone number to Brittani",
+    "notes": "Provide Brittani with your phone number in case she needs to contact you tomorrow morning for the partner video shoot.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "4DF5344E-031D-41C8-B3F9-E77246FD3147"
   }
 ]
