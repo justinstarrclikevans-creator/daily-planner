@@ -158,5 +158,21 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "74342C5F-A183-4B4B-AAC8-6D5B881CDDA4"
+  },
+  {
+    "title": "Notify participants about the film crew onsite tomorrow",
+    "notes": "Inform the men that a film crew will be onsite tomorrow per the reminder in team-charleston.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "4012900B-1A90-4668-ABB3-3534BC027889"
+  },
+  {
+    "title": "Share Walmart Distribution hiring event flyer with participants",
+    "notes": "Dave Tam from SC DEW sent details for the Walmart Distribution hiring event scheduled for tomorrow from 10 AM.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "792FE6FB-7FC6-42D1-9B36-22479137A095"
   }
 ]
