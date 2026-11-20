@@ -166,5 +166,61 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "8500A456-D0C2-4185-A583-4C786E3C4C09"
+  },
+  {
+    "title": "Listen to voicemail from (843) 307-7799 regarding program services",
+    "notes": "Grasshopper received a new voicemail on the Program Services line from caller (843) 307-7799.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "7D757F73-5CA5-48EF-B961-270A3C71D0AF"
+  },
+  {
+    "title": "Record 30-second audio clips of each program staff member reading a script",
+    "notes": "Gather 30-second reference voice recordings from each staff member to train voice recognition and isolate participant voices in LCMI sessions.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "C333C6A4-3CA6-4FAB-8F60-DBDD8A9B4ABA"
+  },
+  {
+    "title": "Switch the LCMI interview to dynamic questioning using probation planner definitions",
+    "notes": "Update the LCMI interview configuration to dynamic questioning and leverage probation planner behavioral definitions to pinpoint participant focus areas.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "70C99285-9400-4A6D-B80C-C192C8DBC053"
+  },
+  {
+    "title": "Create a screening consultation template to automate briefcase generation and eligibility tracking",
+    "notes": "Design a screening consultation template that determines participant eligibility and feeds data directly into briefcases and the LCMI.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "C7DD8821-8C88-4E1F-9E1B-AFB579DFAB46"
+  },
+  {
+    "title": "Update classroom evaluation prompts to replace scoring with dos and donts feedback",
+    "notes": "Modify class evaluation logic to monitor script adherence, pro-social modeling, and facilitator talk time while offering actionable improvement feedback.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "1FCCF47E-C71B-4574-8368-856B7C50ACA9"
+  },
+  {
+    "title": "Create a case management template to track staff process adherence",
+    "notes": "Draft a follow-along case management evaluation template to assess staff fidelity and adherence to program standards.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "8189F292-B201-4316-9C0E-BE367A24C8CF"
+  },
+  {
+    "title": "Check whether participant module progress can be scraped from Skillcat",
+    "notes": "Evaluate technical feasibility of scraping participant module completion data from Skillcat to monitor progress and flag issues automatically.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "AB701C5E-A979-4DDF-94AB-14B1D73E717B"
   }
 ]
