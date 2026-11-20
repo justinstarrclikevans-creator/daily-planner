@@ -222,5 +222,21 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "AB701C5E-A979-4DDF-94AB-14B1D73E717B"
+  },
+  {
+    "title": "Review and correct year-to-date W-2s in Gusto",
+    "notes": "Gusto flagged an end-of-year payroll task due December 18 to review and correct year-to-date W-2 forms for Turn90.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "45222A20-3941-4320-B385-C7D518D4D253"
+  },
+  {
+    "title": "Review London's CPF Week 12 assignment",
+    "notes": "London sent over her CPF Week 12 school assignment for review.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "2C75097C-F657-4715-9B62-69507F1F02E6"
   }
 ]
