@@ -126,5 +126,21 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "8FE7462F-8A8D-463A-A594-B8C9B3EE0BF5"
+  },
+  {
+    "title": "Add Meditation for Mortals into AI context brain",
+    "notes": "Determine how to ingest entire books into AI context, deciding whether to structure the knowledge as a skill or an agent.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "5DFE6EF6-E325-4B63-8B49-8E20E00A83EC"
+  },
+  {
+    "title": "Map out sponsorship packages for warm-up kits and futsal",
+    "notes": "Outline sponsorship proposals including front-of-shirt sponsors and warm-up kits to target five thousand dollars following the discussion with Jeremy.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "D8310C27-5897-4475-AF02-50488C4199C0"
   }
 ]
