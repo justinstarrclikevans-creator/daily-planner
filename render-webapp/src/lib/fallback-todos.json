@@ -166,5 +166,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "E79745C3-81A6-4B92-8307-89273C17240E"
+  },
+  {
+    "title": "Rebook accommodations for the Surf City trip following Airbnb cancellation",
+    "notes": "Airbnb canceled the December 11-13 reservation in Surf City and support reached out regarding assistance with finding alternative lodging.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "2DABA80D-3FAF-468D-821B-6FD32078D332"
   }
 ]
