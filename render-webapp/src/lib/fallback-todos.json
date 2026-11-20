@@ -254,5 +254,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "AF99380F-DC05-48AC-9C96-2494F8322F3E"
+  },
+  {
+    "title": "Have it ask random questions to supervise. Are you using the action plan?",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "C864C094-CFB1-4DF6-ABA7-CCEF37E8C3E3"
   }
 ]
