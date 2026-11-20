@@ -238,5 +238,21 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "2C75097C-F657-4715-9B62-69507F1F02E6"
+  },
+  {
+    "title": "Build six distinct dashboards and lock the T90 app main page behind access code 37655640",
+    "notes": "Remove public elements from the main page to require access code 37655640 and set up dedicated dashboards for LSCMI, each center, reentry navigation, and consolidated program data.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "E06FACFD-85F4-4B64-B6C1-22DFB9952CC0"
+  },
+  {
+    "title": "Redo the briefcase form into a single document with conditional drop-downs",
+    "notes": "Consolidate the briefcase into one document with drop-downs, removing gates and adding logic to only ask about medical appointments if the participant has medical conditions.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "AF99380F-DC05-48AC-9C96-2494F8322F3E"
   }
 ]
