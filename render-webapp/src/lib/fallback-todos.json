@@ -270,5 +270,21 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "60CF97E1-E85B-4958-BC8B-F3D1F12EA3BD"
+  },
+  {
+    "title": "Review Kim Huey's time off request in Gusto",
+    "notes": "Kim Huey submitted a request for 6.0 hours of time off on November 24, 2026.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "2EEB2C71-0E8C-4096-BEB6-55308F4C567B"
+  },
+  {
+    "title": "Confirm Reece's NOCD therapy session with Austen Robinson",
+    "notes": "NOCD requires confirmation for Reece's session scheduled for Tuesday, November 24 at 3:00 PM EST.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "CD9E8DA8-2209-4F18-863E-E7595F240BCE"
   }
 ]
