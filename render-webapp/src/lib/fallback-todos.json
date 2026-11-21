@@ -88,7 +88,7 @@
     "appleReminderId": "8CD0D7FD-0FDB-490C-BF1D-B075E2FDB84D"
   },
   {
-    "title": "Get everyone signed up for wins training",
+    "title": "Email Lashawn Get everyone signed up for wins training",
     "notes": "",
     "listName": "General",
     "priority": "none",
@@ -144,36 +144,12 @@
     "appleReminderId": "D8310C27-5897-4475-AF02-50488C4199C0"
   },
   {
-    "title": "Listen to voicemail from (803) 834-0835 regarding program services",
-    "notes": "Received a new voicemail on the Program Services extension from caller (803) 834-0835.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "EC060FDB-7552-4F75-8072-216E8B5FC68C"
-  },
-  {
-    "title": "Respond to Airbnb Support inquiry",
-    "notes": "Airbnb Support reached out to follow up on their reply to your open inquiry.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "43CD6E99-D667-4050-BD42-058B32BED256"
-  },
-  {
     "title": "Use AI to create training pathways within Skillcat",
     "notes": "Prompt AI to build out the learning pathways within Skillcat once the WIN training requirements are settled.",
     "listName": "General",
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "8500A456-D0C2-4185-A583-4C786E3C4C09"
-  },
-  {
-    "title": "Listen to voicemail from (843) 307-7799 regarding program services",
-    "notes": "Grasshopper received a new voicemail on the Program Services line from caller (843) 307-7799.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "7D757F73-5CA5-48EF-B961-270A3C71D0AF"
   },
   {
     "title": "Record 30-second audio clips of each program staff member reading a script",
@@ -192,20 +168,12 @@
     "appleReminderId": "70C99285-9400-4A6D-B80C-C192C8DBC053"
   },
   {
-    "title": "Create a screening consultation template to automate briefcase generation and eligibility tracking",
+    "title": "Create a screening consultation template to automate briefcase generation and eligibility tracking. Have upload that creates their file, case plan, etc.",
     "notes": "Design a screening consultation template that determines participant eligibility and feeds data directly into briefcases and the LCMI.",
     "listName": "General",
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "C7DD8821-8C88-4E1F-9E1B-AFB579DFAB46"
-  },
-  {
-    "title": "Update classroom evaluation prompts to replace scoring with dos and donts feedback",
-    "notes": "Modify class evaluation logic to monitor script adherence, pro-social modeling, and facilitator talk time while offering actionable improvement feedback.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "1FCCF47E-C71B-4574-8368-856B7C50ACA9"
   },
   {
     "title": "Create a case management template to track staff process adherence",
@@ -224,30 +192,6 @@
     "appleReminderId": "AB701C5E-A979-4DDF-94AB-14B1D73E717B"
   },
   {
-    "title": "Review and correct year-to-date W-2s in Gusto",
-    "notes": "Gusto flagged an end-of-year payroll task due December 18 to review and correct year-to-date W-2 forms for Turn90.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "45222A20-3941-4320-B385-C7D518D4D253"
-  },
-  {
-    "title": "Review London's CPF Week 12 assignment",
-    "notes": "London sent over her CPF Week 12 school assignment for review.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "2C75097C-F657-4715-9B62-69507F1F02E6"
-  },
-  {
-    "title": "Build six distinct dashboards and lock the T90 app main page behind access code 37655640",
-    "notes": "Remove public elements from the main page to require access code 37655640 and set up dedicated dashboards for LSCMI, each center, reentry navigation, and consolidated program data.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "E06FACFD-85F4-4B64-B6C1-22DFB9952CC0"
-  },
-  {
     "title": "Redo the briefcase form into a single document with conditional drop-downs",
     "notes": "Consolidate the briefcase into one document with drop-downs, removing gates and adding logic to only ask about medical appointments if the participant has medical conditions.",
     "listName": "General",
@@ -264,20 +208,12 @@
     "appleReminderId": "C864C094-CFB1-4DF6-ABA7-CCEF37E8C3E3"
   },
   {
-    "title": "Can I create ai avatars to train facilitation?",
+    "title": "Can I create ai avatars to train facilitation? Ask antigravity",
     "notes": "",
     "listName": "General",
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "60CF97E1-E85B-4958-BC8B-F3D1F12EA3BD"
-  },
-  {
-    "title": "Review Kim Huey's time off request in Gusto",
-    "notes": "Kim Huey submitted a request for 6.0 hours of time off on November 24, 2026.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "2EEB2C71-0E8C-4096-BEB6-55308F4C567B"
   },
   {
     "title": "Confirm Reece's NOCD therapy session with Austen Robinson",
@@ -286,5 +222,125 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "CD9E8DA8-2209-4F18-863E-E7595F240BCE"
+  },
+  {
+    "title": "Order a catering stuff",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": "2026-11-21T05:00:00Z",
+    "appleReminderId": "1A7F411C-1B8F-40EC-B89C-0BFA3702ED6E"
+  },
+  {
+    "title": "Have a tabs for each of the program managers that have a list of the to-do and the person that's attached to",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "D516EECA-0781-4EF2-A641-12C8D423DF61"
+  },
+  {
+    "title": "Pay the dentist",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "9961FD8A-1570-46AD-B68A-E56F986B9F60"
+  },
+  {
+    "title": "Clear. Not saying it’s entirely on you. I need to be braver. Because I just talk. Adding back some rituals. Touch the earth. Conceited but me being a good dad has helped me relate to father god concept. Finally. My nature is to trust you completely. I surrender myself right away. I like that but it has left me open to hurt. Not saying that for any reason than to say that. I know I’m so judgy and on edge with most of the world. But not with you. You are my comfort. Safe place.",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "F33BC565-1A14-4251-ABD6-A2CA999513FD"
+  },
+  {
+    "title": "Roll models out month",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "24AD0CA6-6BB0-4160-9B71-7734DF432241"
+  },
+  {
+    "title": "Create a custom fantasy league due me and the boys",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "27788E62-EC92-4F51-93F0-5C5C66544838"
+  },
+  {
+    "title": "Share the app with the 843 boys",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "74AED600-5273-476E-80BF-29CE83C70699"
+  },
+  {
+    "title": "Anything we don't sell at the event can be sold by players later",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "6FCF3BDF-9C53-450E-891F-CBE5A9C401C9"
+  },
+  {
+    "title": "Ask RA to reverse engineer teesim and apricot and see if I need a login to do that. Check on apricot export. How does that work and then implement",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "2493E8ED-C737-4EB1-8B0D-011199EBDA6B"
+  },
+  {
+    "title": "Check appsumo",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "C72FD7BE-E2B5-4A9A-BE91-0552DAEE59C6"
+  },
+  {
+    "title": "Add the Google API to the different components",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "4C394E3A-DA2C-4BB4-AA83-0FC76CF76920"
+  },
+  {
+    "title": "Moon gate in the morning and to sleep. Connect!!!!!",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": "2026-11-21T05:00:00Z",
+    "appleReminderId": "95BE3E74-E2E8-4408-AC1D-9A5C1F9D6C89"
+  },
+  {
+    "title": "As Spanish learning to the app",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": "2026-11-21T05:00:00Z",
+    "appleReminderId": "B7AE5FA4-7449-414D-AECA-C108D545DA2D"
+  },
+  {
+    "title": "Check Verizon Black Friday deals",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "D50D0B0A-3A08-4982-BD83-C1AACE8AE8B7"
+  },
+  {
+    "title": "Make it corse driven so you learn about each one and then just go back and doublecheck",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "870F7677-88D6-494B-BDE8-061A76C093C1"
   }
 ]
