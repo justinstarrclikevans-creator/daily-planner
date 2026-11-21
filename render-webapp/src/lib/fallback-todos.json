@@ -248,22 +248,6 @@
     "appleReminderId": "9961FD8A-1570-46AD-B68A-E56F986B9F60"
   },
   {
-    "title": "Clear. Not saying it’s entirely on you. I need to be braver. Because I just talk. Adding back some rituals. Touch the earth. Conceited but me being a good dad has helped me relate to father god concept. Finally. My nature is to trust you completely. I surrender myself right away. I like that but it has left me open to hurt. Not saying that for any reason than to say that. I know I’m so judgy and on edge with most of the world. But not with you. You are my comfort. Safe place.",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "F33BC565-1A14-4251-ABD6-A2CA999513FD"
-  },
-  {
-    "title": "Roll models out month",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "24AD0CA6-6BB0-4160-9B71-7734DF432241"
-  },
-  {
     "title": "Create a custom fantasy league due me and the boys",
     "notes": "",
     "listName": "General",
@@ -342,5 +326,53 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "870F7677-88D6-494B-BDE8-061A76C093C1"
+  },
+  {
+    "title": "Run Turn90 payroll early in Gusto before the November 24 deadline",
+    "notes": "Gusto notified that payroll must be submitted early due to the Thanksgiving bank holiday.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "CA6FF156-D162-4093-9FF6-CE7890BBFA38"
+  },
+  {
+    "title": "Update the budget to account for car expenses, Logan's car, Christmas, and Apple subscriptions",
+    "notes": "Voice note outlined needed budget additions including car maintenance, Christmas expenses, weekly stipends, and recurring Apple subscriptions.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "A2EC1E03-6F7D-4C87-9A6C-2C3B91DE86F7"
+  },
+  {
+    "title": "Refactor the sports mentality app modules and meditations ahead of the Black Friday launch",
+    "notes": "Strip out the AI layer, retain existing core modules, add voice-guided meditations for mood selection, and prepare the build for App Store submission at $5 monthly.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "F435DFB8-0180-4CD9-9543-E48430576FAA"
+  },
+  {
+    "title": "Build the Turn90 app updates required for Monday morning",
+    "notes": "Prioritize completing the required Turn90 app development before Monday morning.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "D74269BD-B6BE-4015-AB85-ECBD327B3E79"
+  },
+  {
+    "title": "Check whether Influence has an MCP server available for app integration",
+    "notes": "Investigate if Influence offers MCP server connectivity that can tie into your current tool stack.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "562C044C-EFA7-41D5-9F97-B5031D04D178"
+  },
+  {
+    "title": "Source vinyl, shirts, and raffle prizes for the upcoming event",
+    "notes": "Gather shirts and vinyl for printing, size one and match soccer balls for raffle and sales, and print information cards for event app sign-ups.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "8DDF4859-160B-4F32-B127-E8BA0D0CF6D4"
   }
 ]
