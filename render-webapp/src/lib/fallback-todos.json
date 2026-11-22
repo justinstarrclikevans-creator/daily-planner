@@ -422,5 +422,21 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "99378A74-12BA-42FC-B366-3B5395E83953"
+  },
+  {
+    "title": "Complete the new hire check-in for Matthew Tupa in Gusto",
+    "notes": "Turn90 task in Gusto requires completing the new hire check-in for Matthew Tupa due today.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "6954E03D-A2D8-4856-94AA-ED69BB63F240"
+  },
+  {
+    "title": "Test SYNAPSE Elite build 1.0.0 (13) on TestFlight",
+    "notes": "SYNAPSE Elite version 1.0.0 build 13 has completed processing and is ready for testing on iOS.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "61558397-9388-41F1-BC48-D9BCCB721705"
   }
 ]
