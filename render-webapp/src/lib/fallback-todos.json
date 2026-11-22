@@ -336,14 +336,6 @@
     "appleReminderId": "A2EC1E03-6F7D-4C87-9A6C-2C3B91DE86F7"
   },
   {
-    "title": "Refactor the sports mentality app modules and meditations ahead of the Black Friday launch",
-    "notes": "Strip out the AI layer, retain existing core modules, add voice-guided meditations for mood selection, and prepare the build for App Store submission at $5 monthly.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "F435DFB8-0180-4CD9-9543-E48430576FAA"
-  },
-  {
     "title": "Build the Turn90 app updates required for Monday morning",
     "notes": "Prioritize completing the required Turn90 app development before Monday morning.",
     "listName": "General",
