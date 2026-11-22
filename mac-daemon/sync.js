@@ -495,6 +495,13 @@ console.log("Sync daemon started (v2 1-Minute Live Reminder Sync + Hourly Slack/
 console.log("- Syncing active Apple Reminders and web completions every 1 minute");
 console.log("- Checking Emails, Slack & Huddle Summaries, and Letterly MCP once an hour");
 
+try {
+    const { startAgentWorker } = require('./agent-worker');
+    startAgentWorker();
+} catch (err) {
+    console.error("[Agent Worker] Non-fatal startup error:", err.message || err);
+}
+
 module.exports = {
     runHourlySync,
     runFastReminderSync,

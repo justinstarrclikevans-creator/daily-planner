@@ -302,3 +302,111 @@ export function getFallbackTasks(projects: Project[]): Task[] {
       return task;
     });
 }
+
+export type AgentRole = 'ceo' | 'researcher' | 'leads' | 'outreach' | 'content' | 'rerun';
+
+export type AgentJobType =
+  | 'plan_venture'
+  | 'market_research'
+  | 'lead_search'
+  | 'email_outreach'
+  | 'content_draft'
+  | 'task_assist'
+  | 'rerun_coworker';
+
+export type AgentJobStatus =
+  | 'queued'
+  | 'running'
+  | 'needs_approval'
+  | 'approved'
+  | 'executed'
+  | 'rejected'
+  | 'failed';
+
+export type RerunCoworkerConfig = {
+  id: string;
+  name: string;
+  role: string;
+  webhookUrl: string;
+  autoTriggers: AgentJobType[];
+};
+
+export type DaemonCapabilities = {
+  gmailSendReady?: boolean;
+  gmailTokenFile?: string | null;
+  leadoceanConfigured?: boolean;
+  rerunMcpConfigured?: boolean;
+  geminiConfigured?: boolean;
+};
+
+export type AgentSettings = {
+  id: string;
+  default_rerun_webhook_url: string;
+  rerun_coworkers: RerunCoworkerConfig[];
+  default_from_email: string;
+  auto_send_on_approve: boolean;
+  daemon_heartbeat_at?: string | null;
+  daemon_capabilities?: DaemonCapabilities;
+  updated_at?: string;
+};
+
+export type AgentVenture = {
+  id: string;
+  project_id?: string | null;
+  name: string;
+  slug: string;
+  idea_prompt: string;
+  target_audience: string;
+  icp_query: string;
+  stage: 'planning' | 'active' | 'paused' | string;
+  autopilot_enabled: boolean;
+  strategy_markdown: string;
+  rerun_webhook_url: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type LeadRecord = {
+  id?: string;
+  name: string;
+  firstName?: string;
+  lastName?: string;
+  title?: string;
+  company?: string;
+  email?: string;
+  linkedinUrl?: string;
+  location?: string;
+  domain?: string;
+  selected?: boolean;
+};
+
+export type EmailOutreachPayload = {
+  to?: string;
+  toName?: string;
+  company?: string;
+  title?: string;
+  linkedinUrl?: string;
+  subject?: string;
+  body?: string;
+  isEmail?: boolean;
+};
+
+export type AgentJob = {
+  id: string;
+  venture_id?: string | null;
+  project_id?: string | null;
+  source_task_id?: string | null;
+  agent_role: AgentRole | string;
+  job_type: AgentJobType | string;
+  title: string;
+  prompt: string;
+  status: AgentJobStatus | string;
+  output_markdown: string;
+  output_payload: Record<string, any>;
+  revision_feedback: string;
+  execution_result: Record<string, any>;
+  execution_error: string;
+  created_at?: string;
+  updated_at?: string;
+  executed_at?: string | null;
+};

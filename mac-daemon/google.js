@@ -296,10 +296,133 @@ async function deleteTaskCalendarEvent(eventId) {
     }
 }
 
+const GMAIL_SEND_TOKEN_PRIORITY = [
+    'token_gmail_send.json',
+    'token_2.json',
+    'token.json',
+    'token_3.json'
+];
+
+function tokenHasSendScope(token) {
+    if (!token || typeof token.scope !== 'string') return false;
+    const scopes = token.scope.split(/\s+/);
+    return scopes.some(
+        (s) =>
+            s === 'https://www.googleapis.com/auth/gmail.send' ||
+            s === 'https://mail.google.com/'
+    );
+}
+
+function hasGmailSendScope() {
+    for (const fileName of GMAIL_SEND_TOKEN_PRIORITY) {
+        const fullPath = path.join(__dirname, fileName);
+        if (!fs.existsSync(fullPath)) continue;
+        try {
+            const token = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
+            if (tokenHasSendScope(token)) {
+                return { ready: true, tokenFile: fileName };
+            }
+        } catch (e) {
+            // ignore malformed token file
+        }
+    }
+    return { ready: false, tokenFile: null };
+}
+
+function getGmailSendClient() {
+    const credPath = path.join(__dirname, 'credentials.json');
+    if (!fs.existsSync(credPath)) return { client: null, tokenFile: null, error: 'Missing Google credentials.json' };
+    const credentials = JSON.parse(fs.readFileSync(credPath, 'utf8'));
+    const { client_secret, client_id, redirect_uris } = credentials.installed;
+
+    const scopeStatus = hasGmailSendScope();
+    if (!scopeStatus.ready || !scopeStatus.tokenFile) {
+        return {
+            client: null,
+            tokenFile: null,
+            needsReauth: true,
+            error: 'No Gmail send OAuth token found. Run auth-gmail-send.js to grant gmail.send permission.'
+        };
+    }
+
+    const tokPath = path.join(__dirname, scopeStatus.tokenFile);
+    const token = JSON.parse(fs.readFileSync(tokPath, 'utf8'));
+    const oAuth2Client = new OAuth2Client(client_id, client_secret, redirect_uris[0]);
+    oAuth2Client.setCredentials(token);
+
+    return {
+        client: getGmailClient({ version: 'v1', auth: oAuth2Client }),
+        tokenFile: scopeStatus.tokenFile
+    };
+}
+
+function sanitizeHeaderValue(val) {
+    return String(val || '').replace(/[\r\n]+/g, ' ').trim();
+}
+
+function buildRawEmailMessage({ to, subject, body, cc, bcc, replyTo }) {
+    const cleanTo = sanitizeHeaderValue(to);
+    const cleanSubject = sanitizeHeaderValue(subject);
+    if (!cleanTo) throw new Error('Recipient email ("to") is required.');
+    if (!cleanSubject) throw new Error('Email subject is required.');
+
+    const headers = [
+        `To: ${cleanTo}`,
+        `Subject: ${cleanSubject}`,
+    ];
+    if (cc && sanitizeHeaderValue(cc)) headers.push(`Cc: ${sanitizeHeaderValue(cc)}`);
+    if (bcc && sanitizeHeaderValue(bcc)) headers.push(`Bcc: ${sanitizeHeaderValue(bcc)}`);
+    if (replyTo && sanitizeHeaderValue(replyTo)) headers.push(`Reply-To: ${sanitizeHeaderValue(replyTo)}`);
+    headers.push('MIME-Version: 1.0');
+    headers.push('Content-Type: text/plain; charset="UTF-8"');
+
+    const normalizedBody = String(body || '').replace(/\r?\n/g, '\r\n');
+    const mime = `${headers.join('\r\n')}\r\n\r\n${normalizedBody}`;
+
+    return Buffer.from(mime, 'utf8')
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+}
+
+async function sendGmailEmail({ to, subject, body, cc, bcc, replyTo }) {
+    try {
+        const { client: gmail, tokenFile, needsReauth, error } = getGmailSendClient();
+        if (!gmail) {
+            return { ok: false, needsReauth: Boolean(needsReauth), error };
+        }
+
+        const raw = buildRawEmailMessage({ to, subject, body, cc, bcc, replyTo });
+        const res = await gmail.users.messages.send({
+            userId: 'me',
+            requestBody: { raw }
+        });
+
+        return {
+            ok: true,
+            messageId: res.data?.id || null,
+            threadId: res.data?.threadId || null,
+            tokenFile
+        };
+    } catch (e) {
+        const msg = e?.message || String(e);
+        const needsReauth = msg.includes('Insufficient Permission') || e?.code === 403 || e?.status === 403;
+        return {
+            ok: false,
+            needsReauth,
+            error: msg
+        };
+    }
+}
+
 module.exports = {
     getRecentEmails,
     getTodaysCalendarEvents,
     getUpcomingCalendarEvents,
     upsertTaskCalendarEvent,
-    deleteTaskCalendarEvent
+    deleteTaskCalendarEvent,
+    hasGmailSendScope,
+    buildRawEmailMessage,
+    sendGmailEmail
 };

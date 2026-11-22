@@ -13,8 +13,12 @@ import {
   buildTaskDescription,
   extractCleanNotes,
   cleanTaskTitle,
+  AgentVenture,
+  AgentJob,
+  AgentSettings,
 } from '@/lib/supabase';
 import NotesWorkspace from '@/components/NotesWorkspace';
+import AICeoWorkspace from '@/components/AICeoWorkspace';
 import {
   Check,
   Plus,
@@ -36,6 +40,7 @@ import {
   FileText,
   Wand2,
   Menu,
+  Bot,
 } from 'lucide-react';
 
 type ActiveModal = 'none' | 'transcript_plan' | 'focus_mode';
@@ -125,9 +130,22 @@ export default function ProjectPlannerWorkspace() {
   const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'error'>('syncing');
 
   // Navigation & Filters
-  const [activeWorkspace, setActiveWorkspace] = useState<'tasks' | 'notes'>('tasks');
-  const [mobileTab, setMobileTab] = useState<'tasks' | 'schedule' | 'notes'>('tasks');
+  const [activeWorkspace, setActiveWorkspace] = useState<'tasks' | 'notes' | 'ai_ceo'>('tasks');
+  const [mobileTab, setMobileTab] = useState<'tasks' | 'schedule' | 'notes' | 'ai_ceo'>('tasks');
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
+  const [agentVentures, setAgentVentures] = useState<AgentVenture[]>([]);
+  const [agentJobs, setAgentJobs] = useState<AgentJob[]>([]);
+  const [agentSettings, setAgentSettings] = useState<AgentSettings>({
+    id: 'default',
+    default_rerun_webhook_url: '',
+    rerun_coworkers: [],
+    default_from_email: '',
+    auto_send_on_approve: true,
+    daemon_heartbeat_at: null,
+    daemon_capabilities: {},
+  });
+  const [agentNeedsMigration, setAgentNeedsMigration] = useState<boolean>(false);
+  const [agentToast, setAgentToast] = useState<string | null>(null);
   const [schedulingTaskId, setSchedulingTaskId] = useState<string | null>(null);
   const [scheduleDayChoice, setScheduleDayChoice] = useState<'today' | 'tomorrow'>('today');
   const [scheduleTimeChoice, setScheduleTimeChoice] = useState<string>('09:00');
@@ -259,11 +277,42 @@ export default function ProjectPlannerWorkspace() {
     }
   }, []);
 
+  const loadAgentData = useCallback(async () => {
+    try {
+      const [venturesRes, jobsRes] = await Promise.all([
+        fetch('/api/agents/ventures', { cache: 'no-store' }),
+        fetch('/api/agents/jobs', { cache: 'no-store' }),
+      ]);
+      let migrationMissing = false;
+      if (venturesRes.ok) {
+        const vJson = await venturesRes.json();
+        if (vJson.needsMigration) migrationMissing = true;
+        if (Array.isArray(vJson.ventures)) setAgentVentures(vJson.ventures);
+        if (vJson.settings) setAgentSettings(vJson.settings);
+      }
+      if (jobsRes.ok) {
+        const jJson = await jobsRes.json();
+        if (jJson.needsMigration) migrationMissing = true;
+        if (Array.isArray(jJson.jobs)) setAgentJobs(jJson.jobs);
+      }
+      setAgentNeedsMigration(migrationMissing);
+    } catch (err) {
+      console.warn('Agent data fetch warning:', err);
+    }
+  }, []);
+
   useEffect(() => {
     loadData();
     loadNotes();
+    loadAgentData();
     let tasksReloadTimer: ReturnType<typeof setTimeout> | null = null;
     let notesReloadTimer: ReturnType<typeof setTimeout> | null = null;
+    let agentsReloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const scheduleAgentsReload = () => {
+      if (agentsReloadTimer) clearTimeout(agentsReloadTimer);
+      agentsReloadTimer = setTimeout(() => loadAgentData(), 350);
+    };
 
     const channel = supabase
       .channel('planner-realtime-sync')
@@ -275,13 +324,60 @@ export default function ProjectPlannerWorkspace() {
         if (notesReloadTimer) clearTimeout(notesReloadTimer);
         notesReloadTimer = setTimeout(() => loadNotes(), 400);
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_jobs' }, scheduleAgentsReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_ventures' }, scheduleAgentsReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_settings' }, scheduleAgentsReload)
       .subscribe();
     return () => {
       if (tasksReloadTimer) clearTimeout(tasksReloadTimer);
       if (notesReloadTimer) clearTimeout(notesReloadTimer);
+      if (agentsReloadTimer) clearTimeout(agentsReloadTimer);
       supabase.removeChannel(channel);
     };
-  }, [loadData, loadNotes]);
+  }, [loadData, loadNotes, loadAgentData]);
+
+  const needsApprovalCount = useMemo(
+    () => agentJobs.filter((j) => j.status === 'needs_approval').length,
+    [agentJobs]
+  );
+
+  const handleDelegateTaskToAI = useCallback(
+    async (task: Task) => {
+      try {
+        const res = await fetch('/api/agents/jobs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId: task.projectId || null,
+            sourceTaskId: task.id,
+            agentRole: 'ceo',
+            jobType: 'task_assist',
+            title: `AI Assist: ${task.title}`,
+            prompt: extractCleanNotes(task.description) || task.title,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setAgentToast(
+            data.needsMigration
+              ? 'Run the one-time SQL setup inside the AI CEO tab first.'
+              : `Could not delegate task: ${data.error || 'Error'}`
+          );
+          return;
+        }
+        setAgentToast(`Delegated "${task.title}" to AI Agent.`);
+        setTimeout(() => {
+          setAgentToast((prev) =>
+            prev === `Delegated "${task.title}" to AI Agent.` ? null : prev
+          );
+        }, 5500);
+        await loadAgentData();
+      } catch (err: any) {
+        setAgentToast(`Delegation error: ${err?.message || String(err)}`);
+      }
+    },
+    [loadAgentData]
+  );
 
   // Core API Patch Helper (handles both Tasks and Calendar Timeline Events)
   const patchTask = useCallback(
@@ -1516,6 +1612,14 @@ export default function ProjectPlannerWorkspace() {
           >
             <button
               type="button"
+              title="Delegate to AI Agent"
+              onClick={() => handleDelegateTaskToAI(task)}
+              className="p-1.5 xl:p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
+            >
+              <Bot className="h-3.5 w-3.5 xl:h-3 xl:w-3" />
+            </button>
+            <button
+              type="button"
               title="Add to Note or Create Note"
               onClick={() => openSendTaskToNoteModal(task)}
               className="p-1.5 xl:p-1 rounded-md bg-white/[0.06] hover:bg-indigo-500/30 text-slate-300 hover:text-indigo-300"
@@ -1668,33 +1772,56 @@ export default function ProjectPlannerWorkspace() {
             </button>
           </div>
 
-          {/* Workspace Switcher: Tasks vs Notes */}
-          <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-[#111318] border border-white/[0.06]">
+          {/* Workspace Switcher: Tasks vs Notes vs AI CEO */}
+          <nav
+            aria-label="Workspace switcher"
+            className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-[#111318] border border-white/[0.06]"
+          >
             <button
               type="button"
+              aria-current={activeWorkspace === 'tasks' ? 'page' : undefined}
               onClick={() => setActiveWorkspace('tasks')}
-              className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[11px] font-medium transition-colors ${
                 activeWorkspace === 'tasks'
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              <span>Tasks ({openTasks.length})</span>
+              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Tasks</span>
             </button>
             <button
               type="button"
+              aria-current={activeWorkspace === 'notes' ? 'page' : undefined}
               onClick={() => setActiveWorkspace('notes')}
-              className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              className={`flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[11px] font-medium transition-colors ${
                 activeWorkspace === 'notes'
                   ? 'bg-indigo-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              <FileText className="h-3.5 w-3.5" />
-              <span>Notes ({notes.length})</span>
+              <FileText className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">Notes</span>
             </button>
-          </div>
+            <button
+              type="button"
+              aria-current={activeWorkspace === 'ai_ceo' ? 'page' : undefined}
+              onClick={() => setActiveWorkspace('ai_ceo')}
+              className={`relative flex items-center justify-center gap-1 py-1.5 px-1 rounded-lg text-[11px] font-medium transition-colors ${
+                activeWorkspace === 'ai_ceo'
+                  ? 'bg-indigo-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Bot className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">AI CEO</span>
+              {needsApprovalCount > 0 && (
+                <span className="px-1 py-0.2 rounded-full bg-amber-500 text-slate-950 text-[9px] font-bold leading-tight">
+                  {needsApprovalCount}
+                </span>
+              )}
+            </button>
+          </nav>
 
           {/* Primary Actions: Paste Transcript + Auto-Classify + Focus */}
           <div className="space-y-1.5">
@@ -1835,7 +1962,17 @@ export default function ProjectPlannerWorkspace() {
         </div>
       </aside>
 
-      {activeWorkspace === 'notes' ? (
+      {activeWorkspace === 'ai_ceo' ? (
+        <AICeoWorkspace
+          ventures={agentVentures}
+          jobs={agentJobs}
+          settings={agentSettings}
+          projects={orderedProjects}
+          needsMigration={agentNeedsMigration}
+          onRefresh={loadAgentData}
+          onTasksRefresh={loadData}
+        />
+      ) : activeWorkspace === 'notes' ? (
         <NotesWorkspace
           notes={notes}
           onRefresh={loadNotes}
@@ -2993,7 +3130,7 @@ export default function ProjectPlannerWorkspace() {
       {/* 6. MOBILE / TABLET BOTTOM TAB BAR (< xl) */}
       <nav
         aria-label="Mobile Navigation"
-        className="xl:hidden fixed bottom-0 inset-x-0 border-t border-white/[0.08] bg-[#151820]/95 backdrop-blur-md px-2 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] grid grid-cols-4 gap-1 z-40"
+        className="xl:hidden fixed bottom-0 inset-x-0 border-t border-white/[0.08] bg-[#151820]/95 backdrop-blur-md px-1.5 pt-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] grid grid-cols-5 gap-1 z-40"
       >
         <button
           type="button"
@@ -3001,7 +3138,7 @@ export default function ProjectPlannerWorkspace() {
             setMobileTab('tasks');
             setActiveWorkspace('tasks');
           }}
-          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-[11px] font-medium transition-colors ${
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-[10px] font-medium transition-colors ${
             mobileTab === 'tasks'
               ? 'text-indigo-400 bg-indigo-500/10'
               : 'text-slate-400 hover:text-slate-200'
@@ -3017,14 +3154,14 @@ export default function ProjectPlannerWorkspace() {
             setMobileTab('schedule');
             setActiveWorkspace('tasks');
           }}
-          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-[11px] font-medium transition-colors ${
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-[10px] font-medium transition-colors ${
             mobileTab === 'schedule'
               ? 'text-indigo-400 bg-indigo-500/10'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <CalendarIcon className="h-5 w-5 mb-0.5" />
-          <span>Schedule ({timeboxedTimelineBlocks.length})</span>
+          <span>Schedule</span>
         </button>
 
         <button
@@ -3033,20 +3170,41 @@ export default function ProjectPlannerWorkspace() {
             setMobileTab('notes');
             setActiveWorkspace('notes');
           }}
-          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-[11px] font-medium transition-colors ${
+          className={`flex flex-col items-center justify-center py-1.5 rounded-xl text-[10px] font-medium transition-colors ${
             mobileTab === 'notes'
               ? 'text-indigo-400 bg-indigo-500/10'
               : 'text-slate-400 hover:text-slate-200'
           }`}
         >
           <FileText className="h-5 w-5 mb-0.5" />
-          <span>Notes ({notes.length})</span>
+          <span>Notes</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setMobileTab('ai_ceo');
+            setActiveWorkspace('ai_ceo');
+          }}
+          className={`relative flex flex-col items-center justify-center py-1.5 rounded-xl text-[10px] font-medium transition-colors ${
+            mobileTab === 'ai_ceo'
+              ? 'text-indigo-400 bg-indigo-500/10'
+              : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Bot className="h-5 w-5 mb-0.5" />
+          <span>AI CEO</span>
+          {needsApprovalCount > 0 && (
+            <span className="absolute top-1 right-2 px-1 rounded-full bg-amber-500 text-slate-950 text-[9px] font-bold leading-tight">
+              {needsApprovalCount}
+            </span>
+          )}
         </button>
 
         <button
           type="button"
           onClick={() => setMobileMenuOpen(true)}
-          className="flex flex-col items-center justify-center py-1.5 rounded-xl text-[11px] font-medium text-slate-400 hover:text-slate-200 transition-colors"
+          className="flex flex-col items-center justify-center py-1.5 rounded-xl text-[10px] font-medium text-slate-400 hover:text-slate-200 transition-colors"
         >
           <Menu className="h-5 w-5 mb-0.5" />
           <span>Projects</span>
@@ -3506,6 +3664,36 @@ export default function ProjectPlannerWorkspace() {
           </div>
         );
       })()}
+
+      {agentToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-20 xl:bottom-5 right-4 z-50 flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-[#1B1E26] border border-indigo-500/40 shadow-xl text-xs text-slate-100"
+        >
+          <Bot className="h-4 w-4 text-indigo-400 shrink-0" />
+          <span>{agentToast}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveWorkspace('ai_ceo');
+              setMobileTab('ai_ceo');
+              setAgentToast(null);
+            }}
+            className="px-2 py-1 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold"
+          >
+            Open AI CEO
+          </button>
+          <button
+            type="button"
+            onClick={() => setAgentToast(null)}
+            aria-label="Close"
+            className="text-slate-400 hover:text-white"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
