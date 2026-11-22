@@ -382,5 +382,29 @@
     "priority": "none",
     "dueDate": "2026-11-22T05:00:00Z",
     "appleReminderId": "1864B9EF-57F5-4AE4-ADF3-687B5ABBC636"
+  },
+  {
+    "title": "Review the build delivery issues for SYNAPSE Elite build 12 in App Store Connect",
+    "notes": "App Store Connect reported one or more issues with the recent delivery of SYNAPSE Elite version 1.0.0 (12).",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "240CD30A-EB4A-4E0F-B8B3-5449E1B4B1CE"
+  },
+  {
+    "title": "Test SYNAPSE Elite build 1.0.0 (12) on TestFlight",
+    "notes": "SYNAPSE Elite version 1.0.0 (12) completed processing and is ready for beta testing on iOS.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "B71386EE-77AE-4A44-89FF-3F2864ECE7F4"
+  },
+  {
+    "title": "Test T90 Reentry Resources build 1.1 (4) on TestFlight",
+    "notes": "T90 Reentry Resources build 1.1 (4) has been approved for TestFlight beta testing and is ready to install.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "26792AD4-8AA2-44AF-8356-2FA505A8CB0D"
   }
 ]
