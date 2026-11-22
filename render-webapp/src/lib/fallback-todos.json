@@ -406,5 +406,21 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "26792AD4-8AA2-44AF-8356-2FA505A8CB0D"
+  },
+  {
+    "title": "Add Synapse and Ferrento app listings and descriptions to 843fc.org",
+    "notes": "Add purchase options and explanations for both apps on the website so buyers can receive access codes via email.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "19F2ABAC-C48F-4815-85D2-03C0D95E82DA"
+  },
+  {
+    "title": "Implement access revocation in Synapse and Ferrento when email codes expire",
+    "notes": "Build a mechanism into both apps to validate codes and remove user access once the access code expires.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "3E0161D6-CAD3-423C-902E-830C9DB4E191"
   }
 ]
