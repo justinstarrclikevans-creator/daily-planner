@@ -366,5 +366,21 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "6439DEDF-11CC-4D96-A338-D0BCF6C17BA1"
+  },
+  {
+    "title": "Ensure student watches missed CASC live session recording for Meghan Norris's class",
+    "notes": "Meghan Norris sent an alert regarding a missed required live session at Cyber Academy of South Carolina.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "CBA89EF5-DCED-4969-AED9-58A7A80EBFF9"
+  },
+  {
+    "title": "Ensure student logs into Cyber Academy of SC for daily attendance",
+    "notes": "Cyber Academy of SC sent an automated notice that the student had not logged in as of noon today.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "3535AF7E-E989-48A7-A799-72A30DF88873"
   }
 ]
