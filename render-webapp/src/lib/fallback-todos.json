@@ -318,5 +318,21 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "486F1755-335B-4192-B64C-EE90763970E6"
+  },
+  {
+    "title": "Ensure London watches missed Fundamentals of Computing live session recording",
+    "notes": "Laura Bishop from Cyber Academy of South Carolina flagged that the required live session on 11/23 was missed.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "95F64B36-23DA-49E2-A9DA-A2510B38DFEC"
+  },
+  {
+    "title": "Share USPS Hiring Event details with the Turn90 team and participants",
+    "notes": "Dave Tam from SC DEW shared details for the upcoming hiring event at SC Works Charleston scheduled for December 15.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "16B70A2A-17BD-4B87-841E-7B14DD3BF125"
   }
 ]
