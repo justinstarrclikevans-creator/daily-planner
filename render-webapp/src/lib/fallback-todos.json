@@ -382,5 +382,45 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "3535AF7E-E989-48A7-A799-72A30DF88873"
+  },
+  {
+    "title": "Test SYNAPSE Elite build 1.0.0 (17) on TestFlight",
+    "notes": "App Store Connect confirmed that SYNAPSE Elite version 1.0.0 build 17 is processed and available to test on TestFlight.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "3D27C114-0266-4F6F-84C1-96B5C76FD239"
+  },
+  {
+    "title": "Review delivery warnings for SYNAPSE Elite build 17 in App Store Connect",
+    "notes": "App Store Connect flagged one or more issues with the build 17 delivery that may need correction.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "C5CFB81A-F3D7-4FA0-990C-ACD95B2B8DEE"
+  },
+  {
+    "title": "Review SC Works Trident Hot Jobs flyer for participant employment opportunities",
+    "notes": "Shenieka Voluntad sent the latest SC Works Trident Hot Jobs Flyer for the week of November 23, 2026.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "B083BCB9-6060-49DD-8A70-EECC293B0CA5"
+  },
+  {
+    "title": "Ensure London watches missed Human Geography 1st period BOOST session recording",
+    "notes": "Mrs. Cochran emailed that London missed the 1st period BOOST live class session on Monday morning.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "950988F4-638A-4D04-BC1A-F1063279C784"
+  },
+  {
+    "title": "Review Enterprise toll invoice for rental vehicle",
+    "notes": "Highway Toll Administration sent invoice EHI211201174 for Enterprise rental agreement 5R28R1.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "9E11107F-22CF-4D24-A25D-158D01DF8E22"
   }
 ]
