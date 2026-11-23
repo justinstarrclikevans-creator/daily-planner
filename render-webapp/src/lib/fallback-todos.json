@@ -240,14 +240,6 @@
     "appleReminderId": "A2EC1E03-6F7D-4C87-9A6C-2C3B91DE86F7"
   },
   {
-    "title": "Check whether Influence has an MCP server available for app integration",
-    "notes": "Investigate if Influence offers MCP server connectivity that can tie into your current tool stack.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "562C044C-EFA7-41D5-9F97-B5031D04D178"
-  },
-  {
     "title": "Send Daniel a text saying thank you but also explain to him that I can either give him our stuff or find a way to work together symbiotically.",
     "notes": "",
     "listName": "General",
