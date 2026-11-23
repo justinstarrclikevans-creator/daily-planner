@@ -6,7 +6,6 @@ const { getIncompleteReminders, getRecentCompletedReminders, addReminder, comple
 const { exec } = require('child_process');
 const { getRecentSlackMessages } = require('./slack');
 const { getRecentEmails, getTodaysCalendarEvents, upsertTaskCalendarEvent, deleteTaskCalendarEvent } = require('./google');
-const { getRecentLetterlyNotes } = require('./letterly');
 const { extractTodos } = require('./ai');
 const { supabase, syncTaskToSupabase, getCompletedTasksFromSupabase } = require('./supabase');
 
@@ -91,17 +90,16 @@ async function syncWebCompletionsToAppleReminders() {
 }
 
 async function runHourlySync() {
-    console.log(`[${new Date().toLocaleString()}] Starting Hourly Sync (Emails, Slack/Huddles, Letterly MCP)...`);
+    console.log(`[${new Date().toLocaleString()}] Starting Hourly Sync (Emails, Slack/Huddles)...`);
     await syncWebCompletionsToAppleReminders();
     const state = loadState();
     state.completedTaskTitles = state.completedTaskTitles || [];
     
     try {
-        const [slack, emails, events, letterlyNotes, incompleteTodos, completedTodos] = await Promise.all([
+        const [slack, emails, events, incompleteTodos, completedTodos] = await Promise.all([
             getRecentSlackMessages(state.lastSlackSync),
             getRecentEmails(state.lastEmailSync),
             getTodaysCalendarEvents(),
-            getRecentLetterlyNotes(state.lastLetterlySync),
             getIncompleteReminders(),
             getRecentCompletedReminders()
         ]);
@@ -118,8 +116,8 @@ async function runHourlySync() {
         }
         saveState(state);
 
-        if (slack.length > 0 || emails.length > 0 || letterlyNotes.length > 0) {
-            console.log(`New inputs found (Slack: ${slack.length}, Emails: ${emails.length}, Letterly: ${letterlyNotes.length}). Active Apple Reminders: ${incompleteTodos.length}, Completed: ${completedTodos.length}.`);
+        if (slack.length > 0 || emails.length > 0) {
+            console.log(`New inputs found (Slack: ${slack.length}, Emails: ${emails.length}). Active Apple Reminders: ${incompleteTodos.length}, Completed: ${completedTodos.length}.`);
             
             console.log("Extracting todos via Gemini (no project assignments, no calendar todos)...");
             const combinedCompleted = [
@@ -132,7 +130,7 @@ async function runHourlySync() {
                 emails: emails,
                 existingTodos: incompleteTodos,
                 completedTodos: combinedCompleted,
-                letterlyNotes: letterlyNotes
+                letterlyNotes: []
             });
             
             if (aiExtractedItems.length > 0) {
@@ -227,12 +225,9 @@ async function runHourlySync() {
                     }
                 }
             }
-            if (letterlyNotes.length > 0) {
-                state.lastLetterlySync = Math.max(...letterlyNotes.map(n => n.timestamp));
-            }
             saveState(state);
         } else {
-            console.log("No new Slack messages, emails, or Letterly recordings since last hourly check.");
+            console.log("No new Slack messages or emails since last hourly check.");
         }
 
         // Sync open Apple Reminders + Calendar timeline feed to Render webapp & cloud
@@ -493,7 +488,7 @@ cron.schedule('0 * * * *', () => runHourlySync());
 
 console.log("Sync daemon started (v2 1-Minute Live Reminder Sync + Hourly Slack/Email AI Extraction).");
 console.log("- Syncing active Apple Reminders and web completions every 1 minute");
-console.log("- Checking Emails, Slack & Huddle Summaries, and Letterly MCP once an hour");
+console.log("- Checking Emails and Slack & Huddle Summaries once an hour");
 
 try {
     const { startAgentWorker } = require('./agent-worker');
