@@ -310,5 +310,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "A45C9C28-56B7-4695-9F40-66C24FC68269"
+  },
+  {
+    "title": "Add some stuff about the journal and leaderboard",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "486F1755-335B-4192-B64C-EE90763970E6"
   }
 ]
