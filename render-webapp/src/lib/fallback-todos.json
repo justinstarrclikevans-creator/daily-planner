@@ -120,38 +120,6 @@
     "appleReminderId": "8500A456-D0C2-4185-A583-4C786E3C4C09"
   },
   {
-    "title": "Record 30-second audio clips of each program staff member reading a script",
-    "notes": "Gather 30-second reference voice recordings from each staff member to train voice recognition and isolate participant voices in LCMI sessions.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "C333C6A4-3CA6-4FAB-8F60-DBDD8A9B4ABA"
-  },
-  {
-    "title": "Create a screening consultation template to automate briefcase generation and eligibility tracking. Have upload that creates their file, case plan, etc.",
-    "notes": "Design a screening consultation template that determines participant eligibility and feeds data directly into briefcases and the LCMI.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "C7DD8821-8C88-4E1F-9E1B-AFB579DFAB46"
-  },
-  {
-    "title": "Create a case management template to track staff process adherence",
-    "notes": "Draft a follow-along case management evaluation template to assess staff fidelity and adherence to program standards.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "8189F292-B201-4316-9C0E-BE367A24C8CF"
-  },
-  {
-    "title": "Redo the briefcase form into a single document with conditional drop-downs",
-    "notes": "Consolidate the briefcase into one document with drop-downs, removing gates and adding logic to only ask about medical appointments if the participant has medical conditions.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "AF99380F-DC05-48AC-9C96-2494F8322F3E"
-  },
-  {
     "title": "Have it ask random questions to supervise. Are you using the action plan?",
     "notes": "",
     "listName": "General",
@@ -176,14 +144,6 @@
     "appleReminderId": "1A7F411C-1B8F-40EC-B89C-0BFA3702ED6E"
   },
   {
-    "title": "Have a tabs for each of the program managers that have a list of the to-do and the person that's attached to",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "D516EECA-0781-4EF2-A641-12C8D423DF61"
-  },
-  {
     "title": "Pay the dentist",
     "notes": "",
     "listName": "General",
@@ -206,14 +166,6 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "74AED600-5273-476E-80BF-29CE83C70699"
-  },
-  {
-    "title": "Ask RA to reverse engineer teesim and apricot and see if I need a login to do that. Check on apricot export. How does that work and then implement",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "2493E8ED-C737-4EB1-8B0D-011199EBDA6B"
   },
   {
     "title": "Moon gate in the morning and to sleep. Connect!!!!!",
