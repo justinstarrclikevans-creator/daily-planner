@@ -302,5 +302,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "B1D0BC4A-4D28-4BE1-957C-21145C0904B4"
+  },
+  {
+    "title": "Default the human in the loop stuff into each folder",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "A45C9C28-56B7-4695-9F40-66C24FC68269"
   }
 ]
