@@ -184,14 +184,6 @@
     "appleReminderId": "8189F292-B201-4316-9C0E-BE367A24C8CF"
   },
   {
-    "title": "Check whether participant module progress can be scraped from Skillcat",
-    "notes": "Evaluate technical feasibility of scraping participant module completion data from Skillcat to monitor progress and flag issues automatically.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "AB701C5E-A979-4DDF-94AB-14B1D73E717B"
-  },
-  {
     "title": "Redo the briefcase form into a single document with conditional drop-downs",
     "notes": "Consolidate the briefcase into one document with drop-downs, removing gates and adding logic to only ask about medical appointments if the participant has medical conditions.",
     "listName": "General",
