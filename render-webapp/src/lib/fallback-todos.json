@@ -350,5 +350,21 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "97D46005-472E-4835-8745-38D688F48E5C"
+  },
+  {
+    "title": "Test SYNAPSE Elite build 1.0.0 (16) on TestFlight",
+    "notes": "SYNAPSE Elite version 1.0.0 build 16 is ready for testing on iOS via TestFlight.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "D797A0A1-C2B8-4335-908C-8E8DBF61CFDB"
+  },
+  {
+    "title": "Review delivery warnings for SYNAPSE Elite build 16 in App Store Connect",
+    "notes": "App Store Connect reported one or more issues with the recent delivery for SYNAPSE Elite version 1.0.0 build 16.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "6439DEDF-11CC-4D96-A338-D0BCF6C17BA1"
   }
 ]
