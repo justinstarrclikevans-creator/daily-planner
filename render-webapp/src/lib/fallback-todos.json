@@ -32,14 +32,6 @@
     "appleReminderId": "037D1167-1D08-4D8D-A6DD-1F9EE1201E19"
   },
   {
-    "title": "Check in with my Gentry NAV fee but also to",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "638D981B-D53F-4AF8-91EC-A7BA82FA140B"
-  },
-  {
     "title": "Check with Katie about duplicates on the job report",
     "notes": "",
     "listName": "General",
@@ -158,14 +150,6 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "C333C6A4-3CA6-4FAB-8F60-DBDD8A9B4ABA"
-  },
-  {
-    "title": "Switch the LCMI interview to dynamic questioning using probation planner definitions",
-    "notes": "Update the LCMI interview configuration to dynamic questioning and leverage probation planner behavioral definitions to pinpoint participant focus areas.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "70C99285-9400-4A6D-B80C-C192C8DBC053"
   },
   {
     "title": "Create a screening consultation template to automate briefcase generation and eligibility tracking. Have upload that creates their file, case plan, etc.",
