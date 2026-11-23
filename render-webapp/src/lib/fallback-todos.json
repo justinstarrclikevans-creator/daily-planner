@@ -256,14 +256,6 @@
     "appleReminderId": "74AED600-5273-476E-80BF-29CE83C70699"
   },
   {
-    "title": "Anything we don't sell at the event can be sold by players later",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "6FCF3BDF-9C53-450E-891F-CBE5A9C401C9"
-  },
-  {
     "title": "Ask RA to reverse engineer teesim and apricot and see if I need a login to do that. Check on apricot export. How does that work and then implement",
     "notes": "",
     "listName": "General",
