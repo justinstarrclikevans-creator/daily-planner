@@ -192,14 +192,6 @@
     "appleReminderId": "CC5384AC-D607-4368-83E7-D9B0D830C0F3"
   },
   {
-    "title": "Get the pay reports and payroll done",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": "2026-11-22T05:00:00Z",
-    "appleReminderId": "1864B9EF-57F5-4AE4-ADF3-687B5ABBC636"
-  },
-  {
     "title": "Add Synapse and Ferrento app listings and descriptions to 843fc.org",
     "notes": "Add purchase options and explanations for both apps on the website so buyers can receive access codes via email.",
     "listName": "General",
@@ -214,38 +206,6 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "99378A74-12BA-42FC-B366-3B5395E83953"
-  },
-  {
-    "title": "Restructure Synapse lessons into a chronological daily progression",
-    "notes": "Configure lessons so users can complete only one per day while retaining full access to all previously completed lessons.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "D8560F70-1578-4915-AA5E-3216656EA9F7"
-  },
-  {
-    "title": "Reframe Synapse app messaging around life skills using sports analogies",
-    "notes": "Broaden the app scope to address life in general, centering on the analogy that preparation and practice in sports translate directly to work, school, and daily life.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "EF67C44A-E9DD-4171-B567-632EE807F9AE"
-  },
-  {
-    "title": "Update Amazon payment method for declined order",
-    "notes": "Amazon flagged a declined payment that requires updated billing information to process and ship the order.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "44EA6BBF-A1C1-4200-82B3-A3F86B5CC73E"
-  },
-  {
-    "title": "Review and remove unnecessary games from the Synapse app",
-    "notes": "Audit the current game catalog in the Synapse app and remove any games that are no longer needed.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "85F8C0CC-362A-4018-8F34-1039DA984EEB"
   },
   {
     "title": "Create an onboarding tutorial for the Synapse app launch",
