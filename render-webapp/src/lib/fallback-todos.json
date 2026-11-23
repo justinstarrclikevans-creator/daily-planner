@@ -384,60 +384,12 @@
     "appleReminderId": "19F2ABAC-C48F-4815-85D2-03C0D95E82DA"
   },
   {
-    "title": "Implement access revocation in Synapse and Ferrento when email codes expire",
-    "notes": "Build a mechanism into both apps to validate codes and remove user access once the access code expires.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "3E0161D6-CAD3-423C-902E-830C9DB4E191"
-  },
-  {
-    "title": "Connect LeadOcean MCP to Claude",
-    "notes": "Your LeadOcean account and first API key are ready to connect Claude via MCP or use the REST API.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "E231E17C-5A3E-40BC-80A5-121BED2A6EA9"
-  },
-  {
-    "title": "Confirm Reece's therapy session with Austen Robinson",
-    "notes": "NOCD requested confirmation for Reece's upcoming therapy session scheduled for Tuesday, November 24 at 3:00 PM EST.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "8614E1A8-BB3D-424F-B9FF-C807B3AF1623"
-  },
-  {
-    "title": "Listen to voicemail from (864) 764-8575 regarding program services",
-    "notes": "New voicemail received on Grasshopper extension 1 for Program Services from (864) 764-8575.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "482D49B4-BB7C-4F86-A066-F32DD92AD57B"
-  },
-  {
     "title": "Get reports emailed to me about classroom and case management , including rn. Flag briefcase issues, no meetings etc. slack it to me.",
     "notes": "",
     "listName": "General",
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "99378A74-12BA-42FC-B366-3B5395E83953"
-  },
-  {
-    "title": "Complete the new hire check-in for Matthew Tupa in Gusto",
-    "notes": "Turn90 task in Gusto requires completing the new hire check-in for Matthew Tupa due today.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "6954E03D-A2D8-4856-94AA-ED69BB63F240"
-  },
-  {
-    "title": "Test SYNAPSE Elite build 1.0.0 (13) on TestFlight",
-    "notes": "SYNAPSE Elite version 1.0.0 build 13 has completed processing and is ready for testing on iOS.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "61558397-9388-41F1-BC48-D9BCCB721705"
   },
   {
     "title": "See if inkfluence has an MCP to connect anti-gravity",
