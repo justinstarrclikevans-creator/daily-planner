@@ -246,5 +246,29 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "CF9D4D60-13EC-4D5A-9489-A309DC72664F"
+  },
+  {
+    "title": "Test SYNAPSE Elite build 1.0.0 (15) on TestFlight",
+    "notes": "SYNAPSE Elite version 1.0.0 (15) has finished processing and is ready for iOS testing via TestFlight.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "4C6941CF-0600-4C54-A962-4D499A865093"
+  },
+  {
+    "title": "Review delivery warnings for SYNAPSE Elite build 15 in App Store Connect",
+    "notes": "App Store Connect reported one or more issues with the recent delivery of SYNAPSE Elite version 1.0.0 (15).",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "7F770001-C933-4D7C-8AB7-B57F80A4EE9C"
+  },
+  {
+    "title": "Review Kat Norsworthy's time off requests in Gusto",
+    "notes": "Kat Norsworthy submitted time off requests for November 19, 2026 (3 hours) and December 21 - 24, 2026 (24 hours).",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "4C802ADB-0674-4EC8-AC4E-F3E847BF6360"
   }
 ]
