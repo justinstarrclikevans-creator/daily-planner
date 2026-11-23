@@ -414,5 +414,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "0296482D-4C3C-413A-A390-CFC576AF5F34"
+  },
+  {
+    "title": "Review Chime account closure notification and transfer remaining funds",
+    "notes": "Chime sent an account closure notification stating they are moving forward with closing your account.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "55CA255C-C14C-4105-8727-35B35093060E"
   }
 ]
