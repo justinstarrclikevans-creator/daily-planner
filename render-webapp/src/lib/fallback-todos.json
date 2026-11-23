@@ -230,5 +230,29 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "EF67C44A-E9DD-4171-B567-632EE807F9AE"
+  },
+  {
+    "title": "Update Amazon payment method for declined order",
+    "notes": "Amazon flagged a declined payment that requires updated billing information to process and ship the order.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "44EA6BBF-A1C1-4200-82B3-A3F86B5CC73E"
+  },
+  {
+    "title": "Review and remove unnecessary games from the Synapse app",
+    "notes": "Audit the current game catalog in the Synapse app and remove any games that are no longer needed.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "85F8C0CC-362A-4018-8F34-1039DA984EEB"
+  },
+  {
+    "title": "Create an onboarding tutorial for the Synapse app launch",
+    "notes": "Design and build a tutorial flow for users when they first launch the Synapse app.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "F6E6BEC5-2721-49CC-9C81-759D795113E0"
   }
 ]
