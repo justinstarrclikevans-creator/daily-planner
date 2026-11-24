@@ -286,5 +286,13 @@
     "priority": "none",
     "dueDate": "2026-11-24T12:00:00Z",
     "appleReminderId": "51A0EA7B-A689-4C37-BD3F-6D78A747F888"
+  },
+  {
+    "title": "Check if I can double code using Claude and ag? Ask ag.",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "DEC7F40F-7E21-460B-A250-945736F737E0"
   }
 ]
