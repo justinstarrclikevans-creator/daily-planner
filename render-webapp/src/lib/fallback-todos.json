@@ -328,76 +328,12 @@
     "appleReminderId": "95F64B36-23DA-49E2-A9DA-A2510B38DFEC"
   },
   {
-    "title": "Share USPS Hiring Event details with the Turn90 team and participants",
-    "notes": "Dave Tam from SC DEW shared details for the upcoming hiring event at SC Works Charleston scheduled for December 15.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "16B70A2A-17BD-4B87-841E-7B14DD3BF125"
-  },
-  {
     "title": "Respond to Geel & Gentry regarding holiday lunch for the Turn90 Christmas party",
     "notes": "Geel & Gentry offered to provide and serve food for the participants and staff during the Turn90 holiday lunch.",
     "listName": "General",
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "5940A16F-5594-4E9C-A109-760429741E2A"
-  },
-  {
-    "title": "Review December 2026 Goodwill Opportunity Center event flyers for participant opportunities",
-    "notes": "Letricia Cromley shared event flyers for December 2026 at the Goodwill Career Opportunity Centers in Georgetown and Murrells Inlet.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "97D46005-472E-4835-8745-38D688F48E5C"
-  },
-  {
-    "title": "Test SYNAPSE Elite build 1.0.0 (16) on TestFlight",
-    "notes": "SYNAPSE Elite version 1.0.0 build 16 is ready for testing on iOS via TestFlight.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "D797A0A1-C2B8-4335-908C-8E8DBF61CFDB"
-  },
-  {
-    "title": "Review delivery warnings for SYNAPSE Elite build 16 in App Store Connect",
-    "notes": "App Store Connect reported one or more issues with the recent delivery for SYNAPSE Elite version 1.0.0 build 16.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "6439DEDF-11CC-4D96-A338-D0BCF6C17BA1"
-  },
-  {
-    "title": "Ensure student watches missed CASC live session recording for Meghan Norris's class",
-    "notes": "Meghan Norris sent an alert regarding a missed required live session at Cyber Academy of South Carolina.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "CBA89EF5-DCED-4969-AED9-58A7A80EBFF9"
-  },
-  {
-    "title": "Ensure student logs into Cyber Academy of SC for daily attendance",
-    "notes": "Cyber Academy of SC sent an automated notice that the student had not logged in as of noon today.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "3535AF7E-E989-48A7-A799-72A30DF88873"
-  },
-  {
-    "title": "Test SYNAPSE Elite build 1.0.0 (17) on TestFlight",
-    "notes": "App Store Connect confirmed that SYNAPSE Elite version 1.0.0 build 17 is processed and available to test on TestFlight.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "3D27C114-0266-4F6F-84C1-96B5C76FD239"
-  },
-  {
-    "title": "Review delivery warnings for SYNAPSE Elite build 17 in App Store Connect",
-    "notes": "App Store Connect flagged one or more issues with the build 17 delivery that may need correction.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "C5CFB81A-F3D7-4FA0-990C-ACD95B2B8DEE"
   },
   {
     "title": "Review SC Works Trident Hot Jobs flyer for participant employment opportunities",
