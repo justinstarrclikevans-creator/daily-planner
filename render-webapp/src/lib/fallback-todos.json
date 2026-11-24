@@ -358,5 +358,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "6692146F-4C66-41EE-BDAD-11082DD690CB"
+  },
+  {
+    "title": "Complete the new hire check-in for Sean McGowan in Gusto",
+    "notes": "Log into Gusto to complete the pending weekly new hire check-in tasks for Sean McGowan.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "C5C42AA7-2597-423B-B702-C7BCC003FDD0"
   }
 ]
