@@ -382,5 +382,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "B5DEB657-D9F6-48E7-B9C6-123430953E5A"
+  },
+  {
+    "title": "We can have one app like Letterly that feeds into a server that then feeds into the database",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "BB4AEF1A-385B-4C15-AC66-99FE0D13F849"
   }
 ]
