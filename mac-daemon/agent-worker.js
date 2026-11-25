@@ -7,6 +7,15 @@ const { callGeminiWithRetry } = require('./gemini-helper');
 const { hasGmailSendScope, sendGmailEmail } = require('./google');
 const { isLeadOceanConfigured, searchPeople, enrichPerson } = require('./leadocean');
 const { isRerunMcpConfigured, triggerRerunWebhook, callRerunMcpTool } = require('./rerun');
+const fs = require('fs');
+const { resolveSlackRecipient, sendSlackMessageToRecipient } = require('./slack');
+const { generateDailyTrainingBrief } = require('./training-brief');
+const { generateL10Brief } = require('./l10-brief');
+const { runCodeChangeJob, approveCodeChangeJob } = require('./code-runner');
+
+const CLAUDE_CODE_BIN = '/Users/justinevans/.local/bin/claude';
+const ANTIGRAVITY_API_BIN = '/Users/justinevans/.gemini/antigravity/bin/agentapi';
+const LETTERLY_TOKENS_PATH = '/Users/justinevans/.gemini/antigravity/mcp_oauth_tokens.json';
 
 const POLL_INTERVAL_MS = 15000;
 const HEARTBEAT_INTERVAL_MS = 60000;
@@ -14,6 +23,7 @@ const HEARTBEAT_INTERVAL_MS = 60000;
 let workerStarted = false;
 let missingTableWarned = false;
 let isDraining = false;
+let codeChangeRunning = false;
 const inFlightIds = new Set();
 
 function isMissingTableError(err) {
@@ -165,6 +175,11 @@ async function updateDaemonHeartbeat() {
       leadoceanConfigured: isLeadOceanConfigured(),
       rerunMcpConfigured: isRerunMcpConfigured(),
       geminiConfigured: Boolean((process.env.GEMINI_API_KEY || '').trim()),
+      slackReady: Boolean((process.env.SLACK_USER_TOKEN || '').trim()),
+      letterlyReady:
+        fs.existsSync(LETTERLY_TOKENS_PATH) || Boolean((process.env.LETTERLY_ACCESS_TOKEN || '').trim()),
+      claudeCodeReady: fs.existsSync(CLAUDE_CODE_BIN),
+      antigravityApiReady: fs.existsSync(ANTIGRAVITY_API_BIN),
     };
 
     const { error } = await supabase.from('agent_settings').upsert(
@@ -614,6 +629,69 @@ Return clear Markdown with:
   };
 }
 
+// Slack drafts staged as 'queued' (e.g. from the webapp "Stage 1-Tap Staff Slack" button) only get their
+// recipient resolved here. They ALWAYS land in 'needs_approval' — nothing is sent until Justin approves.
+async function handleSlackMessagePrep(job) {
+  const existing = job.output_payload || {};
+  const recipientQuery = String(existing.recipientName || existing.recipientQuery || '').trim();
+  const messageText = String(existing.messageText || job.prompt || '').trim();
+  let resolved = { ok: false, userId: null, channelId: null, displayName: recipientQuery, handle: '', error: 'No recipient' };
+  if (recipientQuery && !existing.slackUserId && !existing.slackChannelId) {
+    resolved = await resolveSlackRecipient(recipientQuery);
+  } else if (existing.slackUserId || existing.slackChannelId) {
+    resolved = {
+      ok: true,
+      userId: existing.slackUserId || null,
+      channelId: existing.slackChannelId || null,
+      displayName: recipientQuery,
+      handle: existing.slackHandle || '',
+      error: null,
+    };
+  }
+  const recipientName = resolved.displayName || recipientQuery || 'Staff member';
+  return {
+    output_markdown: `**Slack DM to:** ${recipientName}${resolved.ok ? '' : ' _(recipient not resolved — edit before approving)_'}\n\n---\n\n${messageText}`,
+    output_payload: {
+      ...existing,
+      isSlack: true,
+      recipientName,
+      recipientQuery,
+      slackUserId: resolved.userId || null,
+      slackChannelId: resolved.channelId || null,
+      slackHandle: resolved.handle || '',
+      resolveError: resolved.ok ? null : resolved.error || 'unresolved',
+      messageText,
+    },
+  };
+}
+
+async function markJobExecuted(jobId, execution_result) {
+  const nowIso = new Date().toISOString();
+  await supabase
+    .from('agent_jobs')
+    .update({ status: 'executed', executed_at: nowIso, execution_error: '', execution_result, updated_at: nowIso })
+    .eq('id', jobId);
+}
+
+async function markJobFailed(jobId, message) {
+  await supabase
+    .from('agent_jobs')
+    .update({ status: 'failed', execution_error: String(message), updated_at: new Date().toISOString() })
+    .eq('id', jobId);
+}
+
+async function upsertBriefNote({ noteId, title, content, folder, source }) {
+  if (noteId) {
+    const { data, error } = await supabase
+      .from('notes')
+      .update({ content: String(content || ''), updated_at: new Date().toISOString() })
+      .eq('id', noteId)
+      .select();
+    if (!error && Array.isArray(data) && data.length > 0) return data[0];
+  }
+  return saveDeliverableNote({ title, content, folder, source });
+}
+
 async function processQueuedJob(job) {
   if (!supabase || !job?.id || inFlightIds.has(job.id)) return;
   inFlightIds.add(job.id);
@@ -667,6 +745,19 @@ async function processQueuedJob(job) {
         break;
       case 'rerun_coworker':
         result = await handleRerunCoworkerPrep(currentJob, venture, settings);
+        break;
+      case 'slack_message':
+        result = await handleSlackMessagePrep(currentJob);
+        break;
+      case 'training_brief':
+        result = await generateDailyTrainingBrief({ days: Number(currentJob.output_payload?.days) || 7 });
+        break;
+      case 'l10_brief':
+        result = await generateL10Brief(currentJob.output_payload?.l10Type === 'leadership' ? 'leadership' : 'program');
+        result.output_payload = { ...(currentJob.output_payload || {}), ...(result.output_payload || {}) };
+        break;
+      case 'code_change':
+        result = await runCodeChangeJob(currentJob);
         break;
       default:
         result = await handleMarketResearch(currentJob, venture);
@@ -772,6 +863,129 @@ async function executeApprovedJob(job) {
     ]);
 
     const nowIso = new Date().toISOString();
+
+    // 0a. Slack message — sent ONLY now that Justin tapped Approve (status === 'approved').
+    if (currentJob.job_type === 'slack_message') {
+      if (currentJob.status !== 'approved') return;
+      const messageText = String(payload.messageText || '').trim();
+      let userId = payload.slackUserId || null;
+      let channelId = payload.slackChannelId || null;
+      const recipientName = String(payload.recipientName || '').trim();
+
+      // If Justin edited the recipient on the card, re-resolve before sending.
+      if (recipientName && payload.recipientEdited === true) {
+        const resolved = await resolveSlackRecipient(recipientName);
+        if (!resolved.ok) {
+          await markJobFailed(currentJob.id, resolved.error || `Could not resolve Slack user "${recipientName}".`);
+          return;
+        }
+        userId = resolved.userId;
+        channelId = resolved.channelId;
+      }
+
+      if (!messageText) {
+        await markJobFailed(currentJob.id, 'Slack message text is empty. Edit the message and retry.');
+        return;
+      }
+      if (!userId && !channelId && !recipientName) {
+        await markJobFailed(currentJob.id, 'Slack recipient is missing. Edit the recipient and retry.');
+        return;
+      }
+
+      console.log(`[Agent Worker] Sending approved Slack DM to ${recipientName || userId}...`);
+      const sendRes = await sendSlackMessageToRecipient({ userId, channelId, recipientName, text: messageText });
+      if (!sendRes.ok) {
+        await markJobFailed(currentJob.id, sendRes.error || 'Slack send failed.');
+        return;
+      }
+      await markJobExecuted(currentJob.id, {
+        action: 'slack_sent',
+        recipientName,
+        slackUserId: sendRes.userId || userId,
+        channel: sendRes.channel,
+        messageTs: sendRes.ts,
+      });
+      console.log(`[Agent Worker] Sent approved Slack DM (${sendRes.ts}) to ${recipientName || userId}.`);
+      return;
+    }
+
+    // 0b. Training brief — save (possibly edited) brief; selected check-ins become NEW needs_approval Slack cards.
+    if (currentJob.job_type === 'training_brief') {
+      const note = await upsertBriefNote({
+        noteId: payload.noteId,
+        title: `Daily Training Brief — ${payload.briefDate || nowIso.slice(0, 10)}`,
+        content: currentJob.output_markdown,
+        folder: 'Training (Turn90 & SYNAPSE)',
+        source: 'training_brief',
+      });
+      const selected = (Array.isArray(payload.proposedSlackCheckins) ? payload.proposedSlackCheckins : []).filter(
+        (c) => c && c.selected === true && c.recipientName && c.messageText
+      );
+      let stagedSlackCards = 0;
+      for (const checkin of selected) {
+        const resolved = await resolveSlackRecipient(checkin.recipientName).catch((e) => ({ ok: false, error: e.message }));
+        const recipientName = resolved.displayName || checkin.recipientName;
+        const { error: insErr } = await supabase.from('agent_jobs').insert([
+          {
+            id: crypto.randomUUID(),
+            agent_role: 'outreach',
+            job_type: 'slack_message',
+            title: `Slack ${recipientName}: training check-in`,
+            prompt: checkin.messageText,
+            status: 'needs_approval',
+            output_markdown: `**Slack DM to:** ${recipientName}${resolved.ok ? '' : ' _(recipient not resolved — edit before approving)_'}\n\n---\n\n${checkin.messageText}`,
+            output_payload: {
+              isSlack: true,
+              recipientName,
+              recipientQuery: checkin.recipientName,
+              slackUserId: resolved.userId || null,
+              slackChannelId: resolved.channelId || null,
+              slackHandle: resolved.handle || '',
+              resolveError: resolved.ok ? null : resolved.error || 'unresolved',
+              messageText: checkin.messageText,
+              sourceJobId: currentJob.id,
+            },
+            revision_feedback: '',
+            execution_result: {},
+            execution_error: '',
+            created_at: nowIso,
+            updated_at: nowIso,
+          },
+        ]);
+        if (!insErr) stagedSlackCards++;
+      }
+      await markJobExecuted(currentJob.id, {
+        action: 'training_brief_saved',
+        noteId: note?.id || payload.noteId || null,
+        stagedSlackCards,
+      });
+      return;
+    }
+
+    // 0c. L10 brief — save finalized brief to Turn90 Ops & Dual L10s.
+    if (currentJob.job_type === 'l10_brief') {
+      const label = payload.l10Type === 'leadership' ? 'Leadership L10' : 'Program L10';
+      const note = await upsertBriefNote({
+        noteId: payload.noteId,
+        title: `${label} Pre-Meeting Brief — ${payload.briefDate || nowIso.slice(0, 10)}`,
+        content: currentJob.output_markdown,
+        folder: 'Turn90 Ops & Dual L10s',
+        source: 'l10_brief',
+      });
+      await markJobExecuted(currentJob.id, { action: 'l10_brief_saved', noteId: note?.id || null, l10Type: payload.l10Type });
+      return;
+    }
+
+    // 0d. Code change — commit only this job's files (push only if pushOnApprove === true).
+    if (currentJob.job_type === 'code_change') {
+      const commitRes = await approveCodeChangeJob(currentJob);
+      if (!commitRes.ok) {
+        await markJobFailed(currentJob.id, commitRes.error || 'Commit failed.');
+        return;
+      }
+      await markJobExecuted(currentJob.id, commitRes);
+      return;
+    }
 
     // 1. Auto-send email immediately upon approval
     if (
@@ -1136,6 +1350,17 @@ async function drainAgentJobs() {
     }
 
     for (const job of queuedJobs || []) {
+      if (job.job_type === 'code_change') {
+        // Claude Code runs can take up to 8 minutes — run in the background (one at a time)
+        // so approvals (Slack/email) keep executing promptly. Atomic claim prevents duplicates.
+        if (!codeChangeRunning) {
+          codeChangeRunning = true;
+          processQueuedJob(job).finally(() => {
+            codeChangeRunning = false;
+          });
+        }
+        continue;
+      }
       await processQueuedJob(job);
     }
   } catch (err) {

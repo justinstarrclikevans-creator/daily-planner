@@ -192,7 +192,7 @@ function parseListNotesOutput(rawText) {
     return notes;
 }
 
-async function getRecentLetterlyNotes(sinceTimestamp = 0) {
+async function getRecentLetterlyNotes(sinceTimestamp = 0, { excludeIds = null } = {}) {
     try {
         console.log('[Letterly MCP] Checking recent recordings via MCP...');
         const rawList = await callLetterlyMCPTool('list_notes', { page: 1, page_size: 20 });
@@ -207,7 +207,10 @@ async function getRecentLetterlyNotes(sinceTimestamp = 0) {
         // Default to looking back 14 days if sinceTimestamp is 0, to make sure recent recordings are included
         const minTime = sinceTimestamp || (Date.now() - 14 * 24 * 60 * 60 * 1000);
 
-        const recentNotes = parsedList.filter(n => Math.max(n.created, n.updated) >= minTime);
+        const exclude = excludeIds ? new Set(Array.from(excludeIds).map(String)) : null;
+        const recentNotes = parsedList.filter(n =>
+            Math.max(n.created, n.updated) >= minTime && !(exclude && exclude.has(String(n.id)))
+        );
         if (recentNotes.length === 0) {
             console.log(`[Letterly MCP] 0 notes newer than timestamp ${new Date(minTime).toLocaleString()}.`);
             return [];
@@ -245,7 +248,25 @@ async function getRecentLetterlyNotes(sinceTimestamp = 0) {
     }
 }
 
+/** Fetch one page of the Letterly note list (parsed). Used by the training backfill. */
+async function listLetterlyNotesPage(page = 1, pageSize = 50) {
+    const raw = await callLetterlyMCPTool('list_notes', { page, page_size: pageSize });
+    return { raw, notes: parseListNotesOutput(raw) };
+}
+
+/** Fetch the full raw transcript of one Letterly note (falls back to null on error/rate-limit). */
+async function getLetterlyNoteFull(noteId) {
+    const fullText = await callLetterlyMCPTool('get_note', { note_id: noteId, offset: 0 });
+    if (!fullText) return null;
+    const lower = fullText.toLowerCase();
+    if (lower.includes('rate limit') || lower.startsWith('error')) return null;
+    return fullText;
+}
+
 module.exports = {
     getRecentLetterlyNotes,
-    callLetterlyMCPTool
+    callLetterlyMCPTool,
+    listLetterlyNotesPage,
+    getLetterlyNoteFull,
+    parseListNotesOutput
 };

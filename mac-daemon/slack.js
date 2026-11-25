@@ -203,4 +203,216 @@ async function sendSlackDM(text) {
     }
 }
 
-module.exports = { getRecentSlackMessages, sendSlackDM };
+// ---------------------------------------------------------------------------
+// Staff recipient resolution + 1-tap approved Slack sends
+// (sendSlackMessageToRecipient must ONLY be called by agent-worker after a
+//  `slack_message` agent_job reaches status === 'approved'.)
+// ---------------------------------------------------------------------------
+
+const USERS_CACHE_TTL_MS = 15 * 60 * 1000;
+let cachedSlackUsers = null;
+let cachedSlackUsersAt = 0;
+
+function loadTaggingPeople() {
+    try {
+        const rules = require('./tagging-rules.json');
+        return Array.isArray(rules.people) ? rules.people : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function normName(str) {
+    return String(str || '').toLowerCase().replace(/^@/, '').replace(/[^a-z0-9\s.]/g, '').replace(/\s+/g, ' ').trim();
+}
+
+async function getSlackUsersCached(client) {
+    const now = Date.now();
+    if (cachedSlackUsers && now - cachedSlackUsersAt < USERS_CACHE_TTL_MS) {
+        return cachedSlackUsers;
+    }
+    const members = [];
+    let cursor;
+    let pages = 0;
+    do {
+        const res = await client.users.list({ limit: 200, cursor });
+        for (const m of res.members || []) {
+            if (m.deleted || m.is_bot || m.id === 'USLACKBOT') continue;
+            members.push(m);
+        }
+        cursor = res.response_metadata?.next_cursor || undefined;
+        pages++;
+    } while (cursor && pages < 10);
+    cachedSlackUsers = members;
+    cachedSlackUsersAt = now;
+    return members;
+}
+
+function scoreMemberMatch(member, candidates) {
+    const fields = [
+        member.real_name,
+        member.profile?.real_name,
+        member.profile?.display_name,
+        member.name,
+    ].map(normName).filter(Boolean);
+
+    let best = 0;
+    for (const cand of candidates) {
+        if (!cand) continue;
+        for (const f of fields) {
+            if (f === cand) best = Math.max(best, 100);
+            else if (f.split(' ')[0] === cand) best = Math.max(best, 80);
+            else if (f.split(/[\s.]/).includes(cand)) best = Math.max(best, 60);
+            else if (cand.length >= 4 && f.includes(cand)) best = Math.max(best, 40);
+        }
+    }
+    return best;
+}
+
+/**
+ * Resolve a staff recipient ("Matt", "@jenn", "Casey Sexton") to a Slack user.
+ * Returns { ok, userId, channelId, displayName, handle, error }.
+ */
+async function resolveSlackRecipient(query) {
+    const raw = String(query || '').trim();
+    if (!raw) return { ok: false, userId: null, channelId: null, displayName: '', handle: '', error: 'Empty recipient' };
+    if (!process.env.SLACK_USER_TOKEN) {
+        return { ok: false, userId: null, channelId: null, displayName: raw, handle: '', error: 'Missing SLACK_USER_TOKEN' };
+    }
+
+    const client = new WebClient(process.env.SLACK_USER_TOKEN);
+    const q = normName(raw.replace(/^#/, ''));
+
+    // Expand with tagging-rules.json people keywords (e.g. "matt" -> ["matt", "matthew"])
+    const people = loadTaggingPeople();
+    const person = people.find(p =>
+        normName(p.tag) === q ||
+        normName(p.label) === q ||
+        (Array.isArray(p.keywords) && p.keywords.some(k => normName(k) === q))
+    );
+    const candidates = Array.from(new Set([
+        q,
+        ...(person ? [normName(person.label), normName(person.tag), ...(person.keywords || []).map(normName)] : []),
+    ].filter(Boolean)));
+    // Prefer full-name keywords (e.g. "casey sexton") first
+    candidates.sort((a, b) => b.split(' ').length - a.split(' ').length);
+
+    // 1. Primary: users.list (cached 15 min)
+    try {
+        const members = await getSlackUsersCached(client);
+        let bestMember = null;
+        let bestScore = 0;
+        for (const m of members) {
+            const s = scoreMemberMatch(m, candidates);
+            if (s > bestScore) {
+                bestScore = s;
+                bestMember = m;
+            }
+        }
+        if (bestMember && bestScore >= 60) {
+            return {
+                ok: true,
+                userId: bestMember.id,
+                channelId: null,
+                displayName: bestMember.real_name || bestMember.profile?.real_name || bestMember.name,
+                handle: bestMember.profile?.display_name || bestMember.name || '',
+                error: null,
+            };
+        }
+    } catch (e) {
+        console.warn('[Slack] users.list unavailable, falling back to DM/search lookup:', e.data?.error || e.message);
+    }
+
+    // 2. Fallback: existing IM channels + search.messages usernames
+    try {
+        const ims = await client.users.conversations({ types: 'im', limit: 200 });
+        for (const im of ims.channels || []) {
+            if (!im.user) continue;
+            try {
+                const info = await client.users.info({ user: im.user });
+                const u = info.user;
+                if (u && scoreMemberMatch(u, candidates) >= 60) {
+                    return {
+                        ok: true,
+                        userId: u.id,
+                        channelId: im.id,
+                        displayName: u.real_name || u.name,
+                        handle: u.profile?.display_name || u.name || '',
+                        error: null,
+                    };
+                }
+            } catch (e) {
+                // users.info may also lack scope; continue to search fallback
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
+
+    try {
+        for (const cand of candidates.slice(0, 3)) {
+            const res = await client.search.messages({ query: `from:${cand.split(' ')[0]}`, count: 5 });
+            for (const match of res.messages?.matches || []) {
+                const uname = normName(match.username);
+                if (match.user && candidates.some(c => uname === c || uname.startsWith(c.split(' ')[0]))) {
+                    return {
+                        ok: true,
+                        userId: match.user,
+                        channelId: null,
+                        displayName: match.username,
+                        handle: match.username,
+                        error: null,
+                    };
+                }
+            }
+        }
+    } catch (e) {
+        // ignore
+    }
+
+    return {
+        ok: false,
+        userId: null,
+        channelId: null,
+        displayName: person?.label || raw,
+        handle: '',
+        error: `Could not resolve Slack user for "${raw}"`,
+    };
+}
+
+/**
+ * Send a Slack DM to a resolved staff recipient. Callers MUST only invoke this
+ * for agent_jobs that Justin has explicitly approved (status === 'approved').
+ */
+async function sendSlackMessageToRecipient({ userId, channelId, recipientName, text } = {}) {
+    if (!process.env.SLACK_USER_TOKEN) return { ok: false, error: 'Missing SLACK_USER_TOKEN' };
+    const messageText = String(text || '').trim();
+    if (!messageText) return { ok: false, error: 'Message text is empty' };
+
+    const client = new WebClient(process.env.SLACK_USER_TOKEN);
+    try {
+        let targetUserId = userId || null;
+        let channel = channelId || null;
+
+        if (!channel && !targetUserId && recipientName) {
+            const resolved = await resolveSlackRecipient(recipientName);
+            if (!resolved.ok) return { ok: false, error: resolved.error };
+            targetUserId = resolved.userId;
+            channel = resolved.channelId;
+        }
+
+        if (!channel) {
+            if (!targetUserId) return { ok: false, error: 'No Slack userId or channelId provided' };
+            const opened = await client.conversations.open({ users: targetUserId });
+            channel = opened.channel?.id;
+            if (!channel) return { ok: false, error: 'Failed to open Slack DM channel' };
+        }
+
+        const posted = await client.chat.postMessage({ channel, text: messageText });
+        return { ok: true, channel: posted.channel || channel, ts: posted.ts, userId: targetUserId };
+    } catch (e) {
+        return { ok: false, error: e.data?.error || e.message };
+    }
+}
+
+module.exports = { getRecentSlackMessages, sendSlackDM, resolveSlackRecipient, sendSlackMessageToRecipient };

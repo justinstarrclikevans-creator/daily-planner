@@ -8,6 +8,10 @@ const { getRecentSlackMessages } = require('./slack');
 const { getRecentEmails, getTodaysCalendarEvents, upsertTaskCalendarEvent, deleteTaskCalendarEvent } = require('./google');
 const { extractTodos } = require('./ai');
 const { supabase, syncTaskToSupabase, getCompletedTasksFromSupabase } = require('./supabase');
+const crypto = require('crypto');
+const { getRecentLetterlyNotes } = require('./letterly');
+const { processLetterlyNotes, getProcessedIds } = require('./letterly-router');
+const { todayEastern } = require('./vault-notes');
 
 const STATE_FILE = path.join(__dirname, 'state.json');
 
@@ -31,7 +35,132 @@ function loadState() {
 }
 
 function saveState(state) {
+    // letterly-router.js persists processedLetterlyNoteIds / lastLetterlySync directly to disk.
+    // Merge the on-disk values so a stale in-memory state object never clobbers them.
+    try {
+        if (fs.existsSync(STATE_FILE)) {
+            const onDisk = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+            const ids = new Set([
+                ...((onDisk.processedLetterlyNoteIds || []).map(String)),
+                ...((state.processedLetterlyNoteIds || []).map(String))
+            ]);
+            if (ids.size > 0) state.processedLetterlyNoteIds = Array.from(ids).slice(-2000);
+            if ((onDisk.lastLetterlySync || 0) > (state.lastLetterlySync || 0)) {
+                state.lastLetterlySync = onDisk.lastLetterlySync;
+            }
+        }
+    } catch (e) {}
     fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+}
+
+// ---------------------------------------------------------------------------
+// Letterly verbatim 5-lane router (every 15 minutes + hourly)
+// ---------------------------------------------------------------------------
+let letterlySyncRunning = false;
+
+async function runLetterlySync() {
+    if (letterlySyncRunning) return;
+    letterlySyncRunning = true;
+    try {
+        const state = loadState();
+        const overlapMs = 60 * 60 * 1000;
+        const floor = Date.now() - 48 * 60 * 60 * 1000;
+        const since = Math.max(floor, (state.lastLetterlySync || 0) - overlapMs);
+        const notes = await getRecentLetterlyNotes(since, { excludeIds: getProcessedIds() });
+        if (notes.length === 0) return;
+        console.log(`[Letterly Sync] Routing ${notes.length} new Letterly note(s) through verbatim 5-lane router...`);
+        const summary = await processLetterlyNotes(notes);
+        for (const s of summary) {
+            const lanes = s.routed.map(r => r.lane).join(', ') || 'none';
+            console.log(`[Letterly Sync] #${s.noteId} "${s.title}" -> ${lanes}`);
+        }
+    } catch (e) {
+        console.error('[Letterly Sync] Error:', e.message);
+    } finally {
+        letterlySyncRunning = false;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled agent jobs (Daily Training Brief + Dual L10 briefs). These only
+// generate drafts in "Needs You"; nothing outbound is ever sent automatically.
+// ---------------------------------------------------------------------------
+async function hasJobToday(jobType, matchPayload = null) {
+    if (!supabase) return true;
+    const since = new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await supabase
+        .from('agent_jobs')
+        .select('id, created_at, output_payload')
+        .eq('job_type', jobType)
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(20);
+    if (error) {
+        console.error(`[Scheduler] Could not check existing ${jobType} jobs:`, error.message);
+        return true; // fail closed: don't spam duplicate jobs
+    }
+    const today = todayEastern();
+    return (data || []).some(row => {
+        if (todayEastern(new Date(row.created_at)) !== today) return false;
+        if (!matchPayload) return true;
+        return Object.entries(matchPayload).every(([k, v]) => (row.output_payload || {})[k] === v);
+    });
+}
+
+async function queueScheduledJob({ jobType, title, prompt, outputPayload = {}, dedupeKey = null }) {
+    if (!supabase) return null;
+    try {
+        if (await hasJobToday(jobType, dedupeKey)) {
+            console.log(`[Scheduler] ${jobType} already created today; skipping.`);
+            return null;
+        }
+        const nowIso = new Date().toISOString();
+        const row = {
+            id: crypto.randomUUID(),
+            agent_role: 'ceo',
+            job_type: jobType,
+            title,
+            prompt,
+            status: 'queued',
+            output_markdown: '',
+            output_payload: outputPayload,
+            revision_feedback: '',
+            execution_result: {},
+            execution_error: '',
+            created_at: nowIso,
+            updated_at: nowIso
+        };
+        const { error } = await supabase.from('agent_jobs').insert([row]);
+        if (error) {
+            console.error(`[Scheduler] Failed queueing ${jobType}:`, error.message);
+            return null;
+        }
+        console.log(`[Scheduler] Queued ${jobType}: "${title}"`);
+        return row;
+    } catch (e) {
+        console.error(`[Scheduler] Error queueing ${jobType}:`, e.message);
+        return null;
+    }
+}
+
+function queueDailyTrainingBrief() {
+    return queueScheduledJob({
+        jobType: 'training_brief',
+        title: `Daily Classroom & CM Training Brief — ${todayEastern()}`,
+        prompt: 'Generate the Daily Classroom & Case Management Training Brief from local Turn90 feedback sources.',
+        outputPayload: { days: 7 }
+    });
+}
+
+function queueL10Brief(l10Type) {
+    const label = l10Type === 'leadership' ? 'Leadership L10' : 'Program L10';
+    return queueScheduledJob({
+        jobType: 'l10_brief',
+        title: `${label} Pre-Meeting Brief — ${todayEastern()}`,
+        prompt: `Prepare the ${label} pre-meeting brief.`,
+        outputPayload: { l10Type },
+        dedupeKey: { l10Type }
+    });
 }
 
 async function syncWebCompletionsToAppleReminders() {
@@ -229,6 +358,9 @@ async function runHourlySync() {
         } else {
             console.log("No new Slack messages or emails since last hourly check.");
         }
+
+        // Route any new Letterly voice notes (verbatim 5-lane router)
+        await runLetterlySync();
 
         // Sync open Apple Reminders + Calendar timeline feed to Render webapp & cloud
         await syncTwoWayCalendarWithSupabase(events);
@@ -486,9 +618,23 @@ cron.schedule('* * * * *', () => runFastReminderSync());
 // Check everything once an hour at the top of every hour
 cron.schedule('0 * * * *', () => runHourlySync());
 
+// Letterly verbatim router every 15 minutes (skips :00, which runHourlySync already covers)
+cron.schedule('15,30,45 * * * *', () => runLetterlySync());
+
+// Daily Classroom & CM Training Brief — weekdays 7:30 AM Eastern
+cron.schedule('30 7 * * 1-5', () => queueDailyTrainingBrief(), { timezone: 'America/New_York' });
+
+// Program L10 Brief — Tuesdays 12:15 PM Eastern
+cron.schedule('15 12 * * 2', () => queueL10Brief('program'), { timezone: 'America/New_York' });
+
+// Leadership L10 Brief — Wednesdays 11:00 AM Eastern (1 hr before 12:00–13:30 Leadership L10)
+cron.schedule('0 11 * * 3', () => queueL10Brief('leadership'), { timezone: 'America/New_York' });
+
 console.log("Sync daemon started (v2 1-Minute Live Reminder Sync + Hourly Slack/Email AI Extraction).");
 console.log("- Syncing active Apple Reminders and web completions every 1 minute");
 console.log("- Checking Emails and Slack & Huddle Summaries once an hour");
+console.log("- Routing Letterly voice notes (verbatim 5-lane router) every 15 minutes");
+console.log("- Training Brief weekdays 7:30 ET · Program L10 brief Tue 12:15 ET · Leadership L10 brief Wed 11:00 ET");
 
 try {
     const { startAgentWorker } = require('./agent-worker');
@@ -499,6 +645,9 @@ try {
 
 module.exports = {
     runHourlySync,
+    runLetterlySync,
+    queueDailyTrainingBrief,
+    queueL10Brief,
     runFastReminderSync,
     syncWebCompletionsToAppleReminders
 };

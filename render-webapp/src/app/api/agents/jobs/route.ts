@@ -120,16 +120,24 @@ export async function POST(req: NextRequest) {
     }
 
     const nowIso = new Date().toISOString();
+    const jobType = String(body.jobType || body.job_type || 'market_research');
+    let requestedStatus = String(body.status || 'queued');
+    // Strict 1-tap approval: outbound email / Slack jobs can only be created as drafts.
+    // They reach 'approved' exclusively via the PATCH 'approve' action (Justin's tap).
+    const OUTBOUND_JOB_TYPES = ['email_outreach', 'slack_message', 'task_assist'];
+    if (OUTBOUND_JOB_TYPES.includes(jobType) && !['queued', 'needs_approval'].includes(requestedStatus)) {
+      requestedStatus = 'queued';
+    }
     const payload = {
       id: body.id || crypto.randomUUID(),
       venture_id: body.ventureId || body.venture_id || null,
       project_id: body.projectId || body.project_id || null,
       source_task_id: body.sourceTaskId || body.source_task_id || null,
       agent_role: String(body.agentRole || body.agent_role || 'researcher'),
-      job_type: String(body.jobType || body.job_type || 'market_research'),
+      job_type: jobType,
       title,
       prompt: String(body.prompt || ''),
-      status: String(body.status || 'queued'),
+      status: requestedStatus,
       output_markdown: String(body.outputMarkdown || body.output_markdown || ''),
       output_payload: body.outputPayload || body.output_payload || {},
       revision_feedback: '',

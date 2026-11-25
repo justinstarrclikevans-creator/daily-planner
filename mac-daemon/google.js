@@ -19,7 +19,10 @@ async function getAllGoogleAuths() {
             
             const auths = [];
             const files = fs.readdirSync(__dirname);
-            const tokenFiles = files.filter(f => f.startsWith('token') && f.endsWith('.json'));
+            // Exclude send-only token_gmail_send.json so read/list calls don't hit HTTP 400 Precondition errors
+            const tokenFiles = files.filter(
+                f => f.startsWith('token') && f.endsWith('.json') && f !== 'token_gmail_send.json'
+            );
             
             for (const tFile of tokenFiles) {
                 try {
@@ -36,6 +39,122 @@ async function getAllGoogleAuths() {
     });
 }
 
+const SCHOOL_SENDER_PATTERNS = [
+    'bcsdschools.net',
+    'parentlink.net',
+    'blackboard.com',
+    'geniussis.com',
+    'lcv admin',
+    'lowcountry virtual',
+    'hanahan elementary',
+    'hanahan middle',
+    'hanahan high',
+    'berkeley county school',
+    'powerschool',
+    'parentsquare',
+    'thrillshare',
+    'finalsite',
+    'peachjar',
+    'schoology',
+    'instructure.com',
+    'classdojo',
+    'seesaw',
+    'talkingpoints',
+    'remind.com',
+    '.k12.',
+];
+
+const KIDS_SCHOOL_NAME_RE = /\b(london|reece|reese|jackson)\b/i;
+const SCHOOL_CONTEXT_RE =
+    /\b(school|elementary|middle school|high school|bcsd|hanahan|lcv|virtual|attendance|absence|absent|tardy|progress report|report card|gradebook|teacher|principal|guidance|counselor|homeroom|yearbook|cafeteria|school lunch|school bus|pta|pto|semester|homework|instructional calendar|student)\b/i;
+
+const APP_STORE_CONNECT_SENDER_RE = /\b(app\s*store\s*connect|itunes\s*connect|appstoreconnect|itunesconnect|testflight)\b/i;
+const APPLE_DEV_CONTEXT_RE =
+    /\b(app store connect|itunes connect|testflight|app review|ready for sale|ready for review|waiting for review|in review|processing has completed|new build|beta review|provisioning profile|signing certificate|developer program|xcode cloud)\b/i;
+
+const MARKETING_SENDER_PATTERNS = [
+    '@marketing.',
+    '.marketing.',
+    'metamail.com',
+    'sendfoxmail.com',
+    'emails.synchrony.com',
+    'digitalorder-update@amazon.com',
+    'updates-noreply@linkedin.com',
+    'hello.babbel.com',
+    'meditations@cac.org',
+    'informeddelivery.usps.com',
+    'mailchimp.com',
+    'klaviyo',
+    'constantcontact.com',
+    'substack.com',
+    'beehiiv.com',
+    'convertkit',
+];
+
+const MARKETING_CONTENT_RE =
+    /\b(unsubscribe|view in browser|limited time|%\s*off|\$\d+\s*off|pre-approved|free trial|activate your|flash sale|black friday|cyber monday|special offer|deal ends|shop now|daily meditation|weekly summary|honest review|extra records a month)\b/i;
+
+const ACTIONABLE_BILL_OR_PICKUP_RE =
+    /\b(bill is now available|amount due|payment due|past due|invoice|toll|dominion energy|nocd|support plan|ready for pickup|pickup reminder|waiver)\b/i;
+
+function getHeader(headers, name) {
+    if (!Array.isArray(headers)) return '';
+    const target = name.toLowerCase();
+    return headers.find((h) => (h.name || '').toLowerCase() === target)?.value || '';
+}
+
+function shouldSkipEmail({ from = '', subject = '', snippet = '', labelIds = [], headers = [] }) {
+    const fromLower = String(from || '').toLowerCase();
+    const subjLower = String(subject || '').toLowerCase();
+    const snipLower = String(snippet || '').toLowerCase();
+    const combined = `${from} ${subject} ${snippet}`;
+    const combinedLower = combined.toLowerCase();
+    const labels = Array.isArray(labelIds) ? labelIds : [];
+
+    // 1. School emails for London, Reece/Reese, and Jackson (or direct school portals)
+    if (SCHOOL_SENDER_PATTERNS.some((p) => fromLower.includes(p))) {
+        return { skip: true, reason: 'school_sender' };
+    }
+    if (KIDS_SCHOOL_NAME_RE.test(combined) && SCHOOL_CONTEXT_RE.test(combined)) {
+        return { skip: true, reason: 'kids_school_context' };
+    }
+
+    // 2. App Store Connect / TestFlight / Apple Developer notifications
+    if (
+        APP_STORE_CONNECT_SENDER_RE.test(fromLower) ||
+        APP_STORE_CONNECT_SENDER_RE.test(subjLower) ||
+        (fromLower.includes('apple.com') && APPLE_DEV_CONTEXT_RE.test(combined))
+    ) {
+        return { skip: true, reason: 'app_store_connect' };
+    }
+
+    // 3. Marketing, promotional & newsletter emails (preserving real bills, pickups, & waivers)
+    if (labels.includes('SPAM') || labels.includes('TRASH')) {
+        return { skip: true, reason: 'spam_or_trash' };
+    }
+    const isActionableBillOrPickup = ACTIONABLE_BILL_OR_PICKUP_RE.test(combinedLower);
+    const isDirectHumanReply = /^re:\s/i.test(subject) && !fromLower.includes('no-reply') && !fromLower.includes('noreply');
+
+    if (!isActionableBillOrPickup && !isDirectHumanReply) {
+        if (labels.includes('CATEGORY_PROMOTIONS') || labels.includes('CATEGORY_SOCIAL')) {
+            return { skip: true, reason: 'gmail_promo_or_social' };
+        }
+        if (MARKETING_SENDER_PATTERNS.some((p) => fromLower.includes(p))) {
+            return { skip: true, reason: 'marketing_sender' };
+        }
+        const hasListUnsub = Boolean(getHeader(headers, 'List-Unsubscribe'));
+        const precedence = getHeader(headers, 'Precedence').toLowerCase();
+        if (hasListUnsub && (precedence === 'bulk' || precedence === 'list' || MARKETING_CONTENT_RE.test(combined))) {
+            return { skip: true, reason: 'bulk_marketing' };
+        }
+        if (MARKETING_CONTENT_RE.test(subjLower)) {
+            return { skip: true, reason: 'marketing_subject' };
+        }
+    }
+
+    return { skip: false, reason: null };
+}
+
 async function getRecentEmails(sinceMap = {}) {
     const auths = await getAllGoogleAuths();
     if (auths.length === 0) return [];
@@ -49,7 +168,7 @@ async function getRecentEmails(sinceMap = {}) {
         try {
             const res = await gmail.users.messages.list({
                 userId: 'me',
-                q: 'is:unread OR (inbox newer_than:3d)',
+                q: '(is:unread OR (in:inbox newer_than:3d)) -category:promotions -category:social',
                 maxResults: 25,
             });
             
@@ -63,22 +182,29 @@ async function getRecentEmails(sinceMap = {}) {
                     continue;
                 }
                 
-                const payload = msgData.data.payload;
-                const headers = payload.headers;
+                const payload = msgData.data.payload || {};
+                const headers = payload.headers || [];
+                const labelIds = msgData.data.labelIds || [];
                 
-                const subject = headers.find(h => h.name === 'Subject')?.value || 'No Subject';
-                const from = headers.find(h => h.name === 'From')?.value || 'Unknown';
+                const subject = getHeader(headers, 'Subject') || 'No Subject';
+                const from = getHeader(headers, 'From') || 'Unknown';
+                const snippet = msgData.data.snippet || '';
+
+                const filterCheck = shouldSkipEmail({ from, subject, snippet, labelIds, headers });
+                if (filterCheck.skip) {
+                    continue;
+                }
                 
                 allEmails.push({ 
                     subject, 
                     from, 
-                    snippet: msgData.data.snippet,
+                    snippet,
                     timestamp: timestamp,
                     account: authObj.account
                 });
             }
         } catch (e) {
-            console.error(`Gmail error for ${authObj.account}:`, e);
+            console.error(`Gmail error for ${authObj.account}:`, e.message || e);
         }
     }
     return allEmails;
@@ -418,6 +544,7 @@ async function sendGmailEmail({ to, subject, body, cc, bcc, replyTo }) {
 
 module.exports = {
     getRecentEmails,
+    shouldSkipEmail,
     getTodaysCalendarEvents,
     getUpcomingCalendarEvents,
     upsertTaskCalendarEvent,

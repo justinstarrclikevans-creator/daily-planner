@@ -14,13 +14,20 @@ import {
 import {
   AlertTriangle,
   Bot,
+  CalendarClock,
   Check,
   CheckCircle2,
   Clock,
+  Code2,
   Copy,
   ExternalLink,
   FileText,
+  GitBranch,
+  GraduationCap,
+  Hammer,
   Mail,
+  MessageSquare,
+  Mic,
   Pencil,
   Play,
   Plus,
@@ -34,6 +41,7 @@ import {
   Users,
   Webhook,
   X,
+  Zap,
 } from 'lucide-react';
 
 type SubTabId = 'needs_you' | 'ventures' | 'activity' | 'connections';
@@ -133,7 +141,21 @@ const ROLE_LABELS: Record<string, string> = {
   outreach: 'Outreach',
   content: 'Content',
   rerun: 'Rerun',
+  trainer: 'Trainer',
+  builder: 'AI Builder',
 };
+
+const CODE_REPO_OPTIONS: { id: string; label: string }[] = [
+  { id: 'todo', label: 'ToDo App' },
+  { id: 'turn90', label: 'Turn90' },
+  { id: 'synapse', label: 'SYNAPSE App' },
+  { id: 'liturgy', label: 'Liturgy App' },
+  { id: 'resource', label: 'Resource App' },
+];
+
+const CODE_REPO_LABELS: Record<string, string> = Object.fromEntries(
+  CODE_REPO_OPTIONS.map((r) => [r.id, r.label])
+);
 
 function formatRelativeTime(iso?: string | null): string {
   if (!iso) return 'Never';
@@ -160,6 +182,11 @@ function isEmailJob(job: AgentJob): boolean {
     job.job_type === 'email_outreach' ||
     (job.job_type === 'task_assist' && Boolean(job.output_payload?.isEmail))
   );
+}
+
+// Outbound Slack DM drafts — always 1-tap approval before sending.
+function isSlackJob(job: AgentJob): boolean {
+  return job.job_type === 'slack_message' || Boolean(job.output_payload?.isSlack);
 }
 
 function MarkdownPreview({ content }: { content: string }) {
@@ -264,6 +291,20 @@ export default function AICeoWorkspace({
   const [revisionText, setRevisionText] = useState('');
   const [revisionError, setRevisionError] = useState<string | null>(null);
   const [busyJobIds, setBusyJobIds] = useState<Record<string, boolean>>({});
+  const [slackDrafts, setSlackDrafts] = useState<Record<string, { recipientName: string; messageText: string }>>({});
+
+  // Quick Actions & App Builder State
+  const [quickPanel, setQuickPanel] = useState<'none' | 'code' | 'slack'>('none');
+  const [codeRepo, setCodeRepo] = useState('todo');
+  const [codeMode, setCodeMode] = useState<'antigravity_claude' | 'claude_direct'>('antigravity_claude');
+  const [codeTitle, setCodeTitle] = useState('');
+  const [codeSpec, setCodeSpec] = useState('');
+  const [codePushOnApprove, setCodePushOnApprove] = useState(false);
+  const [codeFormError, setCodeFormError] = useState<string | null>(null);
+  const [stageSlackRecipient, setStageSlackRecipient] = useState('');
+  const [stageSlackText, setStageSlackText] = useState('');
+  const [stageSlackError, setStageSlackError] = useState<string | null>(null);
+  const [isQuickSubmitting, setIsQuickSubmitting] = useState(false);
 
   // Venture Inline Edit / Outreach Drawer State
   const [expandedStrategyId, setExpandedStrategyId] = useState<string | null>(null);
@@ -407,6 +448,161 @@ export default function AICeoWorkspace({
     return payloadDrafts[job.id] || job.output_payload || {};
   };
 
+  const getSlackDraftForJob = (job: AgentJob) => {
+    if (slackDrafts[job.id]) return slackDrafts[job.id];
+    const p = job.output_payload || {};
+    return {
+      recipientName: String(p.recipientName || p.recipientQuery || ''),
+      messageText: String(p.messageText || job.prompt || ''),
+    };
+  };
+
+  const buildSlackPayload = (job: AgentJob) => {
+    const draft = getSlackDraftForJob(job);
+    const original = job.output_payload || {};
+    const recipientEdited =
+      draft.recipientName.trim() !== String(original.recipientName || original.recipientQuery || '').trim();
+    return {
+      ...getPayloadForJob(job),
+      isSlack: true,
+      recipientName: draft.recipientName.trim(),
+      messageText: draft.messageText.trim(),
+      // Daemon re-resolves the Slack user at send time if Justin changed the recipient.
+      recipientEdited: recipientEdited || Boolean(original.recipientEdited),
+      ...(recipientEdited ? { slackUserId: null, slackChannelId: null } : {}),
+    };
+  };
+
+  const createAgentJob = async (body: Record<string, any>, successMsg: string) => {
+    const res = await fetch('/api/agents/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      showStatus(`Could not queue job: ${data.error || `HTTP ${res.status}`}`);
+      return false;
+    }
+    showStatus(successMsg);
+    await onRefresh();
+    return true;
+  };
+
+  const easternDateLabel = () =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/New_York',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+
+  const handleQueueTrainingBrief = async () => {
+    setIsQuickSubmitting(true);
+    try {
+      await createAgentJob(
+        {
+          agentRole: 'trainer',
+          jobType: 'training_brief',
+          title: `Daily Classroom & CM Training Brief — ${easternDateLabel()}`,
+          prompt: 'Generate the Daily Classroom & Case Management Training Brief from local Turn90 feedback sources.',
+          outputPayload: { days: 7, onDemand: true },
+        },
+        'Queued Daily Training Brief — it will land in Needs You when ready.'
+      );
+    } finally {
+      setIsQuickSubmitting(false);
+    }
+  };
+
+  const handleQueueL10Brief = async (l10Type: 'program' | 'leadership') => {
+    const label = l10Type === 'leadership' ? 'Leadership L10' : 'Program L10';
+    setIsQuickSubmitting(true);
+    try {
+      await createAgentJob(
+        {
+          agentRole: 'ceo',
+          jobType: 'l10_brief',
+          title: `${label} Pre-Meeting Brief — ${easternDateLabel()}`,
+          prompt: `Prepare the ${label} pre-meeting brief.`,
+          outputPayload: { l10Type, onDemand: true },
+        },
+        `Queued ${label} brief — it will land in Needs You when ready.`
+      );
+    } finally {
+      setIsQuickSubmitting(false);
+    }
+  };
+
+  const handleSubmitCodeChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!codeSpec.trim()) {
+      setCodeFormError('Describe the change you want Claude Code to make.');
+      return;
+    }
+    setCodeFormError(null);
+    setIsQuickSubmitting(true);
+    try {
+      const title = codeTitle.trim() || codeSpec.trim().split('\n')[0].slice(0, 80);
+      const ok = await createAgentJob(
+        {
+          agentRole: 'builder',
+          jobType: 'code_change',
+          title,
+          prompt: codeSpec.trim(),
+          outputPayload: {
+            targetRepo: codeRepo,
+            executionMode: codeMode,
+            verbatimSpec: codeSpec.trim(),
+            pushOnApprove: codePushOnApprove,
+          },
+        },
+        `Queued code change for ${CODE_REPO_LABELS[codeRepo] || codeRepo} — review the diff in Needs You before anything is committed.`
+      );
+      if (ok) {
+        setCodeTitle('');
+        setCodeSpec('');
+        setCodePushOnApprove(false);
+        setQuickPanel('none');
+      }
+    } finally {
+      setIsQuickSubmitting(false);
+    }
+  };
+
+  const handleStageSlack = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!stageSlackRecipient.trim() || !stageSlackText.trim()) {
+      setStageSlackError('Enter both a staff recipient and a message.');
+      return;
+    }
+    setStageSlackError(null);
+    setIsQuickSubmitting(true);
+    try {
+      const recipient = stageSlackRecipient.trim();
+      const text = stageSlackText.trim();
+      // Queued -> daemon resolves the Slack user -> lands in Needs You. Never sent until Approve.
+      const ok = await createAgentJob(
+        {
+          agentRole: 'outreach',
+          jobType: 'slack_message',
+          title: `Slack ${recipient}: ${text.slice(0, 60)}${text.length > 60 ? '…' : ''}`,
+          prompt: text,
+          status: 'queued',
+          outputPayload: { isSlack: true, recipientName: recipient, recipientQuery: recipient, messageText: text },
+        },
+        `Staged Slack draft for ${recipient} — approve it in Needs You to send.`
+      );
+      if (ok) {
+        setStageSlackRecipient('');
+        setStageSlackText('');
+        setQuickPanel('none');
+      }
+    } finally {
+      setIsQuickSubmitting(false);
+    }
+  };
+
   const handleLaunchVenture = async (e: React.FormEvent) => {
     e.preventDefault();
     const errors: { name?: string; idea?: string; project?: string } = {};
@@ -504,6 +700,22 @@ export default function AICeoWorkspace({
         nextMarkdown = `**To:** ${nextPayload.to}\n**Subject:** ${nextPayload.subject}\n\n---\n\n${nextPayload.body}`;
       }
 
+      if (isSlackJob(job)) {
+        const slackPayload = buildSlackPayload(job);
+        if (!slackPayload.recipientName) {
+          showStatus('Please enter a staff recipient before approving this Slack message.');
+          setBusyJobIds((prev) => ({ ...prev, [job.id]: false }));
+          return;
+        }
+        if (!slackPayload.messageText) {
+          showStatus('Slack message is empty — add the message text before approving.');
+          setBusyJobIds((prev) => ({ ...prev, [job.id]: false }));
+          return;
+        }
+        Object.assign(nextPayload, slackPayload);
+        nextMarkdown = `**Slack DM to:** ${slackPayload.recipientName}\n\n---\n\n${slackPayload.messageText}`;
+      }
+
       const selectedRerunUrl = rerunDispatchByJob[job.id];
       if (selectedRerunUrl) {
         const cw = coworkers.find((c) => c.webhookUrl === selectedRerunUrl);
@@ -532,6 +744,10 @@ export default function AICeoWorkspace({
       showStatus(
         isEmailJob(job)
           ? `Approved — sending email to ${nextPayload.to} via Gmail right now.`
+          : isSlackJob(job)
+          ? `Approved — sending Slack DM to ${nextPayload.recipientName} now.`
+          : job.job_type === 'code_change'
+          ? `Approved — committing "${job.title}" now.`
           : `Approved "${job.title}" — executing in background.`
       );
       await onRefresh();
@@ -596,6 +812,8 @@ export default function AICeoWorkspace({
             ...getEmailDraftForJob(job),
             isEmail: true,
           }
+        : isSlackJob(job)
+        ? buildSlackPayload(job)
         : getPayloadForJob(job);
 
       await fetch('/api/agents/jobs', {
@@ -944,6 +1162,235 @@ export default function AICeoWorkspace({
 
       {/* Scrollable Body */}
       <div className="flex-1 min-h-0 overflow-y-auto">
+        {/* Quick Actions & App Builder */}
+        <section
+          aria-labelledby="quick-actions-heading"
+          className="mx-4 md:mx-5 mt-4 rounded-2xl bg-[#151820] border border-white/[0.08] p-3 space-y-3"
+        >
+          <div className="flex items-center justify-between gap-2">
+            <h2 id="quick-actions-heading" className="text-xs font-bold text-white flex items-center gap-1.5">
+              <Zap className="h-3.5 w-3.5 text-amber-400" />
+              <span>Quick Actions & App Builder</span>
+            </h2>
+            {!daemonOnline && (
+              <span className="text-[10px] text-amber-300">Daemon offline — jobs will run when it reconnects.</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+            <button
+              type="button"
+              onClick={() => setQuickPanel(quickPanel === 'code' ? 'none' : 'code')}
+              aria-expanded={quickPanel === 'code'}
+              className={`flex-none inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                quickPanel === 'code'
+                  ? 'bg-sky-600 text-white'
+                  : 'bg-sky-500/15 text-sky-300 hover:bg-sky-500/25'
+              }`}
+            >
+              <Hammer className="h-3.5 w-3.5" />
+              <span>Code Change (AG + Claude Code)</span>
+            </button>
+            <button
+              type="button"
+              disabled={isQuickSubmitting}
+              onClick={handleQueueTrainingBrief}
+              className="flex-none inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 text-xs font-semibold disabled:opacity-50"
+            >
+              <GraduationCap className="h-3.5 w-3.5" />
+              <span>Generate Daily Training Brief Now</span>
+            </button>
+            <button
+              type="button"
+              disabled={isQuickSubmitting}
+              onClick={() => handleQueueL10Brief('program')}
+              className="flex-none inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 text-xs font-semibold disabled:opacity-50"
+            >
+              <CalendarClock className="h-3.5 w-3.5" />
+              <span>Prep Program L10 (Tue)</span>
+            </button>
+            <button
+              type="button"
+              disabled={isQuickSubmitting}
+              onClick={() => handleQueueL10Brief('leadership')}
+              className="flex-none inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 text-xs font-semibold disabled:opacity-50"
+            >
+              <CalendarClock className="h-3.5 w-3.5" />
+              <span>Prep Leadership L10 (Wed 12:00)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setQuickPanel(quickPanel === 'slack' ? 'none' : 'slack')}
+              aria-expanded={quickPanel === 'slack'}
+              className={`flex-none inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                quickPanel === 'slack'
+                  ? 'bg-fuchsia-600 text-white'
+                  : 'bg-fuchsia-500/15 text-fuchsia-300 hover:bg-fuchsia-500/25'
+              }`}
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              <span>Stage 1-Tap Staff Slack</span>
+            </button>
+          </div>
+
+          {quickPanel === 'code' && (
+            <form
+              onSubmit={handleSubmitCodeChange}
+              aria-label="Queue a code change"
+              className="rounded-xl bg-[#111318] border border-sky-500/25 p-3 space-y-3"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="code-repo" className="text-[11px] font-semibold text-slate-400">
+                    Repo
+                  </label>
+                  <select
+                    id="code-repo"
+                    value={codeRepo}
+                    onChange={(e) => setCodeRepo(e.target.value)}
+                    className="bg-[#1B1E26] border border-white/[0.08] rounded-lg px-2 py-2 text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+                  >
+                    {CODE_REPO_OPTIONS.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <fieldset className="flex flex-col gap-1">
+                  <legend className="text-[11px] font-semibold text-slate-400">Mode</legend>
+                  <div className="flex flex-wrap items-center gap-3 pt-1.5">
+                    <label className="flex items-center gap-1.5 text-xs text-slate-200 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="codeMode"
+                        checked={codeMode === 'antigravity_claude'}
+                        onChange={() => setCodeMode('antigravity_claude')}
+                        className="h-4 w-4 accent-sky-500"
+                      />
+                      <span>Antigravity Orchestrates Claude Code</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-slate-200 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="codeMode"
+                        checked={codeMode === 'claude_direct'}
+                        onChange={() => setCodeMode('claude_direct')}
+                        className="h-4 w-4 accent-sky-500"
+                      />
+                      <span>Direct Claude Code (0 AG Credits)</span>
+                    </label>
+                  </div>
+                </fieldset>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="code-title" className="text-[11px] font-semibold text-slate-400">
+                  Title (optional)
+                </label>
+                <input
+                  id="code-title"
+                  type="text"
+                  value={codeTitle}
+                  onChange={(e) => setCodeTitle(e.target.value)}
+                  placeholder="e.g. Add Training folder shortcut to Notes"
+                  className="w-full bg-[#1B1E26] border border-white/[0.08] rounded-lg px-3 py-2 text-base sm:text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="code-spec" className="text-[11px] font-semibold text-slate-400">
+                  Spec (your words go to Claude Code verbatim)
+                </label>
+                <textarea
+                  id="code-spec"
+                  rows={4}
+                  value={codeSpec}
+                  aria-invalid={Boolean(codeFormError)}
+                  onChange={(e) => {
+                    setCodeSpec(e.target.value);
+                    if (codeFormError) setCodeFormError(null);
+                  }}
+                  className="w-full bg-[#1B1E26] border border-white/[0.08] rounded-lg px-3 py-2 text-base sm:text-xs text-slate-100 focus:outline-none focus:border-sky-500"
+                />
+                {codeFormError && <span className="text-[11px] text-rose-400">{codeFormError}</span>}
+              </div>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={codePushOnApprove}
+                    onChange={(e) => setCodePushOnApprove(e.target.checked)}
+                    className="h-4 w-4 accent-sky-500"
+                  />
+                  <span>Push to remote after I approve the commit</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-500">
+                    {caps.claudeCodeReady ? 'Claude Code ready' : 'Claude Code not detected on daemon'}
+                  </span>
+                  <button
+                    type="submit"
+                    disabled={isQuickSubmitting}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-xs font-bold text-white disabled:opacity-50"
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                    <span>Queue Code Change</span>
+                  </button>
+                </div>
+              </div>
+            </form>
+          )}
+
+          {quickPanel === 'slack' && (
+            <form
+              onSubmit={handleStageSlack}
+              aria-label="Stage a Slack message for approval"
+              className="rounded-xl bg-[#111318] border border-fuchsia-500/25 p-3 space-y-3"
+            >
+              <div className="flex flex-col gap-1">
+                <label htmlFor="stage-slack-to" className="text-[11px] font-semibold text-slate-400">
+                  Staff Recipient
+                </label>
+                <input
+                  id="stage-slack-to"
+                  type="text"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  value={stageSlackRecipient}
+                  onChange={(e) => setStageSlackRecipient(e.target.value)}
+                  placeholder="e.g. Matt, Jenn, Casey"
+                  className="w-full bg-[#1B1E26] border border-white/[0.08] rounded-lg px-3 py-2 text-base sm:text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-fuchsia-500"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label htmlFor="stage-slack-text" className="text-[11px] font-semibold text-slate-400">
+                  Message
+                </label>
+                <textarea
+                  id="stage-slack-text"
+                  rows={3}
+                  value={stageSlackText}
+                  onChange={(e) => setStageSlackText(e.target.value)}
+                  className="w-full bg-[#1B1E26] border border-white/[0.08] rounded-lg px-3 py-2 text-base sm:text-xs text-slate-100 focus:outline-none focus:border-fuchsia-500"
+                />
+                {stageSlackError && <span className="text-[11px] text-rose-400">{stageSlackError}</span>}
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] text-slate-500">
+                  Lands in Needs You as a draft — nothing sends until you tap Approve.
+                </span>
+                <button
+                  type="submit"
+                  disabled={isQuickSubmitting}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 text-xs font-bold text-white disabled:opacity-50"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  <span>Stage Draft</span>
+                </button>
+              </div>
+            </form>
+          )}
+        </section>
+
         {/* One-time Supabase Migration Card */}
         {needsMigration && (
           <section className="mx-4 md:mx-5 mt-4 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-3">
@@ -1038,8 +1485,13 @@ export default function AICeoWorkspace({
                 const isEditing = editingJobId === job.id;
                 const emailMode = isEmailJob(job);
                 const emailDraft = getEmailDraftForJob(job);
+                const slackMode = isSlackJob(job);
+                const slackDraft = getSlackDraftForJob(job);
                 const payload = getPayloadForJob(job);
                 const isFailed = job.status === 'failed';
+                const isCodeChange = job.job_type === 'code_change';
+                const isTrainingBrief = job.job_type === 'training_brief';
+                const isL10Brief = job.job_type === 'l10_brief';
 
                 return (
                   <article
@@ -1057,6 +1509,35 @@ export default function AICeoWorkspace({
                           <span className="px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-300 text-[10px] font-bold uppercase tracking-wider">
                             {ROLE_LABELS[job.agent_role] || job.agent_role}
                           </span>
+                          {slackMode && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-fuchsia-500/20 text-fuchsia-300 text-[10px] font-semibold">
+                              <MessageSquare className="h-2.5 w-2.5" />
+                              <span>1-Tap Staff Slack</span>
+                            </span>
+                          )}
+                          {isCodeChange && (
+                            <>
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 text-[10px] font-semibold">
+                                <GitBranch className="h-2.5 w-2.5" />
+                                <span>{CODE_REPO_LABELS[payload.targetRepo] || payload.targetRepo || 'ToDo App'}</span>
+                              </span>
+                              <span className="px-2 py-0.5 rounded-md bg-violet-500/20 text-violet-300 text-[10px] font-semibold">
+                                {payload.executionMode === 'claude_direct' ? 'Direct Claude' : 'Antigravity → Claude Code'}
+                              </span>
+                            </>
+                          )}
+                          {isTrainingBrief && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold">
+                              <GraduationCap className="h-2.5 w-2.5" />
+                              <span>Training Brief{payload.briefDate ? ` · ${payload.briefDate}` : ''}</span>
+                            </span>
+                          )}
+                          {isL10Brief && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-200 text-[10px] font-semibold">
+                              <CalendarClock className="h-2.5 w-2.5" />
+                              <span>{payload.l10Type === 'leadership' ? 'Leadership L10 (Wed 12:00)' : 'Program L10 (Tue)'}</span>
+                            </span>
+                          )}
                           {venture && (
                             <span className="px-2 py-0.5 rounded-md bg-white/[0.06] text-slate-300 text-[10px] font-medium">
                               {venture.name}
@@ -1079,7 +1560,7 @@ export default function AICeoWorkspace({
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
-                        {!emailMode && (
+                        {!emailMode && !slackMode && (
                           <button
                             type="button"
                             onClick={() => {
@@ -1221,6 +1702,66 @@ export default function AICeoWorkspace({
                             className="w-full bg-[#1B1E26] border border-white/[0.08] rounded-lg px-3 py-2 text-base sm:text-xs text-slate-100 leading-relaxed focus:outline-none focus:border-indigo-500"
                           />
                         </div>
+                      </div>
+                    ) : slackMode ? (
+                      <div className="rounded-xl bg-[#111318] border border-fuchsia-500/20 p-3.5 space-y-3">
+                        <div className="flex flex-col gap-1">
+                          <label
+                            htmlFor={`slack-to-${job.id}`}
+                            className="text-[11px] font-semibold text-slate-400"
+                          >
+                            Staff Recipient (Slack)
+                          </label>
+                          <input
+                            id={`slack-to-${job.id}`}
+                            type="text"
+                            autoCorrect="off"
+                            autoCapitalize="none"
+                            spellCheck={false}
+                            value={slackDraft.recipientName}
+                            onChange={(e) =>
+                              setSlackDrafts((prev) => ({
+                                ...prev,
+                                [job.id]: { ...slackDraft, recipientName: e.target.value },
+                              }))
+                            }
+                            placeholder="e.g. Matt"
+                            className="w-full min-h-[42px] bg-[#1B1E26] border border-white/[0.08] rounded-lg px-3 py-2 text-base sm:text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-fuchsia-500"
+                          />
+                          {payload.slackHandle && (
+                            <span className="text-[11px] text-slate-500">Resolved: @{payload.slackHandle}</span>
+                          )}
+                          {payload.resolveError && !payload.slackUserId && !payload.slackChannelId && (
+                            <span className="text-[11px] text-amber-300">
+                              Recipient not resolved yet ({String(payload.resolveError)}) — the daemon will look them up when you approve.
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label
+                            htmlFor={`slack-body-${job.id}`}
+                            className="text-[11px] font-semibold text-slate-400"
+                          >
+                            Message Text (sent only when you tap Approve)
+                          </label>
+                          <textarea
+                            id={`slack-body-${job.id}`}
+                            rows={5}
+                            value={slackDraft.messageText}
+                            onChange={(e) =>
+                              setSlackDrafts((prev) => ({
+                                ...prev,
+                                [job.id]: { ...slackDraft, messageText: e.target.value },
+                              }))
+                            }
+                            className="w-full bg-[#1B1E26] border border-white/[0.08] rounded-lg px-3 py-2 text-base sm:text-xs text-slate-100 leading-relaxed focus:outline-none focus:border-fuchsia-500"
+                          />
+                        </div>
+                        {payload.verbatimQuote && (
+                          <blockquote className="border-l-2 border-amber-500/60 pl-2.5 text-[11px] text-amber-200/90 italic">
+                            Verbatim (Letterly): &ldquo;{String(payload.verbatimQuote)}&rdquo;
+                          </blockquote>
+                        )}
                       </div>
                     ) : isEditing ? (
                       <div className="flex flex-col gap-1">
@@ -1366,6 +1907,93 @@ export default function AICeoWorkspace({
                       </fieldset>
                     )}
 
+                    {/* AI Builder: Code Change Diff Preview */}
+                    {isCodeChange && (
+                      <div className="rounded-xl bg-[#111318] border border-sky-500/20 p-3 space-y-2">
+                        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                          <Code2 className="h-3.5 w-3.5 text-sky-400" />
+                          <span>Files Changed ({Array.isArray(payload.changedFiles) ? payload.changedFiles.length : 0})</span>
+                          {payload.claudeTimedOut && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 normal-case">Timed out</span>
+                          )}
+                        </div>
+                        {Array.isArray(payload.changedFiles) && payload.changedFiles.length > 0 ? (
+                          <ul className="text-[11px] font-mono text-sky-200 space-y-0.5">
+                            {(payload.changedFiles as string[]).map((f) => (
+                              <li key={f} className="break-all">{f}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className="text-[11px] text-slate-500">No file changes detected yet.</p>
+                        )}
+                        {payload.diffStat && (
+                          <pre className="text-[11px] font-mono text-slate-300 bg-black/30 rounded-lg p-2 overflow-x-auto">
+                            {String(payload.diffStat)}
+                          </pre>
+                        )}
+                        {payload.diffPreview && (
+                          <details className="text-[11px]">
+                            <summary className="cursor-pointer text-sky-300 hover:text-sky-200">Show full diff</summary>
+                            <pre className="mt-2 max-h-80 overflow-auto font-mono text-[11px] text-slate-300 bg-black/40 rounded-lg p-2 whitespace-pre">
+                              {String(payload.diffPreview)}
+                            </pre>
+                          </details>
+                        )}
+                        <label className="flex items-center gap-2 text-[11px] text-slate-300 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={payload.pushOnApprove === true}
+                            onChange={(e) =>
+                              setPayloadDrafts((prev) => ({
+                                ...prev,
+                                [job.id]: { ...payload, pushOnApprove: e.target.checked },
+                              }))
+                            }
+                            className="h-4 w-4 accent-sky-500"
+                          />
+                          <span>Also push to remote after committing</span>
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Training Brief: optional 1-tap Slack coaching check-ins */}
+                    {isTrainingBrief &&
+                      Array.isArray(payload.proposedSlackCheckins) &&
+                      payload.proposedSlackCheckins.length > 0 && (
+                        <fieldset className="rounded-xl bg-[#111318] border border-white/[0.06] p-3 space-y-2">
+                          <legend className="px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                            Optional Staff Slack Check-ins (each becomes its own 1-tap approval card)
+                          </legend>
+                          {(payload.proposedSlackCheckins as { recipientName: string; messageText: string; selected?: boolean }[]).map(
+                            (c, idx) => {
+                              const cid = `checkin-${job.id}-${idx}`;
+                              return (
+                                <div key={cid} className="flex items-start gap-2">
+                                  <input
+                                    id={cid}
+                                    type="checkbox"
+                                    checked={c.selected === true}
+                                    onChange={(e) => {
+                                      const next = [...payload.proposedSlackCheckins];
+                                      next[idx] = { ...c, selected: e.target.checked };
+                                      setPayloadDrafts((prev) => ({
+                                        ...prev,
+                                        [job.id]: { ...payload, proposedSlackCheckins: next },
+                                      }));
+                                    }}
+                                    className="mt-0.5 h-4 w-4 accent-fuchsia-500 shrink-0"
+                                  />
+                                  <label htmlFor={cid} className="text-xs text-slate-200 cursor-pointer">
+                                    <span className="text-fuchsia-300 font-semibold mr-1">{c.recipientName}:</span>
+                                    <span>{c.messageText}</span>
+                                  </label>
+                                </div>
+                              );
+                            }
+                          )}
+                        </fieldset>
+                      )}
+
                     {/* Inline Revision Form */}
                     {revisingJobId === job.id && (
                       <form
@@ -1417,7 +2045,7 @@ export default function AICeoWorkspace({
 
                     {/* Action Footer */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1 border-t border-white/[0.06]">
-                      {!emailMode && coworkers.length > 0 ? (
+                      {!emailMode && !slackMode && !isCodeChange && coworkers.length > 0 ? (
                         <div className="flex items-center gap-2">
                           <label
                             htmlFor={`rerun-dispatch-${job.id}`}
@@ -1450,6 +2078,14 @@ export default function AICeoWorkspace({
                             ? caps.gmailSendReady
                               ? 'Approving triggers immediate Gmail send.'
                               : 'Requires Gmail send OAuth (see Connections tab).'
+                            : slackMode
+                            ? 'Nothing is sent until you tap Approve.'
+                            : isCodeChange
+                            ? 'Approving commits only the files listed above.'
+                            : isTrainingBrief
+                            ? 'Approving saves the brief + stages checked Slack check-ins as separate approval cards.'
+                            : isL10Brief
+                            ? 'Approving saves the brief to Turn90 Ops & Dual L10s.'
                             : job.job_type === 'plan_venture'
                             ? 'Approving creates checked tasks + starts checked agents.'
                             : job.job_type === 'lead_search'
@@ -1487,12 +2123,24 @@ export default function AICeoWorkspace({
                             onClick={() => handleApproveJob(job)}
                             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-bold text-white shadow-sm disabled:opacity-50"
                           >
-                            {emailMode ? <Send className="h-3.5 w-3.5" /> : <Check className="h-3.5 w-3.5" />}
+                            {emailMode || slackMode ? (
+                              <Send className="h-3.5 w-3.5" />
+                            ) : isCodeChange ? (
+                              <GitBranch className="h-3.5 w-3.5" />
+                            ) : (
+                              <Check className="h-3.5 w-3.5" />
+                            )}
                             <span>
                               {isBusy
                                 ? 'Submitting...'
                                 : emailMode
                                 ? 'Approve & Auto-Send'
+                                : slackMode
+                                ? 'Approve & Send Slack'
+                                : isCodeChange
+                                ? 'Approve & Commit'
+                                : isTrainingBrief || isL10Brief
+                                ? 'Approve & Save Brief'
                                 : job.job_type === 'plan_venture'
                                 ? 'Approve & Launch AI Team'
                                 : job.job_type === 'lead_search'
@@ -2263,6 +2911,66 @@ export default function AICeoWorkspace({
                 </div>
               </section>
             </div>
+
+            {/* Daemon Capabilities + Letterly Instant Webhook */}
+            <section className="rounded-2xl bg-[#151820] border border-white/[0.08] p-4 space-y-3">
+              <div>
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Mic className="h-4 w-4 text-rose-400" />
+                  <span>Letterly, Slack & AI Builder</span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Voice notes route verbatim into Tasks, Notes, L10 agendas, Slack drafts and code changes. Every
+                  outbound Slack message and email waits for your 1-tap approval in{' '}
+                  <strong className="text-slate-200">Needs You</strong>.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                {[
+                  { key: 'claudeCodeReady', label: 'Claude Code', icon: <Code2 className="h-3 w-3" /> },
+                  { key: 'antigravityApiReady', label: 'Antigravity API', icon: <Bot className="h-3 w-3" /> },
+                  { key: 'slackReady', label: 'Slack', icon: <MessageSquare className="h-3 w-3" /> },
+                  { key: 'letterlyReady', label: 'Letterly', icon: <Mic className="h-3 w-3" /> },
+                ].map((pill) => {
+                  const ready = Boolean((caps as Record<string, unknown>)[pill.key]);
+                  return (
+                    <span
+                      key={pill.key}
+                      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border ${
+                        ready
+                          ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/25'
+                          : 'bg-white/[0.04] text-slate-400 border-white/[0.08]'
+                      }`}
+                    >
+                      {pill.icon}
+                      <span>
+                        {pill.label}: {ready ? 'Ready' : 'Not detected'}
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
+              <div className="space-y-1">
+                <span className="text-[11px] font-semibold text-slate-400">Letterly Instant Webhook URL</span>
+                <div className="flex items-center gap-2 bg-[#111318] border border-white/[0.07] rounded-xl p-2.5">
+                  <code className="flex-1 text-[11px] font-mono text-indigo-300 break-all">
+                    {`${originUrl}/api/letterly-webhook`}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(`${originUrl}/api/letterly-webhook`, 'letterly-webhook')}
+                    className="px-2.5 py-1 rounded-lg bg-white/[0.07] hover:bg-white/[0.14] text-xs text-white shrink-0"
+                  >
+                    {copiedKey === 'letterly-webhook' ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                  Paste into Letterly → Actions → Webhook. If <code className="text-slate-300">LETTERLY_WEBHOOK_SECRET</code>{' '}
+                  is set on Render, send it as the <code className="text-slate-300">x-letterly-secret</code> header (or{' '}
+                  <code className="text-slate-300">?secret=</code>). The Mac daemon also polls Letterly every 15 minutes.
+                </p>
+              </div>
+            </section>
 
             {/* Rerun Inbound Callback Info */}
             <section className="rounded-2xl bg-[#151820] border border-white/[0.08] p-4 space-y-3">

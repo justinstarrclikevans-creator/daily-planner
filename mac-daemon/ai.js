@@ -32,6 +32,11 @@ async function extractTodos(slackMessages = [], emails = [], existingTodos = [],
     - Do NOT extract calendar meetings, appointments, or scheduled calendar events as todos. Those belong on the calendar, not as todo reminders.
     - If a task title starts with "Meeting with" or refers to attending a scheduled calendar meeting, DO NOT EXTRACT IT.
 
+    ABSOLUTE EMAIL EXCLUSION RULES (NEVER EXTRACT TODOS FROM THESE):
+    - SCHOOL EMAILS FOR LONDON, REECE (OR REESE), AND JACKSON: Ignore all school, district (BCSD / Berkeley County / Hanahan Elementary, Middle, High / Lowcountry Virtual / LCV / GeniusSIS / ParentLink / PowerSchool / Blackboard), teacher, attendance, tardy, progress report, yearbook, or school newsletter emails regarding London, Reece, or Jackson. (Note: youth sports/futsal club emails like 843FC or Elite Futsal are NOT school emails and remain valid if actionable.)
+    - APP STORE CONNECT & APPLE DEVELOPER: Ignore all App Store Connect, TestFlight, iTunes Connect, build processing, app review status, or developer certificate emails.
+    - MARKETING, PROMOTIONAL & COLD SALES EMAILS: Ignore all marketing blasts, newsletters, discounts, credit card pre-approvals, free trials, AppSumo/SaaS review requests, routine shipping tracking notifications, and unsolicited cold B2B sales pitches. Only extract email tasks from real human colleagues/partners or actionable bills, invoices, waivers, and pickups.
+
     CRITICAL DEDUPLICATION RULES (NEVER RE-ADD COMPLETED OR EXISTING TASKS):
     - Review "Existing Active Todos" AND "Recently Completed Todos".
     - If a task, reminder, or action item has ALREADY BEEN COMPLETED by Justin, DO NOT EXTRACT IT UNDER ANY CIRCUMSTANCES.
@@ -228,9 +233,263 @@ async function getMeetingRelatedTasks(event, tasks) {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Verbatim-first Letterly 5-lane triage
+// ---------------------------------------------------------------------------
+
+const CANONICAL_FOLDERS = [
+    'Training (Turn90 & SYNAPSE)',
+    'Turn90 Ops & Dual L10s',
+    'SYNAPSE & Book',
+    '843FC',
+    'Liturgy & Quotes',
+    'App Build Backlog',
+    'Home & Budget'
+];
+
+const LANES = ['task', 'slack_message', 'delegate', 'vault_note', 'code_change'];
+const DELEGATE_JOB_TYPES = ['email_outreach', 'rerun_coworker', 'task_assist'];
+const CODE_REPOS = ['todo', 'turn90', 'synapse', 'liturgy', 'resource'];
+
+/**
+ * Fix ONLY obvious speech-to-text spellings. Never rewrites anything else.
+ */
+function applyVerbatimSpellingFixes(text) {
+    return String(text || '')
+        .replace(/\bturn[\s-]+(?:90|ninety)\b/gi, 'Turn90')
+        .replace(/\bturn90\b/gi, 'Turn90')
+        .replace(/\bL\.?\s+S\.?\s+C\.?\s+M\.?\s+I\b\.?/g, 'LS/CMI')
+        .replace(/\bLS\s+CMI\b/g, 'LS/CMI')
+        .replace(/\bLSCMI\b/gi, 'LS/CMI')
+        .replace(/\bsynapse\b/gi, 'SYNAPSE')
+        .replace(/\b8\s+4\s+3(?:\s*F\.?\s*C\b\.?)?/gi, '843FC')
+        .replace(/\b843\s+F\.?\s*C\b\.?/gi, '843FC');
+}
+
+/** Strip conversational lead-ins from a task title, keeping Justin's own phrasing. */
+function stripTaskLeadIns(title) {
+    let t = String(title || '').trim();
+    const leadIns = [
+        /^(?:ok(?:ay)?|so|um+|uh+|alright|and)[,\s]+/i,
+        /^(?:hey\s+)?(?:remind me to|reminder to|reminder:)\s+/i,
+        /^(?:i\s+)?(?:need to|have to|gotta|got to|should|want to|must)\s+/i,
+        /^(?:i'm going to|i am going to|i'm gonna|gonna)\s+/i,
+        /^(?:don't forget to|make sure (?:i|to)|make sure that i)\s+/i,
+        /^(?:to do:|todo:)\s*/i
+    ];
+    let changed = true;
+    while (changed) {
+        changed = false;
+        for (const re of leadIns) {
+            const next = t.replace(re, '');
+            if (next !== t) {
+                t = next.trim();
+                changed = true;
+            }
+        }
+    }
+    t = t.replace(/!+/g, '').replace(/#\w[\w-]*/g, '').replace(/\s+/g, ' ').trim();
+    if (t) t = t.charAt(0).toUpperCase() + t.slice(1);
+    return t.replace(/[.,;:]+$/, '');
+}
+
+function splitIntoSentences(text) {
+    const cleaned = String(text || '').replace(/\r\n/g, '\n');
+    const parts = cleaned
+        .split(/(?<=[.?!])\s+|\n+/)
+        .map(s => s.trim())
+        .filter(Boolean);
+    return parts.length ? parts : [cleaned.trim()].filter(Boolean);
+}
+
+function collapseWs(s) {
+    return String(s || '').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function parseJsonLoose(text) {
+    let cleaned = String(text || '').trim();
+    const fence = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/i);
+    if (fence) cleaned = fence[1].trim();
+    try {
+        return JSON.parse(cleaned);
+    } catch (e) {
+        const a = cleaned.indexOf('[');
+        const b = cleaned.lastIndexOf(']');
+        if (a !== -1 && b > a) {
+            try { return JSON.parse(cleaned.slice(a, b + 1)); } catch (e2) {}
+        }
+    }
+    return null;
+}
+
+/**
+ * Split a single Letterly note into atomic, routed items WITHOUT rewriting Justin's words.
+ * Verbatim fields are rebuilt from the original (spelling-fixed) transcript sentences.
+ */
+async function triageLetterlyNote(note, { existingTodos = [], completedTodos = [] } = {}) {
+    const rawContent = String(note?.content || '').trim();
+    if (!rawContent) return [];
+    const normalized = applyVerbatimSpellingFixes(rawContent);
+    const sentences = splitIntoSentences(normalized);
+    const fullVerbatim = normalized;
+
+    const fallbackVault = [{
+        lane: 'vault_note',
+        folder: 'App Build Backlog',
+        title: applyVerbatimSpellingFixes(note?.title || `Letterly #${note?.id}`),
+        verbatimTranscript: fullVerbatim,
+        l10Target: null,
+        isTrainingCorpus: false
+    }];
+
+    if (!process.env.GEMINI_API_KEY) {
+        console.error('[Letterly Triage] No Gemini API key; saving note verbatim to vault only.');
+        return fallbackVault;
+    }
+
+    const numbered = sentences.map((s, i) => `[${i}] ${s}`).join('\n');
+
+    const prompt = `
+You are routing Justin Evans's raw Letterly voice recording into atomic items. Justin is the executive director of Turn90 (reentry nonprofit, 5 centers: Charleston, Columbia, Spartanburg, Reentry Navigation, Prison Program), author of SYNAPSE (training framework + book), and involved with 843FC (soccer club).
+
+ABSOLUTE RULE — VERBATIM FIRST:
+- NEVER rewrite, summarize, or paraphrase Justin's words. You only POINT to his sentences by index.
+- Every item MUST include "sentenceStart" and "sentenceEnd" (inclusive indices into the numbered sentences below) identifying the exact span of Justin's words it came from.
+- Short fields you write (title, messageText, subject, prompt) must reuse Justin's own phrasing as closely as possible.
+
+LANES (pick exactly one per item):
+1. "task": a personal to-do for Justin. Fields: title (Justin's own phrasing, drop lead-ins like "remind me to" / "I need to", no "!" no "#", start with the action verb he used).
+2. "slack_message": Justin asks to Slack/message/tell/ping a staff member. Fields: recipients (array of first names, e.g. ["Matt"]), messageText (the message to send, in Justin's own words and direct supportive tone, first person, no greeting fluff).
+3. "delegate": work for an AI agent. Fields: jobType ("email_outreach" when he wants an email sent to someone; "rerun_coworker" for handing a workflow to a Rerun coworker; "task_assist" for research/drafting), recipientName, subject, prompt.
+4. "vault_note": ideas, reflections, training content, quotes, L10 agenda items, budget/home notes. Fields: folder (EXACTLY one of ${JSON.stringify(CANONICAL_FOLDERS)}), title (short, his words), l10Target ("leadership" for org rocks/finance/HR/Gusto/partners/donors/strategy/Amy/Katie/Sean/Daisy items he wants on the Leadership L10; "program" for center scorecards/Apricot/Briefcase/LS/CMI/training/SkillCat/Matt/Jenn/Diyoung/TB/LaShawn/Stacy/Casey items for the Program L10; otherwise null), isTrainingCorpus (true when it is classroom facilitation, case management, SYNAPSE, Pro-Social Modeling, CBT, communication or coaching teaching content).
+5. "code_change": Justin describes a change to one of his apps. Fields: targetRepo (one of ${JSON.stringify(CODE_REPOS)}: todo = this ToDo/AI CEO app, turn90 = Turn90 apps/pipelines, synapse = SYNAPSE App, liturgy = Liturgy App, resource = Turn90 Resource App), executionMode ("antigravity_claude" for larger/architectural changes, "claude_direct" for small surgical changes), title.
+
+DEDUPLICATION: Do NOT create "task" items that duplicate these active or completed todos:
+Active: ${JSON.stringify((existingTodos || []).slice(0, 150).map(t => t.title || t.name))}
+Completed: ${JSON.stringify((completedTodos || []).slice(0, 150).map(t => t.title || t.name))}
+
+If the whole recording is one reflection, return a single vault_note spanning all sentences.
+
+Return ONLY a raw JSON array (no prose), e.g.
+[{"lane":"task","sentenceStart":0,"sentenceEnd":0,"title":"Call Goodwill about the SC Works referral"}]
+
+Recording title: ${JSON.stringify(applyVerbatimSpellingFixes(note?.title || ''))}
+Numbered sentences:
+${numbered}
+`;
+
+    let parsed = null;
+    try {
+        const response = await callGeminiWithRetry({
+            model: 'gemini-3.8-flash',
+            contents: prompt,
+            config: { temperature: 0.15 }
+        });
+        parsed = parseJsonLoose(response.text || '');
+    } catch (error) {
+        console.error('[Letterly Triage] Gemini error:', error.message || error);
+    }
+
+    if (!Array.isArray(parsed) || parsed.length === 0) return fallbackVault;
+
+    const spanText = (item) => {
+        const max = sentences.length - 1;
+        let start = Number.isInteger(item.sentenceStart) ? item.sentenceStart : parseInt(item.sentenceStart, 10);
+        let end = Number.isInteger(item.sentenceEnd) ? item.sentenceEnd : parseInt(item.sentenceEnd, 10);
+        if (Number.isNaN(start) && Number.isNaN(end)) return null;
+        if (Number.isNaN(start)) start = end;
+        if (Number.isNaN(end)) end = start;
+        start = Math.max(0, Math.min(max, start));
+        end = Math.max(start, Math.min(max, end));
+        return sentences.slice(start, end + 1).join(' ');
+    };
+
+    // If the model returned a legacy verbatim string instead of indices, only trust it if it is a true substring.
+    const verifiedQuote = (item, legacyField) => {
+        const fromSpan = spanText(item);
+        if (fromSpan) return fromSpan;
+        const legacy = applyVerbatimSpellingFixes(item[legacyField] || '');
+        if (legacy && collapseWs(normalized).includes(collapseWs(legacy))) return legacy.trim();
+        return fullVerbatim;
+    };
+
+    const routed = [];
+    for (const item of parsed) {
+        if (!item || !LANES.includes(item.lane)) continue;
+        switch (item.lane) {
+            case 'task': {
+                const verbatimQuote = verifiedQuote(item, 'verbatimQuote');
+                const title = stripTaskLeadIns(applyVerbatimSpellingFixes(item.title || verbatimQuote));
+                if (!title) break;
+                routed.push({ lane: 'task', title, verbatimQuote });
+                break;
+            }
+            case 'slack_message': {
+                const recipients = (Array.isArray(item.recipients) ? item.recipients : [item.recipients])
+                    .map(r => String(r || '').replace(/^[@#]/, '').trim())
+                    .filter(Boolean);
+                if (recipients.length === 0) break;
+                const verbatimQuote = verifiedQuote(item, 'verbatimQuote');
+                routed.push({
+                    lane: 'slack_message',
+                    recipients,
+                    messageText: applyVerbatimSpellingFixes(item.messageText || verbatimQuote).replace(/!+/g, '.').trim(),
+                    verbatimQuote
+                });
+                break;
+            }
+            case 'delegate': {
+                const verbatimQuote = verifiedQuote(item, 'verbatimQuote');
+                routed.push({
+                    lane: 'delegate',
+                    jobType: DELEGATE_JOB_TYPES.includes(item.jobType) ? item.jobType : 'task_assist',
+                    recipientName: String(item.recipientName || '').trim(),
+                    subject: applyVerbatimSpellingFixes(item.subject || '').trim(),
+                    prompt: applyVerbatimSpellingFixes(item.prompt || verbatimQuote).trim(),
+                    verbatimQuote
+                });
+                break;
+            }
+            case 'vault_note': {
+                const verbatimTranscript = verifiedQuote(item, 'verbatimTranscript');
+                const folder = CANONICAL_FOLDERS.includes(item.folder) ? item.folder : 'App Build Backlog';
+                const l10Target = item.l10Target === 'leadership' || item.l10Target === 'program' ? item.l10Target : null;
+                routed.push({
+                    lane: 'vault_note',
+                    folder: l10Target ? 'Turn90 Ops & Dual L10s' : folder,
+                    title: applyVerbatimSpellingFixes(item.title || note?.title || 'Letterly Note').trim(),
+                    verbatimTranscript,
+                    l10Target,
+                    isTrainingCorpus: Boolean(item.isTrainingCorpus) || folder === 'Training (Turn90 & SYNAPSE)'
+                });
+                break;
+            }
+            case 'code_change': {
+                const verbatimSpec = verifiedQuote(item, 'verbatimSpec');
+                routed.push({
+                    lane: 'code_change',
+                    targetRepo: CODE_REPOS.includes(item.targetRepo) ? item.targetRepo : 'todo',
+                    executionMode: item.executionMode === 'claude_direct' ? 'claude_direct' : 'antigravity_claude',
+                    title: applyVerbatimSpellingFixes(item.title || 'Code change from Letterly').replace(/!+/g, '').trim(),
+                    verbatimSpec
+                });
+                break;
+            }
+            default:
+                break;
+        }
+    }
+
+    return routed.length ? routed : fallbackVault;
+}
+
 module.exports = {
     extractTodos,
     generateDailySummary,
     getMostImportantTask,
-    getMeetingRelatedTasks
+    getMeetingRelatedTasks,
+    triageLetterlyNote,
+    applyVerbatimSpellingFixes,
+    stripTaskLeadIns,
+    CANONICAL_FOLDERS
 };

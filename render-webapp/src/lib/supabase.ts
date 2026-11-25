@@ -303,7 +303,20 @@ export function getFallbackTasks(projects: Project[]): Task[] {
     });
 }
 
-export type AgentRole = 'ceo' | 'researcher' | 'leads' | 'outreach' | 'content' | 'rerun';
+export type AgentRole = 'ceo' | 'researcher' | 'leads' | 'outreach' | 'content' | 'rerun' | 'trainer' | 'builder';
+
+// The 7 canonical "One Brain" note folders (always visible in Notes).
+export const CANONICAL_NOTE_FOLDERS = [
+  'Training (Turn90 & SYNAPSE)',
+  'Turn90 Ops & Dual L10s',
+  'SYNAPSE & Book',
+  '843FC',
+  'Liturgy & Quotes',
+  'App Build Backlog',
+  'Home & Budget',
+] as const;
+
+export type CanonicalNoteFolder = (typeof CANONICAL_NOTE_FOLDERS)[number];
 
 export type AgentJobType =
   | 'plan_venture'
@@ -312,7 +325,33 @@ export type AgentJobType =
   | 'email_outreach'
   | 'content_draft'
   | 'task_assist'
-  | 'rerun_coworker';
+  | 'rerun_coworker'
+  | 'slack_message'
+  | 'code_change'
+  | 'training_brief'
+  | 'l10_brief';
+
+export type CodeChangeRepo = 'todo' | 'turn90' | 'synapse' | 'liturgy' | 'resource';
+export type CodeChangeExecutionMode = 'antigravity_claude' | 'claude_direct';
+
+export type SlackMessagePayload = {
+  isSlack?: boolean;
+  recipientName?: string;
+  recipientQuery?: string;
+  recipientEdited?: boolean;
+  slackUserId?: string | null;
+  slackChannelId?: string | null;
+  slackHandle?: string;
+  resolveError?: string | null;
+  messageText?: string;
+  verbatimQuote?: string;
+};
+
+export type ProposedSlackCheckin = {
+  recipientName: string;
+  messageText: string;
+  selected?: boolean;
+};
 
 export type AgentJobStatus =
   | 'queued'
@@ -337,6 +376,10 @@ export type DaemonCapabilities = {
   leadoceanConfigured?: boolean;
   rerunMcpConfigured?: boolean;
   geminiConfigured?: boolean;
+  slackReady?: boolean;
+  letterlyReady?: boolean;
+  claudeCodeReady?: boolean;
+  antigravityApiReady?: boolean;
 };
 
 export type AgentSettings = {

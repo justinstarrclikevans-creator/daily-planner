@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Note, supabase } from '@/lib/supabase';
+import { CANONICAL_NOTE_FOLDERS, Note, supabase } from '@/lib/supabase';
 import {
   FileText,
   Plus,
@@ -41,12 +41,22 @@ export default function NotesWorkspace({
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
+  // The 7 canonical "One Brain" folders are always visible (in order), followed by any other folders in use.
   const folders = useMemo(() => {
-    const set = new Set<string>(['All']);
+    const set = new Set<string>(['All', ...CANONICAL_NOTE_FOLDERS]);
     for (const n of notes) {
       if (n.folder) set.add(n.folder);
     }
     return Array.from(set);
+  }, [notes]);
+
+  const folderCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const n of notes) {
+      const f = n.folder || 'Notes';
+      counts[f] = (counts[f] || 0) + 1;
+    }
+    return counts;
   }, [notes]);
 
   const filteredNotes = useMemo(() => {
@@ -308,12 +318,13 @@ export default function NotesWorkspace({
             mobileShowEditor ? 'hidden xl:flex' : 'flex'
           } w-full xl:w-80 min-h-0 border-r border-white/[0.06] flex-col bg-[#13161E] shrink-0`}
         >
-          {folders.length > 2 && (
+          {folders.length > 1 && (
             <div className="p-2.5 border-b border-white/[0.06] flex items-center gap-1.5 overflow-x-auto">
               {folders.map((folder) => (
                 <button
                   key={folder}
                   type="button"
+                  title={folder === 'All' ? `${notes.length} notes` : `${folderCounts[folder] || 0} notes`}
                   onClick={() => setSelectedFolder(folder)}
                   className={`px-2 py-1 rounded-md text-[11px] whitespace-nowrap transition-colors ${
                     selectedFolder === folder
@@ -422,8 +433,16 @@ export default function NotesWorkspace({
                         if (isDirty && !isSaving) handleSaveNote();
                       }}
                       placeholder="Folder"
-                      className="w-24 bg-transparent text-base md:text-[11px] text-slate-300 focus:outline-none"
+                      list="notes-folder-options"
+                      className="w-40 bg-transparent text-base md:text-[11px] text-slate-300 focus:outline-none"
                     />
+                    <datalist id="notes-folder-options">
+                      {folders
+                        .filter((f) => f !== 'All')
+                        .map((f) => (
+                          <option key={f} value={f} />
+                        ))}
+                    </datalist>
                   </div>
                 </div>
 
