@@ -368,14 +368,6 @@
     "appleReminderId": "FD8A7E87-678F-4DBC-948B-3F7DC292948E"
   },
   {
-    "title": "Check class evals",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "B5DEB657-D9F6-48E7-B9C6-123430953E5A"
-  },
-  {
     "title": "We can have one app like Letterly that feeds into a server that then feeds into the database",
     "notes": "",
     "listName": "General",
