@@ -768,13 +768,68 @@ export default function ProjectPlannerWorkspace() {
     };
   }, [movingState, activeTimelineDate, tasks, scheduleTaskAtSlot, patchTask]);
 
-  // Toggle Complete
+  // Apple Reminders-style completion pause (lingers ~1.8s so you can see/undo & check multiple rows without list jumping)
+  const COMPLETION_PAUSE_MS = 1800;
+  const [completingTaskIds, setCompletingTaskIds] = useState<Record<string, boolean>>({});
+  const completingIdsRef = useRef<Set<string>>(new Set());
+  const completionFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleCompletionFlush = useCallback(() => {
+    if (completionFlushTimerRef.current) {
+      clearTimeout(completionFlushTimerRef.current);
+      completionFlushTimerRef.current = null;
+    }
+    if (completingIdsRef.current.size === 0) return;
+
+    completionFlushTimerRef.current = setTimeout(() => {
+      completionFlushTimerRef.current = null;
+      const idsToComplete = Array.from(completingIdsRef.current);
+      if (idsToComplete.length === 0) return;
+
+      completingIdsRef.current.clear();
+      setCompletingTaskIds({});
+      setInspectingTaskId((curr) => (curr && idsToComplete.includes(curr) ? null : curr));
+
+      for (const id of idsToComplete) {
+        void patchTask(id, { status: 'completed' });
+      }
+    }, COMPLETION_PAUSE_MS);
+  }, [patchTask]);
+
+  useEffect(() => {
+    return () => {
+      if (completionFlushTimerRef.current) {
+        clearTimeout(completionFlushTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Toggle Complete (with Apple Reminders pause & tap-to-undo)
   const handleToggleComplete = useCallback(
     async (task: Task) => {
-      const nextStatus = task.status === 'completed' ? 'pending' : 'completed';
-      await patchTask(task.id, { status: nextStatus });
+      if (task.status === 'completed') {
+        await patchTask(task.id, { status: 'pending' });
+        return;
+      }
+
+      // Tapping again during the pause cancels completion immediately (undo)
+      if (completingIdsRef.current.has(task.id)) {
+        completingIdsRef.current.delete(task.id);
+        setCompletingTaskIds((prev) => {
+          const next = { ...prev };
+          delete next[task.id];
+          return next;
+        });
+        scheduleCompletionFlush();
+        return;
+      }
+
+      // Mark visually complete now and start/extend the settle timer
+      completingIdsRef.current.add(task.id);
+      setCompletingTaskIds((prev) => ({ ...prev, [task.id]: true }));
+      scheduleCompletionFlush();
     },
-    [patchTask]
+    [patchTask, scheduleCompletionFlush]
   );
 
   // Create Task inside a Project Group
@@ -1564,6 +1619,7 @@ export default function ProjectPlannerWorkspace() {
   const renderTaskCard = (task: Task) => {
     const taskProj = getTaskProject(task);
     const timeboxed = isTimeboxedDate(task.dueDate);
+    const isCompleting = Boolean(completingTaskIds[task.id]);
     const displayMinutes =
       resizingState?.taskId === task.id
         ? resizingState.previewMinutes
@@ -1572,7 +1628,7 @@ export default function ProjectPlannerWorkspace() {
     return (
       <div
         key={task.id}
-        draggable
+        draggable={!isCompleting}
         onDragStart={(e) => {
           setDraggedTaskId(task.id);
           e.dataTransfer.setData('text/plain', task.id);
@@ -1582,7 +1638,11 @@ export default function ProjectPlannerWorkspace() {
           setDragOverTarget(null);
         }}
         onClick={() => setInspectingTaskId(task.id)}
-        className="group relative rounded-xl border bg-[#1B1E26] hover:bg-[#212530] border-white/[0.07] hover:border-white/[0.15] p-3 transition-all cursor-pointer select-none shadow-sm"
+        className={`group relative rounded-xl border p-3 transition-all cursor-pointer select-none shadow-sm ${
+          isCompleting
+            ? 'bg-[#171B22] border-emerald-500/30 opacity-65'
+            : 'bg-[#1B1E26] hover:bg-[#212530] border-white/[0.07] hover:border-white/[0.15]'
+        }`}
       >
         <div className="flex items-start gap-2.5">
           <button
@@ -1591,12 +1651,22 @@ export default function ProjectPlannerWorkspace() {
               e.stopPropagation();
               handleToggleComplete(task);
             }}
-            className="mt-0.5 h-4 w-4 rounded-full border border-slate-500 hover:border-emerald-400 flex items-center justify-center transition-colors shrink-0"
-            title="Complete task"
-          />
+            className={`mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center transition-all shrink-0 ${
+              isCompleting
+                ? 'bg-emerald-500 border-emerald-500 text-slate-950 scale-105'
+                : 'border-slate-500 hover:border-emerald-400'
+            }`}
+            title={isCompleting ? 'Tap again to undo' : 'Complete task'}
+          >
+            {isCompleting && <Check className="h-2.5 w-2.5 stroke-[3]" />}
+          </button>
 
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-medium leading-snug text-slate-100 break-words">
+            <p
+              className={`text-[13px] font-medium leading-snug break-words transition-colors ${
+                isCompleting ? 'line-through text-slate-400' : 'text-slate-100'
+              }`}
+            >
               {task.title}
             </p>
             {extractCleanNotes(task.description) && (
@@ -2499,19 +2569,20 @@ export default function ProjectPlannerWorkspace() {
                               handleToggleComplete(t);
                             }
                           }}
-                          className={`h-3 w-3 rounded-full border flex items-center justify-center shrink-0 ${
-                            t.status === 'completed'
+                          className={`h-3 w-3 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+                            t.status === 'completed' || completingTaskIds[t.id]
                               ? 'bg-emerald-500 border-emerald-500 text-slate-950'
                               : 'border-slate-400 hover:border-white'
                           }`}
+                          title={completingTaskIds[t.id] ? 'Tap again to undo' : 'Complete task'}
                         >
-                          {t.status === 'completed' && (
+                          {(t.status === 'completed' || completingTaskIds[t.id]) && (
                             <Check className="h-2 w-2 stroke-[3]" />
                           )}
                         </button>
                         <span
                           className={`text-[11px] font-semibold truncate ${
-                            t.status === 'completed' ? 'line-through opacity-60' : ''
+                            t.status === 'completed' || completingTaskIds[t.id] ? 'line-through opacity-60' : ''
                           }`}
                         >
                           {t.title}
@@ -2764,13 +2835,14 @@ export default function ProjectPlannerWorkspace() {
                 <button
                   type="button"
                   onClick={() => handleToggleComplete(inspectingTask)}
-                  className={`mt-1 h-5 w-5 rounded-full border flex items-center justify-center shrink-0 ${
-                    inspectingTask.status === 'completed'
+                  title={completingTaskIds[inspectingTask.id] ? 'Tap again to undo' : 'Complete task'}
+                  className={`mt-1 h-5 w-5 rounded-full border flex items-center justify-center shrink-0 transition-all ${
+                    inspectingTask.status === 'completed' || completingTaskIds[inspectingTask.id]
                       ? 'bg-emerald-500 border-emerald-500 text-slate-950'
-                      : 'border-slate-500'
+                      : 'border-slate-500 hover:border-emerald-400'
                   }`}
                 >
-                  {inspectingTask.status === 'completed' && (
+                  {(inspectingTask.status === 'completed' || completingTaskIds[inspectingTask.id]) && (
                     <Check className="h-3 w-3 stroke-[3]" />
                   )}
                 </button>
@@ -2789,7 +2861,9 @@ export default function ProjectPlannerWorkspace() {
                       e.currentTarget.blur();
                     }
                   }}
-                  className="w-full bg-transparent text-base font-semibold text-white focus:outline-none"
+                  className={`w-full bg-transparent text-base font-semibold focus:outline-none ${
+                    completingTaskIds[inspectingTask.id] ? 'line-through text-slate-400' : 'text-white'
+                  }`}
                 />
               </div>
 
