@@ -264,14 +264,6 @@
     "appleReminderId": "DEC7F40F-7E21-460B-A250-945736F737E0"
   },
   {
-    "title": "Go through to dos and guess time. Order ninja transfer and shirts. Go through letterly.",
-    "notes": "",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "E4CF66CA-95F8-4489-804F-D7F27F487577"
-  },
-  {
     "title": "All the stress does nothing. Peace. Peace is god. Young pope quote.",
     "notes": "",
     "listName": "General",
@@ -294,14 +286,6 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "81B6E490-467C-415B-AC54-2E1C29F29DAF"
-  },
-  {
-    "title": "Review Render security notice regarding Ghostscript and ImageMagick vulnerability",
-    "notes": "Render reported an Upload2Shell vulnerability (CVE-2026-125396) affecting services using Ghostscript or ImageMagick that could permit remote code execution.",
-    "listName": "General",
-    "priority": "none",
-    "dueDate": null,
-    "appleReminderId": "FD8A7E87-678F-4DBC-948B-3F7DC292948E"
   },
   {
     "title": "We can have one app like Letterly that feeds into a server that then feeds into the database",
