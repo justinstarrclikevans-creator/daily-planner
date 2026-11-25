@@ -366,5 +366,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "6777DA92-27AF-44D9-B13F-573397056473"
+  },
+  {
+    "title": "Review Render security notice regarding Ghostscript and ImageMagick vulnerability",
+    "notes": "Render reported an Upload2Shell vulnerability (CVE-2026-125396) affecting services using Ghostscript or ImageMagick that could permit remote code execution.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "FD8A7E87-678F-4DBC-948B-3F7DC292948E"
   }
 ]
