@@ -294,5 +294,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "02935245-0A2A-4C9D-AA9B-D83C9618A493"
+  },
+  {
+    "title": "Verify email address for Be Your Best account",
+    "notes": "Complete email verification to activate the account and access the cognitive training platform.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "6E70DDA0-162C-4E80-9D3A-C0F1431A2BE9"
   }
 ]
