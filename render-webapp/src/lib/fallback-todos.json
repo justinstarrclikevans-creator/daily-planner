@@ -270,5 +270,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "BB4AEF1A-385B-4C15-AC66-99FE0D13F849"
+  },
+  {
+    "title": "Connect the new Stripe account in Forento",
+    "notes": "Adrian disconnected the previous Stripe account from your Forento school, so you can now link the correct Stripe account in Forento settings.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "8443E392-4644-40A7-A7FC-D22DCF850B34"
   }
 ]
