@@ -58,3 +58,31 @@ body {
 .drag-handle.dragging {
   cursor: grabbing;
 }
+
+/* ==========================================================================
+   Native modal <dialog> scroll containment & backdrop
+   (Intentionally no `display` on bare dialog so the UA hides it when closed.)
+   ========================================================================== */
+dialog:modal {
+  overscroll-behavior: contain;
+}
+
+dialog::backdrop {
+  overflow: hidden;
+  overscroll-behavior: contain;
+  background-color: rgba(8, 11, 18, 0.75);
+  backdrop-filter: blur(3px);
+}
+
+/* Visually hidden but available to assistive tech */
+.visually-hidden:where(:not(:focus-within, :active)) {
+  position: absolute !important;
+  clip-path: inset(50%) !important;
+  overflow: hidden !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}

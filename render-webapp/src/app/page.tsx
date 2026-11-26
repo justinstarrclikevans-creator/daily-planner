@@ -16,9 +16,12 @@ import {
   AgentVenture,
   AgentJob,
   AgentSettings,
+  SynapseAnchorState,
+  getEasternDateKey,
 } from '@/lib/supabase';
 import NotesWorkspace from '@/components/NotesWorkspace';
 import AICeoWorkspace from '@/components/AICeoWorkspace';
+import SynapseAnchorBanner from '@/components/SynapseAnchorBanner';
 import {
   Check,
   Plus,
@@ -57,6 +60,22 @@ const PX_PER_MINUTE = 2.4; // 144px per hour -> 36px per 15m interval, 12px per 
 const HOUR_HEIGHT_PX = 60 * PX_PER_MINUTE;
 const QUARTER_HEIGHT_PX = 15 * PX_PER_MINUTE;
 const DAILY_TARGET_MINUTES = 360;
+const SYNAPSE_ANCHOR_STORAGE_KEY = 'todo_synapse_anchor_v1';
+const EMPTY_SYNAPSE_ANCHOR: SynapseAnchorState = {
+  innerWhy: null,
+  currentGoal: null,
+  goalHistory: [],
+  skippedReviewDateKey: null,
+};
+
+function persistSynapseAnchor(state: SynapseAnchorState) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(SYNAPSE_ANCHOR_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Storage full or unavailable; server copy is still the source of truth.
+  }
+}
 
 function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
@@ -145,6 +164,8 @@ export default function ProjectPlannerWorkspace() {
     daemon_capabilities: {},
   });
   const [agentNeedsMigration, setAgentNeedsMigration] = useState<boolean>(false);
+  const [synapseAnchor, setSynapseAnchor] = useState<SynapseAnchorState>(EMPTY_SYNAPSE_ANCHOR);
+  const synapseAnchorRef = useRef<SynapseAnchorState>(EMPTY_SYNAPSE_ANCHOR);
   const [agentToast, setAgentToast] = useState<string | null>(null);
   const [schedulingTaskId, setSchedulingTaskId] = useState<string | null>(null);
   const [scheduleDayChoice, setScheduleDayChoice] = useState<'today' | 'tomorrow'>('today');
@@ -301,6 +322,64 @@ export default function ProjectPlannerWorkspace() {
     }
   }, []);
 
+  const applySynapseAnchor = useCallback((next: SynapseAnchorState) => {
+    synapseAnchorRef.current = next;
+    setSynapseAnchor(next);
+    persistSynapseAnchor(next);
+  }, []);
+
+  const loadSynapseAnchor = useCallback(async () => {
+    try {
+      const res = await fetch('/api/synapse-anchor', { cache: 'no-store' });
+      if (!res.ok) return;
+      const json = await res.json();
+      // Keep the local copy if the table is missing or the server returned no state.
+      if (json.needsMigration || !json.state) return;
+      applySynapseAnchor(json.state as SynapseAnchorState);
+    } catch (err) {
+      console.warn('Synapse anchor fetch warning:', err);
+    }
+  }, [applySynapseAnchor]);
+
+  // Hydrate instantly from localStorage, then reconcile with the server.
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = window.localStorage.getItem(SYNAPSE_ANCHOR_STORAGE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached) as SynapseAnchorState;
+          synapseAnchorRef.current = { ...EMPTY_SYNAPSE_ANCHOR, ...parsed };
+          setSynapseAnchor(synapseAnchorRef.current);
+        }
+      } catch {
+        // Ignore corrupt cache.
+      }
+    }
+    loadSynapseAnchor();
+  }, [loadSynapseAnchor]);
+
+  const handleUpdateSynapseAnchor = useCallback(
+    async (patchPayload: Record<string, unknown>, optimisticState: SynapseAnchorState) => {
+      const previous = synapseAnchorRef.current;
+      applySynapseAnchor(optimisticState);
+      try {
+        const res = await fetch('/api/synapse-anchor', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patchPayload),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(json?.error || `Save failed (${res.status})`);
+        if (json.state) applySynapseAnchor(json.state as SynapseAnchorState);
+      } catch (err) {
+        console.warn('Synapse anchor save failed:', err);
+        applySynapseAnchor(previous);
+        throw err;
+      }
+    },
+    [applySynapseAnchor]
+  );
+
   useEffect(() => {
     loadData();
     loadNotes();
@@ -326,7 +405,10 @@ export default function ProjectPlannerWorkspace() {
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_jobs' }, scheduleAgentsReload)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_ventures' }, scheduleAgentsReload)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_settings' }, scheduleAgentsReload)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_settings' }, () => {
+        scheduleAgentsReload();
+        loadSynapseAnchor();
+      })
       .subscribe();
     return () => {
       if (tasksReloadTimer) clearTimeout(tasksReloadTimer);
@@ -334,7 +416,7 @@ export default function ProjectPlannerWorkspace() {
       if (agentsReloadTimer) clearTimeout(agentsReloadTimer);
       supabase.removeChannel(channel);
     };
-  }, [loadData, loadNotes, loadAgentData]);
+  }, [loadData, loadNotes, loadAgentData, loadSynapseAnchor]);
 
   const needsApprovalCount = useMemo(
     () => agentJobs.filter((j) => j.status === 'needs_approval').length,
@@ -2126,6 +2208,7 @@ export default function ProjectPlannerWorkspace() {
 
         {/* Scrollable Project Groups */}
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
+          <SynapseAnchorBanner state={synapseAnchor} onSave={handleUpdateSynapseAnchor} />
           {visibleProjectGroups.map((proj) => {
             const projTasks = openTasks.filter(
               (t) => getTaskProject(t).id === proj.id
@@ -3054,6 +3137,38 @@ export default function ProjectPlannerWorkspace() {
                 />
                 <span>{getTaskProject(activeFocusTask).name}</span>
               </div>
+
+              {(() => {
+                const focusWhy = synapseAnchor.innerWhy?.statement?.trim();
+                const focusGoal =
+                  synapseAnchor.currentGoal?.dateKey === getEasternDateKey()
+                    ? synapseAnchor.currentGoal.text
+                    : null;
+                if (!focusWhy && !focusGoal) return null;
+                return (
+                  <div
+                    aria-label="Today's anchor"
+                    className="mx-auto max-w-lg rounded-2xl bg-white/[0.04] border border-white/[0.08] px-4 py-3 text-left space-y-2"
+                  >
+                    {focusWhy && (
+                      <p className="text-sm text-slate-200 leading-[1.45] [text-wrap:pretty] break-words">
+                        <span className="mr-2 text-[11px] font-extrabold uppercase tracking-wider text-pink-400">
+                          My Why
+                        </span>
+                        {focusWhy}
+                      </p>
+                    )}
+                    {focusGoal && (
+                      <p className="text-sm text-slate-200 leading-[1.45] [text-wrap:pretty] break-words">
+                        <span className="mr-2 text-[11px] font-extrabold uppercase tracking-wider text-sky-400">
+                          Process Goal
+                        </span>
+                        {focusGoal}
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
 
               <h1 className="text-3xl font-bold text-white leading-tight">
                 {activeFocusTask.title}

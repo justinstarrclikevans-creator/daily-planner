@@ -453,3 +453,37 @@ export type AgentJob = {
   updated_at?: string;
   executed_at?: string | null;
 };
+
+export type InnerWhyData = {
+  necessity: string;
+  aptitude: string;
+  motive: string;
+  enjoyment: string;
+  statement: string;
+  updatedAt: string;
+};
+
+export type DailyProcessGoal = {
+  text: string;
+  dateKey: string; // YYYY-MM-DD in America/New_York
+  rating?: number; // 1..5
+  createdAt: string;
+  ratedAt?: string;
+};
+
+export type SynapseAnchorState = {
+  innerWhy: InnerWhyData | null;
+  currentGoal: DailyProcessGoal | null;
+  goalHistory: DailyProcessGoal[];
+  skippedReviewDateKey?: string | null;
+};
+
+export function getEasternDateKey(date: Date = new Date()): string {
+  // en-CA formats as YYYY-MM-DD.
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date);
+}
