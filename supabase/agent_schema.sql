@@ -84,7 +84,7 @@ alter table public.agent_ventures enable row level security;
 alter table public.agent_jobs enable row level security;
 alter table public.agent_settings enable row level security;
 
--- Permissive Policies matching existing ToDo Companion tables
+-- Permissive Policies matching existing ToDo Webapp tables
 drop policy if exists "Allow all operations for anon/authenticated" on public.agent_ventures;
 create policy "Allow all operations for anon/authenticated" on public.agent_ventures
     for all using (true) with check (true);

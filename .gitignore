@@ -2,13 +2,8 @@
 */.DS_Store
 node_modules/
 build/
-ios-companion/build/
-ios-companion/.build/
 * 2.*
 * 2
-*.xcuserstate
-xcuserdata/
-DerivedData/
 *.log
 mac-daemon/token*.json
 mac-daemon/credentials.json

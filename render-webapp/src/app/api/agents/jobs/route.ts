@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
             event: 'test_ping',
             coworkerName: body.coworkerName || 'Rerun Coworker',
             timestamp: new Date().toISOString(),
-            message: 'Test webhook ping from ToDo Companion AI CEO.',
+            message: 'Test webhook ping from ToDo Webapp AI CEO.',
           }),
           signal: controller.signal,
         });

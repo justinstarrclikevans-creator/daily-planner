@@ -17,12 +17,18 @@ const REPO_MAP = {
 };
 
 const REPO_LABELS = {
-    todo: 'ToDo App',
+    todo: 'ToDo Webapp',
     turn90: 'Turn90',
     synapse: 'SYNAPSE App',
     liturgy: 'Liturgy App',
     resource: 'Resource App',
 };
+
+const TODO_WEBAPP_CONSTRAINT = 'IMPORTANT: The iOS ToDo Companion app is permanently retired and deleted. All development in this repository targets ONLY the Next.js webapp (render-webapp/) and macOS daemon (mac-daemon/). Never create, build, or reference iOS/Swift companion files.';
+
+function todoRepoConstraint(repoLabel) {
+    return repoLabel === REPO_LABELS.todo ? `\n\n${TODO_WEBAPP_CONSTRAINT}` : '';
+}
 
 const CLAUDE_BIN = path.join(os.homedir(), '.local/bin/claude');
 const AGENTAPI_BIN = '/Users/justinevans/.gemini/antigravity/bin/agentapi';
@@ -89,7 +95,7 @@ async function buildArchitecturalFraming(job, repoLabel) {
     try {
         const res = await callGeminiWithRetry({
             model: 'gemini-3.8-flash',
-            contents: `You are a senior architect. In <= 12 bullet points, frame how to implement this change in the "${repoLabel}" codebase: likely files/areas to inspect, risks, and verification steps. Do not write code.\n\nChange title: ${job.title}\nJustin's spec (verbatim):\n${job.output_payload?.verbatimSpec || job.prompt}`,
+            contents: `You are a senior architect. In <= 12 bullet points, frame how to implement this change in the "${repoLabel}" codebase: likely files/areas to inspect, risks, and verification steps. Do not write code.${todoRepoConstraint(repoLabel)}\n\nChange title: ${job.title}\nJustin's spec (verbatim):\n${job.output_payload?.verbatimSpec || job.prompt}`,
             config: { temperature: 0.2 },
         });
         return String(res.text || '').trim();
@@ -101,7 +107,7 @@ async function buildArchitecturalFraming(job, repoLabel) {
 function buildClaudePrompt(job, repoLabel, framing) {
     const spec = job.output_payload?.verbatimSpec || job.prompt || job.title;
     const feedback = String(job.revision_feedback || '').trim();
-    return `You are working inside the "${repoLabel}" repository on Justin Evans's machine as a headless coding agent.
+    return `You are working inside the "${repoLabel}" repository on Justin Evans's machine as a headless coding agent.${todoRepoConstraint(repoLabel)}
 
 TASK: ${job.title}
 

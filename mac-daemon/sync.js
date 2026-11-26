@@ -595,7 +595,7 @@ async function syncAllRemindersToCloud(events = [], incomingReminders = null) {
                 fs.writeFileSync(calendarFallbackPath, nextCalJson);
                 const repoRoot = path.join(__dirname, '..');
                 exec(
-                    'git add render-webapp/src/lib/fallback-todos.json render-webapp/src/lib/fallback-calendar.json && git commit -m "chore(sync): auto-sync reminders and calendar timeline feed" && git push origin HEAD:main && git push origin feat/ios-companion-app',
+                    'git add render-webapp/src/lib/fallback-todos.json render-webapp/src/lib/fallback-calendar.json && git commit -m "chore(sync): auto-sync reminders and calendar timeline feed" && git push origin HEAD:main',
                     { cwd: repoRoot },
                     (err) => {
                         if (!err) {

@@ -1,5 +1,5 @@
 -- ==========================================================
--- Supabase Schema for ToDo & Project Companion (Idempotent)
+-- Supabase Schema for ToDo Webapp (Idempotent)
 -- Run this in your Supabase SQL Editor:
 -- https://app.supabase.com/project/_/sql
 -- ==========================================================
@@ -42,7 +42,7 @@ create table if not exists public.tasks (
     list_name text not null default 'Personal',
     status text not null default 'pending',
     due_date timestamptz,
-    source text not null default 'ios',
+    source text not null default 'webapp',
     apple_reminder_id text,
     estimated_minutes integer default 15,
     actual_seconds integer default 0,
@@ -192,7 +192,7 @@ values
         'moon.stars.fill',
         '[
             {"title": "Clear browser tabs & review scratch notes", "estimated_minutes": 5, "first_five_minutes": "Close finished tabs and save keepers to project notes."},
-            {"title": "Review Play Queue and bump unstarted tasks to tomorrow", "estimated_minutes": 5, "first_five_minutes": "Open ToDo Companion and tap Bump to Tomorrow."},
+            {"title": "Review Play Queue and bump unstarted tasks to tomorrow", "estimated_minutes": 5, "first_five_minutes": "Open ToDo Webapp and tap Bump to Tomorrow."},
             {"title": "Pin top 3 priority tasks for tomorrow morning", "estimated_minutes": 5, "first_five_minutes": "Tap +Queue on tomorrow morning’s primary focus."}
         ]'::jsonb
     ),

@@ -146,7 +146,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const CODE_REPO_OPTIONS: { id: string; label: string }[] = [
-  { id: 'todo', label: 'ToDo App' },
+  { id: 'todo', label: 'ToDo Webapp' },
   { id: 'turn90', label: 'Turn90' },
   { id: 'synapse', label: 'SYNAPSE App' },
   { id: 'liturgy', label: 'Liturgy App' },
@@ -2998,7 +2998,7 @@ export default function AICeoWorkspace({
                   <span>Rerun Two-Way Integration</span>
                 </h2>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Have any Rerun Coworker POST deliverables back to your ToDo Companion Desk (lands in{' '}
+                  Have any Rerun Coworker POST deliverables back to your ToDo Webapp (lands in{' '}
                   <strong className="text-slate-200">Needs You</strong>, <strong className="text-slate-200">Tasks</strong>, or{' '}
                   <strong className="text-slate-200">Notes</strong>).
                 </p>

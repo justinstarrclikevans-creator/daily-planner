@@ -51,7 +51,7 @@ const server = http.createServer(async (req, res) => {
                 <div style="text-align:center;max-width:460px;padding:32px;background:#171A23;border-radius:16px;border:1px solid rgba(255,255,255,0.1);">
                     <h2 style="margin-top:0;">Gmail Auto-Send Connected!</h2>
                     <p style="color:#94a3b8;font-size:14px;line-height:1.5;">
-                        Saved OAuth credentials to <code>token_gmail_send.json</code>. Approved outreach emails in ToDo Companion AI CEO will now send automatically via Gmail. You can close this window.
+                        Saved OAuth credentials to <code>token_gmail_send.json</code>. Approved outreach emails in ToDo Webapp AI CEO will now send automatically via Gmail. You can close this window.
                     </p>
                 </div>
             </body></html>
