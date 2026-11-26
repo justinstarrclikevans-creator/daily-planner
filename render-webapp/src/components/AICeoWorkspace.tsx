@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
 import {
   AgentJob,
   AgentJobType,
@@ -11,6 +10,7 @@ import {
   Project,
   RerunCoworkerConfig,
 } from '@/lib/supabase';
+import FormattedDocument from './FormattedDocument';
 import {
   AlertTriangle,
   Bot,
@@ -189,60 +189,6 @@ function isSlackJob(job: AgentJob): boolean {
   return job.job_type === 'slack_message' || Boolean(job.output_payload?.isSlack);
 }
 
-function MarkdownPreview({ content }: { content: string }) {
-  return (
-    <div className="space-y-2 text-xs text-slate-200 leading-relaxed break-words">
-      <ReactMarkdown
-        components={{
-          h1: ({ children }) => <h1 className="text-sm font-bold text-white mt-2 mb-1">{children}</h1>,
-          h2: ({ children }) => <h2 className="text-xs font-bold text-indigo-300 mt-2 mb-1">{children}</h2>,
-          h3: ({ children }) => <h3 className="text-xs font-semibold text-slate-100 mt-1.5 mb-0.5">{children}</h3>,
-          p: ({ children }) => <p className="text-xs text-slate-300 leading-relaxed">{children}</p>,
-          ul: ({ children }) => <ul className="list-disc pl-4 space-y-1 text-slate-300">{children}</ul>,
-          ol: ({ children }) => <ol className="list-decimal pl-4 space-y-1 text-slate-300">{children}</ol>,
-          li: ({ children }) => <li className="text-xs text-slate-300">{children}</li>,
-          strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
-          code: ({ children }) => (
-            <code className="px-1 py-0.5 rounded bg-black/40 text-indigo-300 font-mono text-[11px]">
-              {children}
-            </code>
-          ),
-          blockquote: ({ children }) => (
-            <blockquote className="border-l-2 border-amber-500/60 pl-2.5 text-amber-200/90 italic my-1.5">
-              {children}
-            </blockquote>
-          ),
-          a: ({ href, children }) => (
-            <a
-              href={href}
-              target="_blank"
-              rel="noreferrer"
-              className="text-indigo-400 hover:underline"
-            >
-              {children}
-            </a>
-          ),
-          table: ({ children }) => (
-            <div className="overflow-x-auto my-2 rounded-lg border border-white/[0.08]">
-              <table className="w-full text-left border-collapse text-[11px]">{children}</table>
-            </div>
-          ),
-          th: ({ children }) => (
-            <th className="px-2 py-1.5 bg-white/[0.05] text-slate-200 font-semibold border-b border-white/[0.08]">
-              {children}
-            </th>
-          ),
-          td: ({ children }) => (
-            <td className="px-2 py-1.5 text-slate-300 border-b border-white/[0.05]">{children}</td>
-          ),
-        }}
-      >
-        {content || '_No content generated yet._'}
-      </ReactMarkdown>
-    </div>
-  );
-}
-
 export default function AICeoWorkspace({
   ventures,
   jobs,
@@ -314,6 +260,8 @@ export default function AICeoWorkspace({
   const [quickEmailPrompt, setQuickEmailPrompt] = useState('');
 
   // Activity Filter State
+  const [expandedNeedsBriefIds, setExpandedNeedsBriefIds] = useState<Record<string, boolean>>({});
+  const [expandedActivityJobId, setExpandedActivityJobId] = useState<string | null>(null);
   const [activityFilter, setActivityFilter] = useState<'all' | 'active' | 'executed' | 'failed' | 'rejected'>('all');
 
   // Connections / Rerun Coworker Form State
@@ -1781,9 +1729,45 @@ export default function AICeoWorkspace({
                           className="w-full bg-[#111318] border border-white/[0.08] rounded-xl p-3 text-base sm:text-xs font-mono text-slate-100 focus:outline-none focus:border-indigo-500"
                         />
                       </div>
+                    ) : isTrainingBrief || isL10Brief ? (
+                      (() => {
+                        const briefExpanded = expandedNeedsBriefIds[job.id] !== false;
+                        const briefRegionId = `needs-brief-${job.id}`;
+                        return (
+                          <div className="rounded-xl bg-[#111318] border border-white/[0.06]">
+                            <div className="flex items-center justify-between gap-2 px-4 sm:px-6 pt-3">
+                              <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                                {isTrainingBrief ? 'Training Brief' : 'L10 Brief'}
+                              </span>
+                              <button
+                                type="button"
+                                aria-expanded={briefExpanded}
+                                aria-controls={briefRegionId}
+                                onClick={() =>
+                                  setExpandedNeedsBriefIds((prev) => ({ ...prev, [job.id]: !briefExpanded }))
+                                }
+                                className="min-h-[32px] px-2.5 py-1 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-xs font-medium text-slate-300 transition-colors"
+                              >
+                                {briefExpanded ? 'Collapse Brief' : 'Expand Brief'}
+                              </button>
+                            </div>
+                            <div
+                              id={briefRegionId}
+                              className={`p-4 sm:p-6 ${briefExpanded ? '' : 'max-h-48 overflow-hidden [mask-image:linear-gradient(to_bottom,black_60%,transparent)]'}`}
+                            >
+                              <FormattedDocument
+                                content={markdownDrafts[job.id] || job.output_markdown || '_No content generated yet._'}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })()
                     ) : (
-                      <div className="rounded-xl bg-[#111318] border border-white/[0.06] p-3.5 max-h-96 overflow-y-auto">
-                        <MarkdownPreview content={markdownDrafts[job.id] ?? job.output_markdown} />
+                      <div className="rounded-xl bg-[#111318] border border-white/[0.06] p-4 sm:p-5 max-h-[32rem] overflow-y-auto">
+                        <FormattedDocument
+                          variant="compact"
+                          content={markdownDrafts[job.id] || job.output_markdown || '_No content generated yet._'}
+                        />
                       </div>
                     )}
 
@@ -2669,7 +2653,7 @@ export default function AICeoWorkspace({
 
                       {strategyExpanded && v.strategy_markdown && (
                         <div className="rounded-xl bg-[#111318] border border-white/[0.06] p-3.5 max-h-80 overflow-y-auto">
-                          <MarkdownPreview content={v.strategy_markdown} />
+                          <FormattedDocument variant="compact" content={v.strategy_markdown} />
                         </div>
                       )}
                     </article>
@@ -2726,11 +2710,16 @@ export default function AICeoWorkspace({
                 {filteredActivityJobs.map((job) => {
                   const venture = ventures.find((v) => v.id === job.venture_id);
                   const resMeta = job.execution_result || {};
+                  const hasOutput = Boolean(job.output_markdown && job.output_markdown.trim());
+                  const isBriefJob = job.job_type === 'training_brief' || job.job_type === 'l10_brief';
+                  const isExpanded = hasOutput && expandedActivityJobId === job.id;
+                  const outputRegionId = `activity-output-${job.id}`;
                   return (
                     <div
                       key={job.id}
-                      className="rounded-xl bg-[#151820] border border-white/[0.07] p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                      className="rounded-xl bg-[#151820] border border-white/[0.07]"
                     >
+                    <div className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="px-1.5 py-0.5 rounded bg-white/[0.06] text-[10px] font-bold uppercase text-indigo-300">
@@ -2791,6 +2780,26 @@ export default function AICeoWorkspace({
                       </div>
 
                       <div className="flex items-center gap-1.5 shrink-0">
+                        {hasOutput && (
+                          <button
+                            type="button"
+                            aria-expanded={isExpanded}
+                            aria-controls={outputRegionId}
+                            onClick={() => setExpandedActivityJobId(isExpanded ? null : job.id)}
+                            className="inline-flex items-center gap-1 min-h-[32px] px-2.5 py-1 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/25 text-xs font-semibold text-indigo-200 transition-colors"
+                          >
+                            <FileText className="h-3 w-3" aria-hidden="true" />
+                            <span>
+                              {isBriefJob
+                                ? isExpanded
+                                  ? 'Hide Brief'
+                                  : 'Read Brief'
+                                : isExpanded
+                                ? 'Hide Output'
+                                : 'View Output'}
+                            </span>
+                          </button>
+                        )}
                         {job.status === 'needs_approval' && (
                           <button
                             type="button"
@@ -2819,6 +2828,15 @@ export default function AICeoWorkspace({
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       </div>
+                    </div>
+                    {isExpanded && (
+                      <div
+                        id={outputRegionId}
+                        className="border-t border-white/[0.06] bg-[#111318] rounded-b-xl px-4 sm:px-6 py-4 sm:py-5"
+                      >
+                        <FormattedDocument content={job.output_markdown} />
+                      </div>
+                    )}
                     </div>
                   );
                 })}

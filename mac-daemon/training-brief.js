@@ -5,6 +5,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+const { Type } = require('@google/genai');
 const { callGeminiWithRetry } = require('./gemini-helper');
 const { insertNote, ensureDir, todayEastern, TRAINER_DAILY_BRIEFS_DIR } = require('./vault-notes');
 
@@ -190,6 +191,89 @@ function parseJsonLoose(text) {
     return null;
 }
 
+/** Strip a single outer ```markdown / ```md / ``` fence wrapping the whole document. */
+function stripOuterMarkdownFence(text) {
+    const s = String(text || '').trim();
+    const m = s.match(/^```(?:markdown|md)?[ \t]*\r?\n?([\s\S]*?)\r?\n?[ \t]*```$/i);
+    return m ? m[1].trim() : s;
+}
+
+function tryParseObject(text) {
+    const s = String(text || '').trim();
+    if (!s) return null;
+    try {
+        const v = JSON.parse(s);
+        if (v && typeof v === 'object' && !Array.isArray(v)) return v;
+    } catch (e) {
+        // fall through to loose parse
+    }
+    const v = parseJsonLoose(s);
+    return v && typeof v === 'object' && !Array.isArray(v) ? v : null;
+}
+
+function looksLikeJsonWrapper(text) {
+    const s = String(text || '').trim();
+    return /^```json/i.test(s) || s.startsWith('{') || /"briefMarkdown"\s*:/.test(s);
+}
+
+/**
+ * Resiliently extract { briefMarkdown, proposedSlackCheckins } from a Gemini response.
+ * Never lets a raw ```json / { "briefMarkdown": ... } wrapper leak through as briefMarkdown.
+ */
+function extractTrainingBriefPayload(rawText, _depth = 0) {
+    let cleaned = String(rawText || '').trim();
+    const outerFence = cleaned.match(/^```(?:json)?[ \t]*\r?\n?([\s\S]*?)\r?\n?[ \t]*```$/i);
+    if (outerFence) cleaned = outerFence[1].trim();
+
+    let parsed = tryParseObject(cleaned);
+    if (!parsed) {
+        const repaired = cleaned.replace(/"\s*\],\s*"proposedSlackCheckins"/g, '",\n"proposedSlackCheckins"');
+        if (repaired !== cleaned) parsed = tryParseObject(repaired);
+    }
+
+    let briefMarkdown = '';
+    let proposedSlackCheckins = [];
+
+    if (parsed) {
+        briefMarkdown = typeof parsed.briefMarkdown === 'string' ? parsed.briefMarkdown : '';
+        proposedSlackCheckins = parsed.proposedSlackCheckins;
+    } else {
+        const mdMatch = cleaned.match(/"briefMarkdown"\s*:\s*"((?:\\.|[^"\\])*)"/);
+        if (mdMatch) {
+            try {
+                briefMarkdown = JSON.parse(`"${mdMatch[1]}"`);
+            } catch (e) {
+                briefMarkdown = '';
+            }
+        }
+        const checkinsMatch = cleaned.match(/"proposedSlackCheckins"\s*:\s*(\[[\s\S]*?\])/);
+        if (checkinsMatch) {
+            try {
+                proposedSlackCheckins = JSON.parse(checkinsMatch[1]);
+            } catch (e) {
+                proposedSlackCheckins = [];
+            }
+        }
+        // Plain Markdown response (no JSON wrapper at all) is acceptable as-is.
+        if (!briefMarkdown && !looksLikeJsonWrapper(cleaned)) briefMarkdown = cleaned;
+    }
+
+    briefMarkdown = stripOuterMarkdownFence(briefMarkdown);
+    // Handle a doubly-wrapped payload (briefMarkdown itself containing the JSON wrapper).
+    if (looksLikeJsonWrapper(briefMarkdown) && /"briefMarkdown"\s*:/.test(briefMarkdown)) {
+        const inner = _depth < 2 ? extractTrainingBriefPayload(briefMarkdown, _depth + 1) : { briefMarkdown: '' };
+        briefMarkdown = inner.briefMarkdown;
+        if (!Array.isArray(proposedSlackCheckins) || proposedSlackCheckins.length === 0) {
+            proposedSlackCheckins = inner.proposedSlackCheckins || [];
+        }
+    }
+
+    return {
+        briefMarkdown: String(briefMarkdown || '').trim(),
+        proposedSlackCheckins: Array.isArray(proposedSlackCheckins) ? proposedSlackCheckins : [],
+    };
+}
+
 /** Final guard: remove any numeric score that slipped into classroom content. */
 function scrubClassroomScores(markdown) {
     return String(markdown || '')
@@ -272,20 +356,42 @@ ${JSON.stringify(caseCache)}
         const response = await callGeminiWithRetry({
             model: 'gemini-3.8-flash',
             contents: prompt,
-            config: { temperature: 0.3 },
+            config: {
+                temperature: 0.3,
+                responseMimeType: 'application/json',
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        briefMarkdown: { type: Type.STRING },
+                        proposedSlackCheckins: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    recipientName: { type: Type.STRING },
+                                    messageText: { type: Type.STRING },
+                                },
+                                required: ['recipientName', 'messageText'],
+                            },
+                        },
+                    },
+                    required: ['briefMarkdown', 'proposedSlackCheckins'],
+                },
+            },
         });
-        const parsed = parseJsonLoose(response.text || '');
-        briefMarkdown = String(parsed?.briefMarkdown || response.text || '').trim();
-        proposedSlackCheckins = Array.isArray(parsed?.proposedSlackCheckins)
-            ? parsed.proposedSlackCheckins
-                  .filter((c) => c && c.recipientName && c.messageText)
-                  .slice(0, 3)
-                  .map((c) => ({
-                      recipientName: String(c.recipientName).trim(),
-                      messageText: scrubClassroomScores(String(c.messageText).replace(/!+/g, '.').trim()),
-                      selected: false,
-                  }))
-            : [];
+        const extracted = extractTrainingBriefPayload(response.text || '');
+        briefMarkdown = extracted.briefMarkdown;
+        if (!briefMarkdown) {
+            throw new Error('[Training Brief] Gemini response could not be parsed into briefMarkdown');
+        }
+        proposedSlackCheckins = extracted.proposedSlackCheckins
+            .filter((c) => c && c.recipientName && c.messageText)
+            .slice(0, 3)
+            .map((c) => ({
+                recipientName: String(c.recipientName).trim(),
+                messageText: scrubClassroomScores(String(c.messageText).replace(/!+/g, '.').trim()),
+                selected: false,
+            }));
     }
 
     briefMarkdown = scrubClassroomScores(briefMarkdown);
@@ -323,6 +429,15 @@ ${JSON.stringify(caseCache)}
 
 module.exports = {
     generateDailyTrainingBrief,
+    extractTrainingBriefPayload,
+    stripOuterMarkdownFence,
     TRAINING_FOLDER,
-    _internals: { fetchClassroomEvaluations, fetchCaseManagementEvaluations, fetchDropboxClassroomFeedback, fetchCaseFeedbackCache, scrubClassroomScores },
+    _internals: {
+        fetchClassroomEvaluations,
+        fetchCaseManagementEvaluations,
+        fetchDropboxClassroomFeedback,
+        fetchCaseFeedbackCache,
+        scrubClassroomScores,
+        extractTrainingBriefPayload,
+    },
 };

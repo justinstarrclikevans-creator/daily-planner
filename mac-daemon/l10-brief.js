@@ -6,6 +6,7 @@ const { supabase } = require('./supabase');
 const { callGeminiWithRetry } = require('./gemini-helper');
 const { getRecentSlackMessages } = require('./slack');
 const { getL10AgendaNote, insertNote, todayEastern, L10_FOLDER } = require('./vault-notes');
+const { extractTrainingBriefPayload, stripOuterMarkdownFence } = require('./training-brief');
 
 const L10_SCOPES = {
     leadership: {
@@ -116,8 +117,12 @@ ${type === 'program' ? `RECENT TRAINING / SUPERVISION HIGHLIGHTS:\n${JSON.string
         config: { temperature: 0.25 },
     });
     let markdown = String(response.text || '').trim();
-    const fence = markdown.match(/^```(?:markdown|md)?\s*([\s\S]*?)```$/i);
-    if (fence) markdown = fence[1].trim();
+    // If Gemini wrapped the brief in JSON ({ "briefMarkdown": ... } or ```json fences), unwrap it.
+    if (/^```json/i.test(markdown) || (markdown.startsWith('{') && /"briefMarkdown"\s*:/.test(markdown))) {
+        const unwrapped = extractTrainingBriefPayload(markdown).briefMarkdown;
+        if (unwrapped) markdown = unwrapped;
+    }
+    markdown = stripOuterMarkdownFence(markdown);
     markdown = markdown.replace(/!+(?=\s|$)/g, '.');
 
     const note = await insertNote({

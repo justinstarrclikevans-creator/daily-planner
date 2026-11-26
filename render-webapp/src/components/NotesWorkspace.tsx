@@ -12,7 +12,10 @@ import {
   Check,
   Send,
   ArrowLeft,
+  BookOpen,
+  Pencil,
 } from 'lucide-react';
+import FormattedDocument, { stripMarkdownForPreview } from './FormattedDocument';
 
 type NotesWorkspaceProps = {
   notes: Note[];
@@ -40,6 +43,7 @@ export default function NotesWorkspace({
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [viewMode, setViewMode] = useState<'read' | 'edit'>('read');
 
   // The 7 canonical "One Brain" folders are always visible (in order), followed by any other folders in use.
   const folders = useMemo(() => {
@@ -97,6 +101,7 @@ export default function NotesWorkspace({
       setDraftFolder(selectedNote.folder || 'Notes');
       setDraftContent(selectedNote.content || '');
       setSaveMessage(null);
+      setViewMode((selectedNote.content || '').trim() ? 'read' : 'edit');
     } else {
       setDraftTitle('');
       setDraftFolder('Notes');
@@ -133,6 +138,7 @@ export default function NotesWorkspace({
         setDraftTitle(json.note.title);
         setDraftFolder(json.note.folder);
         setDraftContent(json.note.content);
+        setViewMode('edit');
         setSaveMessage('Created new note');
       }
     } finally {
@@ -348,10 +354,7 @@ export default function NotesWorkspace({
             ) : (
               filteredNotes.map((note) => {
                 const isSelected = note.id === selectedNoteId;
-                const preview = (note.content || '')
-                  .replace(/\s+/g, ' ')
-                  .trim()
-                  .slice(0, 90);
+                const preview = stripMarkdownForPreview(note.content, 100);
                 const updatedLabel = note.updated_at
                   ? new Date(note.updated_at).toLocaleDateString('en-US', {
                       month: 'short',
@@ -447,6 +450,38 @@ export default function NotesWorkspace({
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
+                  <div
+                    role="group"
+                    aria-label="Note view mode"
+                    className="flex items-center rounded-lg bg-[#1B1E26] border border-white/[0.06] p-0.5"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('read')}
+                      aria-pressed={viewMode === 'read'}
+                      className={`flex items-center gap-1.5 min-h-[32px] px-2.5 py-1 rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 ${
+                        viewMode === 'read'
+                          ? 'bg-indigo-600/30 text-indigo-200'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]'
+                      }`}
+                    >
+                      <BookOpen className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Read</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('edit')}
+                      aria-pressed={viewMode === 'edit'}
+                      className={`flex items-center gap-1.5 min-h-[32px] px-2.5 py-1 rounded-md text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/60 ${
+                        viewMode === 'edit'
+                          ? 'bg-indigo-600/30 text-indigo-200'
+                          : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.05]'
+                      }`}
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>Edit</span>
+                    </button>
+                  </div>
                   {saveMessage && (
                     <span className="text-[11px] text-emerald-400 flex items-center gap-1">
                       <Check className="h-3 w-3" />
@@ -477,6 +512,25 @@ export default function NotesWorkspace({
                 </div>
               </div>
 
+              {viewMode === 'read' ? (
+                <div className="flex-1 min-h-0 bg-[#141821]/60 px-5 sm:px-8 py-5 sm:py-7 overflow-y-auto">
+                  {draftContent.trim() ? (
+                    <FormattedDocument content={draftContent} />
+                  ) : (
+                    <p className="text-sm text-slate-500">
+                      This note is empty.{' '}
+                      <button
+                        type="button"
+                        onClick={() => setViewMode('edit')}
+                        className="text-indigo-300 underline underline-offset-2 hover:text-indigo-200"
+                      >
+                        Start writing
+                      </button>{' '}
+                      or add a line below.
+                    </p>
+                  )}
+                </div>
+              ) : (
               <div className="flex-1 p-4 md:p-6 overflow-y-auto flex flex-col">
                 <textarea
                   value={draftContent}
@@ -494,6 +548,7 @@ export default function NotesWorkspace({
                   className="flex-1 w-full bg-transparent text-base md:text-sm leading-relaxed text-slate-200 placeholder:text-slate-600 focus:outline-none resize-none font-sans"
                 />
               </div>
+              )}
 
               {/* Quick Append Bar */}
               <form
