@@ -334,5 +334,13 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "A6685AC8-0F43-491E-97AF-8B7A3C7C9786"
+  },
+  {
+    "title": "Take pictures of all the items and display those",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "B8E9292C-7689-4159-BEB9-5FB165D8A82B"
   }
 ]
