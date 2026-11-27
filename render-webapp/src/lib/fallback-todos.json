@@ -278,5 +278,13 @@
     "priority": "none",
     "dueDate": "2026-11-27T00:33:20Z",
     "appleReminderId": "42F3821A-A390-49F6-8DB8-CB5EC35AFDB0"
+  },
+  {
+    "title": "Check what rerun apps I need to implement still on Quebec and doublecheck if I need to imply anything else",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "1F7F0FCA-46DF-4714-86AF-021EB9C42F20"
   }
 ]
