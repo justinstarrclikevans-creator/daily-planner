@@ -384,7 +384,16 @@ export async function POST(req: NextRequest) {
       string,
       unknown
     >;
-    const rawContent = String(note.transcription || note.text || note.content || '').trim();
+    const rawContent = String(
+      note.transcript ||
+        note.transcription ||
+        note.original_text ||
+        note.raw_text ||
+        note.text ||
+        note.content ||
+        note.body ||
+        ''
+    ).trim();
     if (!rawContent) {
       return NextResponse.json({ ok: false, error: 'No transcription/text/content in payload.' }, { status: 400 });
     }
