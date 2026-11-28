@@ -342,5 +342,53 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "B8E9292C-7689-4159-BEB9-5FB165D8A82B"
+  },
+  {
+    "title": "Follow up with Jenn to see if she requested the VR",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "A47E046E-005A-4C6F-A0A9-559FBFD07FFD"
+  },
+  {
+    "title": "Add our own jobs and flag at week 4 to start job searching",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "0A044C0C-1261-47C7-80BD-88D837BF0460"
+  },
+  {
+    "title": "Skillcat pathways",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "FC2BBAB1-B96B-4C9F-81EA-15DE2DF870AC"
+  },
+  {
+    "title": "Ai ceo to give estimate of credits use when suggested build",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "AD47AE74-4716-413D-BFB0-960951FE8D6A"
+  },
+  {
+    "title": "Make smaller tags as well to put in each of the bags",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": "2026-11-28T05:00:00Z",
+    "appleReminderId": "5C9FCB20-81B6-42CB-95B7-D76251C39C5B"
+  },
+  {
+    "title": "Have AI write me a blog post for 843 and synapse",
+    "notes": "",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "EF4F800B-EACA-47FB-8EAE-BA53A2D535E4"
   }
 ]
