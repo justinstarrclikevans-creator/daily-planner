@@ -390,5 +390,21 @@
     "priority": "none",
     "dueDate": null,
     "appleReminderId": "EF4F800B-EACA-47FB-8EAE-BA53A2D535E4"
+  },
+  {
+    "title": "Provide a valid bank account for 843FC on Stripe",
+    "notes": "Stripe requires submitting a valid bank account for the 843FC account to complete account setup and enable payouts.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "44D18515-193A-4B9D-8876-76D97759EF7B"
+  },
+  {
+    "title": "Reply to Feminist Magic regarding booth hosting for the postponed event",
+    "notes": "Rae from Feminist Magic asked to confirm whether you are still interested in having them host your booth for the event postponed to the 29th.",
+    "listName": "General",
+    "priority": "none",
+    "dueDate": null,
+    "appleReminderId": "A8CEC37D-CC37-413C-8F04-452B8840D4C9"
   }
 ]
